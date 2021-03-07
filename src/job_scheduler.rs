@@ -1,5 +1,5 @@
 use crate::job::{Job, JobToRun, JobLocked};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, PoisonError, RwLockWriteGuard};
 use uuid::Uuid;
 use saffron::Cron;
 use chrono::Utc;
@@ -35,7 +35,7 @@ impl JobScheduler {
                 job_id: job_id.clone(),
                 count: 0
             };
-            w.push(Arc::new(RwLock::new(job)));
+            w.push(JobLocked(Arc::new(RwLock::new(job))));
             job_id
         };
 
@@ -46,7 +46,7 @@ impl JobScheduler {
         {
             let mut w = self.jobs.write()?;
             w.retain(|f| !{
-                if let Ok(f) = f.read() {
+                if let Ok(f) = f.0.read() {
                     f.job_id.eq(&to_be_removed)
                 } else {
                     false
@@ -56,20 +56,38 @@ impl JobScheduler {
         Ok(())
     }
 
-    pub fn tick(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let r = self.jobs.read();
+    pub fn tick(&mut self, l: JobsScheduleLocked) -> Result<(), Box<dyn std::error::Error + '_>> {
 
+        let w = self.jobs.write().map(|mut w| {
+            for mut jl in w.iter_mut() {
+                if jl.tick() {
+                    let ref_for_later = jl.0.clone();
+                    let jobs = l.clone();
+                    tokio::spawn(async move {
+                        let e = ref_for_later.write();
+                        match e {
+                            Ok(mut w) => {
+                                let uuid = w.job_id.clone();
+                                (w.run)(uuid, jobs);
+                            }
+                            _ => { }
+                        }
+                    });
+                }
+            }
+            ()
+        })?;
         Ok(())
     }
 
-    pub fn start(l: JobsScheduleLocked) -> JoinHandle<()> {
+    pub fn start(jl: JobsScheduleLocked) -> JoinHandle<()> {
         let jh: JoinHandle<()> = tokio::spawn(async move {
             loop {
                 tokio::time::sleep(core::time::Duration::from_millis(500)).await;
-                let l = l.clone();
+                let jl = jl.clone();
                 {
-                    let mut l = l.write().unwrap();
-                    l.tick();
+                    let mut l = jl.write().unwrap();
+                    l.tick(jl.clone());
                 }
             }
         });
@@ -85,7 +103,7 @@ impl JobScheduler {
         let now = Utc::now();
         let min = jobs.iter().map(|j| {
             let diff = {
-                j.read().ok()
+                j.0.read().ok()
                     .and_then(|j|
                         j.schedule.next_after(now)
                             .map(|next| next - now)
