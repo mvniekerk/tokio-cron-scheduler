@@ -15,7 +15,7 @@ Be sure to add the job_scheduler crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-job_scheduler = "*"
+tokio-cron-scheduler = "*"
 ```
 
 Creating a schedule for a job is done using the `FromStr` impl for the

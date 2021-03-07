@@ -1,8 +1,8 @@
 use crate::job::JobLocked;
-use std::sync::{Arc, RwLock};
-use uuid::Uuid;
 use chrono::Utc;
+use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
+use uuid::Uuid;
 
 pub struct JobsSchedulerLocked(Arc<RwLock<JobScheduler>>);
 
@@ -14,7 +14,7 @@ impl Clone for JobsSchedulerLocked {
 
 #[derive(Default)]
 pub struct JobScheduler {
-    jobs: Vec<JobLocked>
+    jobs: Vec<JobLocked>,
 }
 
 unsafe impl Send for JobScheduler {}
@@ -27,7 +27,9 @@ impl Default for JobsSchedulerLocked {
 
 impl JobsSchedulerLocked {
     pub fn new() -> JobsSchedulerLocked {
-        let r = JobScheduler { ..Default::default() };
+        let r = JobScheduler {
+            ..Default::default()
+        };
         JobsSchedulerLocked(Arc::new(RwLock::new(r)))
     }
 
@@ -91,27 +93,38 @@ impl JobsSchedulerLocked {
         jh
     }
 
-    pub fn time_till_next_job(&self) -> Result<std::time::Duration, Box<dyn std::error::Error + '_>> {
+    pub fn time_till_next_job(
+        &self,
+    ) -> Result<std::time::Duration, Box<dyn std::error::Error + '_>> {
         let r = self.0.read()?;
         if r.jobs.is_empty() {
             // Take a guess if there are no jobs.
             return Ok(std::time::Duration::from_millis(500));
         }
         let now = Utc::now();
-        let min = r.jobs.iter().map(|j| {
-            let diff = {
-                j.0.read().ok()
-                    .and_then(|j|
-                        j.schedule.upcoming(Utc).take(1).find(|_| true).map(|next| next - now)
-                    )
-            };
-            diff
-        })
+        let min = r
+            .jobs
+            .iter()
+            .map(|j| {
+                let diff = {
+                    j.0.read().ok().and_then(|j| {
+                        j.schedule
+                            .upcoming(Utc)
+                            .take(1)
+                            .find(|_| true)
+                            .map(|next| next - now)
+                    })
+                };
+                diff
+            })
             .filter(|d| d.is_some())
             .map(|d| d.unwrap())
             .min();
 
-        let m = min.unwrap_or_else(chrono::Duration::zero).to_std().unwrap_or_else(|_| std::time::Duration::new(0, 0));
+        let m = min
+            .unwrap_or_else(chrono::Duration::zero)
+            .to_std()
+            .unwrap_or_else(|_| std::time::Duration::new(0, 0));
         Ok(m)
     }
 }
