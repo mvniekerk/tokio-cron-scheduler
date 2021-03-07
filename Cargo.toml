@@ -10,7 +10,7 @@ repository = "https://github.com/mvniekerk/tokio-cron-scheduler"
 license = "MIT/Apache-2.0"
 
 readme = "README.md"
-keywords = ["cron", "crontab", "scheduler", "job", "tokio", "async"]
+keywords = ["cron", "crontab", "scheduler", "job", "tokio"]
 
 categories = ["date-and-time"]
 
