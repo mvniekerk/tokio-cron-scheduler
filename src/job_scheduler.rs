@@ -68,7 +68,7 @@ impl JobsSchedulerLocked {
             let mut ws = self.0.write()?;
             ws.jobs.retain(|f| !{
                 if let Ok(f) = f.0.read() {
-                    f.job_id.eq(&to_be_removed)
+                    !f.job_id.eq(&to_be_removed)
                 } else {
                     false
                 }
