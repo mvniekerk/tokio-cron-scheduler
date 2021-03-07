@@ -27,23 +27,12 @@ impl JobsSchedulerLocked {
         JobsSchedulerLocked(Arc::new(RwLock::new(r)))
     }
 
-    pub fn add(&mut self, run: JobToRun, schedule: String) -> Result<Uuid, Box<dyn std::error::Error + '_>> {
-        let schedule: Cron = schedule.parse().map_err(|e| SimpleError::new(format!("{:?}", e)))?;
+    pub fn add(&mut self, job: JobLocked) -> Result<(), Box<dyn std::error::Error + '_>> {
         {
             let mut self_w = self.0.write()?;
-
-            let job_id = Uuid::new_v4();
-
-            let job = Job {
-                schedule,
-                run,
-                last_tick: None,
-                job_id: job_id.clone(),
-                count: 0
-            };
-            self_w.jobs.push(JobLocked(Arc::new(RwLock::new(job))));
-            Ok(job_id)
+            self_w.jobs.push(job);
         }
+        Ok(())
     }
 
     pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), Box<dyn std::error::Error + '_>> {
