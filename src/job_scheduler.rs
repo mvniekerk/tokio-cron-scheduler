@@ -1,30 +1,36 @@
 use crate::job::{Job, JobToRun, JobLocked};
-use std::sync::{Arc, RwLock, PoisonError, RwLockWriteGuard};
+use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 use saffron::Cron;
 use chrono::Utc;
 use simple_error::SimpleError;
 use tokio::task::JoinHandle;
 
-pub type JobsScheduleLocked = Arc<RwLock<JobScheduler>>;
+pub struct JobsSchedulerLocked(Arc<RwLock<JobScheduler>>);
+
+impl Clone for JobsSchedulerLocked {
+    fn clone(&self) -> Self {
+        JobsSchedulerLocked(self.0.clone())
+    }
+}
 
 #[derive(Default)]
 pub struct JobScheduler {
-    jobs: RwLock<Vec<JobLocked>>
+    jobs: Vec<JobLocked>
 }
 
 unsafe impl Send for JobScheduler {}
 
-impl JobScheduler {
-    pub fn new() -> JobsScheduleLocked {
+impl JobsSchedulerLocked {
+    pub fn new() -> JobsSchedulerLocked {
         let r = JobScheduler { ..Default::default() };
-        Arc::new(RwLock::new(r))
+        JobsSchedulerLocked(Arc::new(RwLock::new(r)))
     }
 
-    pub fn add(&self, run: JobToRun, schedule: String) -> Result<Uuid, Box<dyn std::error::Error + '_>> {
+    pub fn add(&mut self, run: JobToRun, schedule: String) -> Result<Uuid, Box<dyn std::error::Error + '_>> {
         let schedule: Cron = schedule.parse().map_err(|e| SimpleError::new(format!("{:?}", e)))?;
-        let job_id = {
-            let mut w = self.jobs.write()?;
+        {
+            let mut self_w = self.0.write()?;
 
             let job_id = Uuid::new_v4();
 
@@ -35,17 +41,15 @@ impl JobScheduler {
                 job_id: job_id.clone(),
                 count: 0
             };
-            w.push(JobLocked(Arc::new(RwLock::new(job))));
-            job_id
-        };
-
-        Ok(job_id)
+            self_w.jobs.push(JobLocked(Arc::new(RwLock::new(job))));
+            Ok(job_id)
+        }
     }
 
-    pub fn remove(&self, to_be_removed: &Uuid) -> Result<(), Box<dyn std::error::Error + '_>> {
+    pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), Box<dyn std::error::Error + '_>> {
         {
-            let mut w = self.jobs.write()?;
-            w.retain(|f| !{
+            let mut ws = self.0.write()?;
+            ws.jobs.retain(|f| !{
                 if let Ok(f) = f.0.read() {
                     f.job_id.eq(&to_be_removed)
                 } else {
@@ -56,10 +60,11 @@ impl JobScheduler {
         Ok(())
     }
 
-    pub fn tick(&mut self, l: JobsScheduleLocked) -> Result<(), Box<dyn std::error::Error + '_>> {
-
-        let w = self.jobs.write().map(|mut w| {
-            for mut jl in w.iter_mut() {
+    pub fn tick(&mut self) -> Result<(), Box<dyn std::error::Error + '_>> {
+        let l = self.clone();
+        {
+            let mut ws = self.0.write()?;
+            for jl in ws.jobs.iter_mut() {
                 if jl.tick() {
                     let ref_for_later = jl.0.clone();
                     let jobs = l.clone();
@@ -75,19 +80,21 @@ impl JobScheduler {
                     });
                 }
             }
-            ()
-        })?;
+        }
+
         Ok(())
     }
 
-    pub fn start(jl: JobsScheduleLocked) -> JoinHandle<()> {
+    pub fn start(&self) -> JoinHandle<()> {
+        let jl: JobsSchedulerLocked = self.clone();
         let jh: JoinHandle<()> = tokio::spawn(async move {
             loop {
                 tokio::time::sleep(core::time::Duration::from_millis(500)).await;
-                let jl = jl.clone();
-                {
-                    let mut l = jl.write().unwrap();
-                    l.tick(jl.clone());
+                let mut jsl = jl.clone();
+                let tick = jsl.tick();
+                if let Err(e) = tick {
+                    eprintln!("Error on job scheduler tick {:?}", e);
+                    break;
                 }
             }
         });
@@ -95,13 +102,13 @@ impl JobScheduler {
     }
 
     pub fn time_till_next_job(&self) -> Result<std::time::Duration, Box<dyn std::error::Error + '_>> {
-        let jobs = self.jobs.read()?;
-        if jobs.is_empty() {
+        let r = self.0.read()?;
+        if r.jobs.is_empty() {
             // Take a guess if there are no jobs.
             return Ok(std::time::Duration::from_millis(500));
         }
         let now = Utc::now();
-        let min = jobs.iter().map(|j| {
+        let min = r.jobs.iter().map(|j| {
             let diff = {
                 j.0.read().ok()
                     .and_then(|j|

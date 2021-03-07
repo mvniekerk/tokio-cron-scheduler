@@ -1,10 +1,10 @@
 use saffron::Cron;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use crate::job_scheduler::{JobsScheduleLocked, JobScheduler};
+use crate::job_scheduler::JobsSchedulerLocked;
 use std::sync::{Arc, RwLock};
 
-pub type JobToRun = Box<dyn (FnMut(Uuid, JobsScheduleLocked) -> ()) + Send + Sync>;
+pub type JobToRun = Box<dyn (FnMut(Uuid, JobsSchedulerLocked) -> ()) + Send + Sync>;
 pub struct JobLocked(pub(crate) Arc<RwLock<Job>>);
 
 pub struct Job {
@@ -19,7 +19,7 @@ impl JobLocked {
     pub fn tick(&mut self) -> bool {
         let now = Utc::now();
         {
-            let mut s = self.0.write();
+            let s = self.0.write();
             s.map(|mut s| {
                 if s.last_tick.is_none() {
                     s.last_tick = Some(now);
