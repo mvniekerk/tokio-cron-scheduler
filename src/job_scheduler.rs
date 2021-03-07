@@ -19,6 +19,12 @@ pub struct JobScheduler {
 
 unsafe impl Send for JobScheduler {}
 
+impl Default for JobsSchedulerLocked {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JobsSchedulerLocked {
     pub fn new() -> JobsSchedulerLocked {
         let r = JobScheduler { ..Default::default() };
@@ -57,12 +63,9 @@ impl JobsSchedulerLocked {
                     let jobs = l.clone();
                     tokio::spawn(async move {
                         let e = ref_for_later.write();
-                        match e {
-                            Ok(mut w) => {
-                                let uuid = w.job_id.clone();
-                                (w.run)(uuid, jobs);
-                            }
-                            _ => { }
+                        if let Ok(mut w) = e {
+                            let uuid = w.job_id;
+                            (w.run)(uuid, jobs);
                         }
                     });
                 }
@@ -108,7 +111,7 @@ impl JobsSchedulerLocked {
             .map(|d| d.unwrap())
             .min();
 
-        let m = min.unwrap_or(chrono::Duration::zero()).to_std().unwrap_or(std::time::Duration::new(0, 0));
+        let m = min.unwrap_or_else(chrono::Duration::zero).to_std().unwrap_or_else(|_| std::time::Duration::new(0, 0));
         Ok(m)
     }
 }

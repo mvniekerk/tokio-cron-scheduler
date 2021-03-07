@@ -1,10 +1,18 @@
 [package]
-name = "async-cron-scheduler"
+name = "tokio-cron-scheduler"
 version = "0.1.0"
-authors = ["Michael van Niekerk <mvniekerk@chazaqdev.com>"]
+authors = ["Michael van Niekerk <mike@agri-io.co.za>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+documentation = "https://docs.rs/tokio_cron_scheduler/"
+repository = "https://github.com/mvniekerk/tokio-cron-scheduler"
+
+license = "MIT/Apache-2.0"
+
+readme = "README.md"
+keywords = ["cron", "crontab", "scheduler", "job", "tokio", "async"]
+
+categories = ["date-and-time"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }

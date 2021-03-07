@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 use cron::Schedule;
 use std::str::FromStr;
 
-pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) -> () + Send + Sync;
+pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
 pub struct JobLocked(pub(crate) Arc<RwLock<Job>>);
 
 pub struct Job {
@@ -20,7 +20,7 @@ impl JobLocked {
     pub fn new<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
-        T: FnMut(Uuid, JobsSchedulerLocked) -> () + Send + Sync {
+        T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync {
         let schedule: Schedule = Schedule::from_str(schedule)?;
         Ok(Self {
             0: Arc::new(RwLock::new(Job {
@@ -43,19 +43,15 @@ impl JobLocked {
                     return false;
                 }
                 let last_tick = s.last_tick.unwrap();
-                s.last_tick = Some(now.clone());
+                s.last_tick = Some(now);
                 s.count = if s.count + 1 < u32::MAX { s.count + 1} else { 0 }; // Overflow check
                 s.schedule.after(&last_tick).take(1).map(|na| {
                     let now_to_next = now.cmp(&na);
                     let last_to_next = last_tick.cmp(&na);
 
+                    // matches!(last_to_next, std::cmp::Ordering::Less)
                     match now_to_next {
-                        std::cmp::Ordering::Greater => {
-                            match last_to_next {
-                                std::cmp::Ordering::Less => true,
-                                _ => false
-                            }
-                        },
+                        std::cmp::Ordering::Greater => matches!(last_to_next, std::cmp::Ordering::Less),
                         _ => false
                     }
                 }).into_iter().find(|_| true).unwrap_or(false)
