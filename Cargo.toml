@@ -1,5 +1,5 @@
 [package]
-name = "tokio-cron-scheduler"
+name = "async-cron-scheduler"
 version = "0.1.0"
 authors = ["Michael van Niekerk <mvniekerk@chazaqdev.com>"]
 edition = "2018"
@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-saffron = "0.1"
+cron = "0.8"
 chrono = "0.4"
 uuid = { version = "0.8", features = ["v4"] }
-simple-error = "0.2"

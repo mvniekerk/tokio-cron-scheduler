@@ -1,9 +1,7 @@
-use crate::job::{Job, JobToRun, JobLocked};
+use crate::job::JobLocked;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
-use saffron::Cron;
 use chrono::Utc;
-use simple_error::SimpleError;
 use tokio::task::JoinHandle;
 
 pub struct JobsSchedulerLocked(Arc<RwLock<JobScheduler>>);
@@ -101,8 +99,7 @@ impl JobsSchedulerLocked {
             let diff = {
                 j.0.read().ok()
                     .and_then(|j|
-                        j.schedule.next_after(now)
-                            .map(|next| next - now)
+                        j.schedule.upcoming(Utc).take(1).find(|_| true).map(|next| next - now)
                     )
             };
             diff
