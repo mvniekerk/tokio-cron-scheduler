@@ -6,6 +6,9 @@ use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
+
+///
+/// A schedulable Job
 pub struct JobLocked(pub(crate) Arc<RwLock<Job>>);
 
 pub struct Job {
@@ -17,6 +20,15 @@ pub struct Job {
 }
 
 impl JobLocked {
+
+    /// Create a new job.
+    ///
+    /// ```rust,ignore
+    /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
+    /// // of any day in March and June that is a Friday of the year 2017.
+    /// let s: Schedule = "0 15 6,8,10 * Mar,Jun Fri 2017".into().unwrap();
+    /// Job::new(s, || println!("I have a complex schedule...") );
+    /// ```
     pub fn new<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
@@ -34,6 +46,9 @@ impl JobLocked {
         })
     }
 
+    ///
+    /// The `tick` method returns a true if there was an invocation needed after it was last called
+    /// This method will also change the last tick on itself
     pub fn tick(&mut self) -> bool {
         let now = Utc::now();
         {
@@ -57,13 +72,8 @@ impl JobLocked {
                         let now_to_next = now.cmp(&na);
                         let last_to_next = last_tick.cmp(&na);
 
-                        // matches!(last_to_next, std::cmp::Ordering::Less)
-                        match now_to_next {
-                            std::cmp::Ordering::Greater => {
-                                matches!(last_to_next, std::cmp::Ordering::Less)
-                            }
-                            _ => false,
-                        }
+                        matches!(now_to_next, std::cmp::Ordering::Greater) &&
+                            matches!(last_to_next, std::cmp::Ordering::Less)
                     })
                     .into_iter()
                     .find(|_| true)

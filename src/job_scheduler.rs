@@ -4,6 +4,7 @@ use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
+/// The JobScheduler contains and executes the scheduled jobs.
 pub struct JobsSchedulerLocked(Arc<RwLock<JobScheduler>>);
 
 impl Clone for JobsSchedulerLocked {
@@ -26,6 +27,8 @@ impl Default for JobsSchedulerLocked {
 }
 
 impl JobsSchedulerLocked {
+
+    /// Create a new `JobSchedulerLocked`.
     pub fn new() -> JobsSchedulerLocked {
         let r = JobScheduler {
             ..Default::default()
@@ -33,6 +36,15 @@ impl JobsSchedulerLocked {
         JobsSchedulerLocked(Arc::new(RwLock::new(r)))
     }
 
+    /// Add a job to the `JobScheduler`
+    ///
+    /// ```rust,ignore
+    /// use tokio_cron_scheduler::{Job, JobScheduler, JobToRun};
+    /// let mut sched = JobScheduler::new();
+    /// sched.add(Job::new("1/10 * * * * *".parse().unwrap(), || {
+    ///     println!("I get executed every 10 seconds!");
+    /// }));
+    /// ```
     pub fn add(&mut self, job: JobLocked) -> Result<(), Box<dyn std::error::Error + '_>> {
         {
             let mut self_w = self.0.write()?;
@@ -41,6 +53,16 @@ impl JobsSchedulerLocked {
         Ok(())
     }
 
+    /// Remove a job from the `JobScheduler`
+    ///
+    /// ```rust,ignore
+    /// use tokio_cron_scheduler::{Job, JobScheduler, JobToRun};
+    /// let mut sched = JobScheduler::new();
+    /// let job_id = sched.add(Job::new("1/10 * * * * *".parse().unwrap(), || {
+    ///     println!("I get executed every 10 seconds!");
+    /// }));
+    /// sched.remove(job_id);
+    /// ```
     pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), Box<dyn std::error::Error + '_>> {
         {
             let mut ws = self.0.write()?;
@@ -55,6 +77,18 @@ impl JobsSchedulerLocked {
         Ok(())
     }
 
+    /// The `tick` method increments time for the JobScheduler and executes
+    /// any pending jobs. It is recommended to sleep for at least 500
+    /// milliseconds between invocations of this method.
+    /// This is kept public if you're running this yourself. It is better to
+    /// call the `start` method if you want all of this automated for you.
+    ///
+    /// ```rust,ignore
+    /// loop {
+    ///     sched.tick();
+    ///     std::thread::sleep(Duration::from_millis(500));
+    /// }
+    /// ```
     pub fn tick(&mut self) -> Result<(), Box<dyn std::error::Error + '_>> {
         let l = self.clone();
         {
@@ -77,6 +111,16 @@ impl JobsSchedulerLocked {
         Ok(())
     }
 
+
+    /// The `start` spawns a Tokio task where it loops. Every 500ms it
+    /// runs the tick method to increment any
+    /// any pending jobs.
+    ///
+    /// ```rust,ignore
+    /// if let Err(e) = sched.start().await {
+    ///         eprintln!("Error on scheduler {:?}", e);
+    ///     }
+    /// ```
     pub fn start(&self) -> JoinHandle<()> {
         let jl: JobsSchedulerLocked = self.clone();
         let jh: JoinHandle<()> = tokio::spawn(async move {
@@ -93,6 +137,16 @@ impl JobsSchedulerLocked {
         jh
     }
 
+    /// The `time_till_next_job` method returns the duration till the next job
+    /// is supposed to run. This can be used to sleep until then without waking
+    /// up at a fixed interval.AsMut
+    ///
+    /// ```rust, ignore
+    /// loop {
+    ///     sched.tick();
+    ///     std::thread::sleep(sched.time_till_next_job());
+    /// }
+    /// ```
     pub fn time_till_next_job(
         &self,
     ) -> Result<std::time::Duration, Box<dyn std::error::Error + '_>> {
