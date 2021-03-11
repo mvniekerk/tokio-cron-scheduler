@@ -82,4 +82,9 @@ impl JobLocked {
             .unwrap_or(false)
         }
     }
+
+    pub fn guid(&self) -> Uuid {
+        let r = self.0.read().unwrap();
+        r.job_id.clone()
+    }
 }

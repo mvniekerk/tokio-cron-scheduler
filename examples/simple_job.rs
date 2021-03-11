@@ -1,24 +1,32 @@
 use tokio_cron_scheduler::{Job, JobScheduler, JobToRun};
+use std::time::Duration;
+use chrono::DateTime;
 
 #[tokio::main]
 async fn main() {
     let mut sched = JobScheduler::new();
 
-    sched.add(
-        Job::new("1/10 * * * * *", |_uuid, _l| {
-            println!("I run every 10 seconds");
-        })
-        .unwrap(),
-    );
+    let five_s_job = Job::new("1/5 * * * * *", |_uuid, _l| {
+        println!("{:?} I run every 5 seconds", chrono::Utc::now());
+    })
+        .unwrap();
+    let five_s_job_guid = five_s_job.guid();
+    sched.add(five_s_job);
 
     sched.add(
         Job::new("1/30 * * * * *", |_uuid, _l| {
-            println!("I run every 30 seconds");
+            println!("{:?} I run every 30 seconds", chrono::Utc::now());
         })
         .unwrap(),
     );
 
-    if let Err(e) = sched.start().await {
-        eprintln!("Error on scheduler {:?}", e);
-    }
+    tokio::spawn(sched.start());
+    tokio::time::sleep(Duration::from_secs(30)).await;
+
+    println!("{:?} Remove 5 sec job", chrono::Utc::now());
+    sched.remove(&five_s_job_guid);
+
+    tokio::time::sleep(Duration::from_secs(40)).await;
+
+    println!("{:?} Goodbye.", chrono::Utc::now())
 }
