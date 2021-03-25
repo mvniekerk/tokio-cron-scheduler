@@ -203,7 +203,7 @@ impl JobLocked {
    /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
    /// // of any day in March and June that is a Friday of the year 2017.
    /// let s: Schedule = "0 15 6,8,10 * Mar,Jun Fri 2017".into().unwrap();
-   /// Job::new(s, || println!("I have a complex schedule...") );
+   /// Job::new_cron_job(s, || println!("I have a complex schedule...") );
    /// ```
     pub fn new_cron_job<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
@@ -213,6 +213,13 @@ impl JobLocked {
         JobLocked::new(schedule, run)
     }
 
+    /// Create a new one shot job.
+    ///
+    /// This is checked if it is running only after 500ms in 500ms intervals.
+    /// ```rust,ignore
+    /// // Run after 10 seconds
+    /// Job::new_on_shot(std::time::Duration::from_seconds(10), || println!("I run once after 10 seconds") );
+    /// ```
     pub fn new_one_shot<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
