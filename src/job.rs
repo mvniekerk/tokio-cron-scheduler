@@ -16,7 +16,8 @@ pub struct JobLocked(pub(crate) Arc<RwLock<Box<dyn Job + Send + Sync>>>);
 
 pub enum JobType {
     CronJob,
-    OneShot
+    OneShot,
+    Repeated
 }
 
 pub trait Job {
@@ -29,10 +30,13 @@ pub trait Job {
     fn increment_count(&mut self);
     fn job_id(&self) -> Uuid;
     fn run(&mut self, jobs: JobScheduler);
-    fn job_type(&self) -> JobType;
+    fn job_type(&self) -> &JobType;
     fn ran(&self) -> bool;
     fn set_ran(&mut self, ran: bool);
     fn set_join_handle(&mut self, handle: Option<JoinHandle<()>>);
+    fn abort_join_handle(&mut self);
+    fn stop(&self) -> bool;
+    fn set_stopped(&mut self);
 }
 
 struct CronJob {
@@ -42,6 +46,7 @@ struct CronJob {
     pub job_id: Uuid,
     pub count: u32,
     pub ran: bool,
+    pub stopped: bool,
 }
 
 impl Job for CronJob {
@@ -85,8 +90,8 @@ impl Job for CronJob {
         (self.run)(self.job_id, jobs)
     }
 
-    fn job_type(&self) -> JobType {
-        JobType::CronJob
+    fn job_type(&self) -> &JobType {
+        &JobType::CronJob
     }
 
     fn ran(&self) -> bool {
@@ -98,19 +103,30 @@ impl Job for CronJob {
     }
 
     fn set_join_handle(&mut self, _handle: Option<JoinHandle<()>>) {}
+
+    fn abort_join_handle(&mut self) {}
+
+    fn set_stopped(&mut self) {
+        self.stopped = true;
+    }
+
+    fn stop(&self) -> bool {
+        self.stopped
+    }
 }
 
-
-struct OneShotJob {
+struct NonCronJob {
     pub run: Box<JobToRun>,
     pub last_tick: Option<DateTime<Utc>>,
     pub job_id: Uuid,
     pub join_handle: Option<JoinHandle<()>>,
     pub ran: bool,
     pub count: u32,
+    pub job_type: JobType,
+    pub stopped: bool
 }
 
-impl Job for OneShotJob {
+impl Job for NonCronJob {
     fn is_cron_job(&self) -> bool {
         false
     }
@@ -152,8 +168,8 @@ impl Job for OneShotJob {
         (self.run)(self.job_id, jobs)
     }
 
-    fn job_type(&self) -> JobType {
-        JobType::OneShot
+    fn job_type(&self) -> &JobType {
+        &self.job_type
     }
 
     fn ran(&self) -> bool {
@@ -166,6 +182,21 @@ impl Job for OneShotJob {
 
     fn set_join_handle(&mut self, handle: Option<JoinHandle<()>>) {
         self.join_handle = handle;
+    }
+
+    fn abort_join_handle(&mut self) {
+        if let Some(jh) = self.join_handle.as_ref() {
+            jh.abort();
+            self.set_join_handle(None);
+        }
+    }
+
+    fn set_stopped(&mut self) {
+        self.stopped = true;
+    }
+
+    fn stop(&self) -> bool {
+        self.stopped
     }
 }
 
@@ -192,7 +223,8 @@ impl JobLocked {
                 last_tick: None,
                 job_id: Uuid::new_v4(),
                 count: 0,
-                ran: false
+                ran: false,
+                stopped: false
             }))),
         })
     }
@@ -225,13 +257,15 @@ impl JobLocked {
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
     {
-        let job = OneShotJob {
+        let job = NonCronJob {
             run: Box::new(run),
             last_tick: None,
             job_id: Uuid::new_v4(),
             join_handle: None,
             ran: false,
             count: 0,
+            job_type: JobType::OneShot,
+            stopped: false
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> = Arc::new(RwLock::new(Box::new(job)));
@@ -240,8 +274,117 @@ impl JobLocked {
         let jh = tokio::spawn(async move {
             tokio::time::sleep(duration).await;
             {
+                let j = job_for_trigger.read().unwrap();
+                if j.stop() {
+                    return;
+                }
+            }
+            {
                 let mut j = job_for_trigger.write().unwrap();
                 j.set_last_tick(Some(Utc::now()));
+            }
+        });
+
+        {
+            let mut j = job.write().unwrap();
+            j.set_join_handle(Some(jh));
+        }
+
+        Ok(Self {
+            0: job
+        })
+    }
+
+    /// Create a new one shot job that runs at an instant
+    ///
+    /// ```rust,ignore
+    /// // Run after 20 seconds
+    /// let instant = std::time::Instant::now().checked_add(std::time::Duration::from_secs(20));
+    /// Job::new_one_shot_at_instant(instant, || println!("I run once after 20 seconds") );
+    /// ```
+    pub fn new_one_shot_at_instant<T>(instant: std::time::Instant, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+    {
+        let job = NonCronJob {
+            run: Box::new(run),
+            last_tick: None,
+            job_id: Uuid::new_v4(),
+            join_handle: None,
+            ran: false,
+            count: 0,
+            job_type: JobType::OneShot,
+            stopped: false
+        };
+
+        let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> = Arc::new(RwLock::new(Box::new(job)));
+        let job_for_trigger = job.clone();
+
+        let jh = tokio::spawn(async move {
+            tokio::time::sleep_until(tokio::time::Instant::from(instant)).await;
+            {
+                let j = job_for_trigger.read().unwrap();
+                if j.stop() {
+                    return;
+                }
+            }
+            {
+                let mut j = job_for_trigger.write().unwrap();
+                j.set_last_tick(Some(Utc::now()));
+            }
+        });
+
+        {
+            let mut j = job.write().unwrap();
+            j.set_join_handle(Some(jh));
+        }
+
+        Ok(Self {
+            0: job
+        })
+    }
+
+    /// Create a new one shot job.
+    ///
+    /// This is checked if it is running only after 500ms in 500ms intervals.
+    /// ```rust,ignore
+    /// // Repeats 10 seconds
+    /// Job::new_repeated(std::time::Duration::from_seconds(10), || println!("I run once after 10 seconds") );
+    /// ```
+    pub fn new_repeated<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
+        where
+            T: 'static,
+            T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+    {
+        let job = NonCronJob {
+            run: Box::new(run),
+            last_tick: None,
+            job_id: Uuid::new_v4(),
+            join_handle: None,
+            ran: false,
+            count: 0,
+            job_type: JobType::Repeated,
+            stopped: false
+        };
+
+        let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> = Arc::new(RwLock::new(Box::new(job)));
+        let job_for_trigger = job.clone();
+
+        let jh = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(duration);
+            loop {
+                interval.tick().await;
+                {
+                    let j = job_for_trigger.read().unwrap();
+                    if j.stop() {
+                        return;
+                    }
+                }
+                {
+                    let mut j = job_for_trigger.write().unwrap();
+                    j.set_last_tick(Some(Utc::now()));
+                }
             }
         });
 
@@ -292,6 +435,15 @@ impl JobLocked {
                         must_run
                     },
                     JobType::OneShot => {
+                        if s.last_tick().is_some() {
+                            s.set_last_tick(None);
+                            s.set_ran(true);
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    JobType::Repeated => {
                         if s.last_tick().is_some() {
                             s.set_last_tick(None);
                             s.set_ran(true);

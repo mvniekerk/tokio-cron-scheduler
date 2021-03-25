@@ -66,13 +66,27 @@ impl JobsSchedulerLocked {
     pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), Box<dyn std::error::Error + '_>> {
         {
             let mut ws = self.0.write()?;
+            let mut removed: Vec<JobLocked> = vec![];
             ws.jobs.retain(|f| !{
-                if let Ok(f) = f.0.read() {
+                let not_to_be_removed = if let Ok(f) = f.0.read() {
                     f.job_id().eq(&to_be_removed)
                 } else {
                     false
+                };
+                if !not_to_be_removed {
+                    let f = f.0.clone();
+                    removed.push(JobLocked(f))
                 }
+                not_to_be_removed
             });
+            for job in removed {
+                let mut job_r = job.0.write().unwrap();
+                job_r.set_stopped();
+                let job_type = job_r.job_type();
+                if matches!(job_type, JobType::OneShot) || matches!(job_type, JobType::Repeated) {
+                    job_r.abort_join_handle();
+                }
+            }
         }
         Ok(())
     }

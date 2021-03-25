@@ -25,6 +25,12 @@ async fn main() {
         }).unwrap()
     );
 
+    sched.add(
+        Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
+            println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
+        }).unwrap()
+    );
+
     tokio::spawn(sched.start());
     tokio::time::sleep(Duration::from_secs(30)).await;
 
