@@ -1,6 +1,5 @@
-use tokio_cron_scheduler::{Job, JobScheduler, JobToRun};
+use tokio_cron_scheduler::{Job, JobScheduler};
 use std::time::Duration;
-use chrono::DateTime;
 
 #[tokio::main]
 async fn main() {
@@ -18,6 +17,12 @@ async fn main() {
             println!("{:?} I run every 30 seconds", chrono::Utc::now());
         })
         .unwrap(),
+    );
+
+    sched.add(
+        Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
+            println!("{:?} I'm only run once", chrono::Utc::now());
+        }).unwrap()
     );
 
     tokio::spawn(sched.start());

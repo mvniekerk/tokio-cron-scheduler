@@ -1,4 +1,4 @@
-use crate::job::JobLocked;
+use crate::job::{JobLocked, JobType};
 use chrono::Utc;
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
@@ -100,6 +100,16 @@ impl JobsSchedulerLocked {
                     tokio::spawn(async move {
                         let e = ref_for_later.write();
                         if let Ok(mut w) = e {
+                            let jt = w.job_type();
+                            if matches!(jt, JobType::OneShot) {
+                                let mut jobs = jobs.clone();
+                                let job_id = w.job_id();
+                                tokio::spawn(async move {
+                                    if let Err(e) = jobs.remove(&job_id) {
+                                        eprintln!("Error removing job {:}", e);
+                                    }
+                                });
+                            }
                             w.run(jobs);
                         }
                     });

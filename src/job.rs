@@ -5,12 +5,19 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 use crate::JobScheduler;
+use std::time::Duration;
+use tokio::task::JoinHandle;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
 
 ///
 /// A schedulable Job
 pub struct JobLocked(pub(crate) Arc<RwLock<Box<dyn Job + Send + Sync>>>);
+
+pub enum JobType {
+    CronJob,
+    OneShot
+}
 
 pub trait Job {
     fn is_cron_job(&self) -> bool;
@@ -22,6 +29,10 @@ pub trait Job {
     fn increment_count(&mut self);
     fn job_id(&self) -> Uuid;
     fn run(&mut self, jobs: JobScheduler);
+    fn job_type(&self) -> JobType;
+    fn ran(&self) -> bool;
+    fn set_ran(&mut self, ran: bool);
+    fn set_join_handle(&mut self, handle: Option<JoinHandle<()>>);
 }
 
 struct CronJob {
@@ -30,6 +41,7 @@ struct CronJob {
     pub last_tick: Option<DateTime<Utc>>,
     pub job_id: Uuid,
     pub count: u32,
+    pub ran: bool,
 }
 
 impl Job for CronJob {
@@ -72,6 +84,89 @@ impl Job for CronJob {
     fn run(&mut self, jobs: JobScheduler) {
         (self.run)(self.job_id, jobs)
     }
+
+    fn job_type(&self) -> JobType {
+        JobType::CronJob
+    }
+
+    fn ran(&self) -> bool {
+        self.ran
+    }
+
+    fn set_ran(&mut self, ran: bool) {
+        self.ran = ran;
+    }
+
+    fn set_join_handle(&mut self, _handle: Option<JoinHandle<()>>) {}
+}
+
+
+struct OneShotJob {
+    pub run: Box<JobToRun>,
+    pub last_tick: Option<DateTime<Utc>>,
+    pub job_id: Uuid,
+    pub join_handle: Option<JoinHandle<()>>,
+    pub ran: bool,
+    pub count: u32,
+}
+
+impl Job for OneShotJob {
+    fn is_cron_job(&self) -> bool {
+        false
+    }
+
+    fn schedule(&self) -> Option<&Schedule> {
+        None
+    }
+
+    fn last_tick(&self) -> Option<&DateTime<Utc>> {
+        self.last_tick.as_ref()
+    }
+
+    fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>) {
+        self.last_tick = tick;
+    }
+
+    fn set_count(&mut self, count: u32) {
+
+        self.count = count;
+    }
+
+    fn count(&self) -> u32 {
+        self.count
+    }
+
+    fn increment_count(&mut self) {
+        self.count = if self.count + 1 < u32::MAX {
+            self.count + 1
+        } else {
+            0
+        }; // Overflow check
+    }
+
+    fn job_id(&self) -> Uuid {
+        self.job_id
+    }
+
+    fn run(&mut self, jobs: JobScheduler) {
+        (self.run)(self.job_id, jobs)
+    }
+
+    fn job_type(&self) -> JobType {
+        JobType::OneShot
+    }
+
+    fn ran(&self) -> bool {
+        self.ran
+    }
+
+    fn set_ran(&mut self, ran: bool) {
+        self.ran = ran;
+    }
+
+    fn set_join_handle(&mut self, handle: Option<JoinHandle<()>>) {
+        self.join_handle = handle;
+    }
 }
 
 impl JobLocked {
@@ -97,6 +192,7 @@ impl JobLocked {
                 last_tick: None,
                 job_id: Uuid::new_v4(),
                 count: 0,
+                ran: false
             }))),
         })
     }
@@ -117,6 +213,41 @@ impl JobLocked {
         JobLocked::new(schedule, run)
     }
 
+    pub fn new_one_shot<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+    {
+        let job = OneShotJob {
+            run: Box::new(run),
+            last_tick: None,
+            job_id: Uuid::new_v4(),
+            join_handle: None,
+            ran: false,
+            count: 0,
+        };
+
+        let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> = Arc::new(RwLock::new(Box::new(job)));
+        let job_for_trigger = job.clone();
+
+        let jh = tokio::spawn(async move {
+            tokio::time::sleep(duration).await;
+            {
+                let mut j = job_for_trigger.write().unwrap();
+                j.set_last_tick(Some(Utc::now()));
+            }
+        });
+
+        {
+            let mut j = job.write().unwrap();
+            j.set_join_handle(Some(jh));
+        }
+
+        Ok(Self {
+            0: job
+        })
+    }
+
     ///
     /// The `tick` method returns a true if there was an invocation needed after it was last called
     /// This method will also change the last tick on itself
@@ -125,29 +256,43 @@ impl JobLocked {
         {
             let s = self.0.write();
             s.map(|mut s| {
-                if s.is_cron_job() {
-                    if s.last_tick().is_none() {
+                match s.job_type() {
+                    JobType::CronJob => {
+                        if s.last_tick().is_none() {
+                            s.set_last_tick(Some(now));
+                            return false;
+                        }
+                        let last_tick = s.last_tick().unwrap().clone();
                         s.set_last_tick(Some(now));
-                        return false;
-                    }
-                    let last_tick = s.last_tick().unwrap().clone();
-                    s.set_last_tick(Some(now));
-                    s.increment_count();
-                    s.schedule().unwrap()
-                        .after(&last_tick)
-                        .take(1)
-                        .map(|na| {
-                            let now_to_next = now.cmp(&na);
-                            let last_to_next = last_tick.cmp(&na);
+                        s.increment_count();
+                        let must_run = s.schedule().unwrap()
+                            .after(&last_tick)
+                            .take(1)
+                            .map(|na| {
+                                let now_to_next = now.cmp(&na);
+                                let last_to_next = last_tick.cmp(&na);
 
-                            matches!(now_to_next, std::cmp::Ordering::Greater) &&
-                                matches!(last_to_next, std::cmp::Ordering::Less)
-                        })
-                        .into_iter()
-                        .find(|_| true)
-                        .unwrap_or(false)
-                } else {
-                    false
+                                matches!(now_to_next, std::cmp::Ordering::Greater) &&
+                                    matches!(last_to_next, std::cmp::Ordering::Less)
+                            })
+                            .into_iter()
+                            .find(|_| true)
+                            .unwrap_or(false);
+
+                        if !s.ran() && must_run {
+                            s.set_ran(true);
+                        }
+                        must_run
+                    },
+                    JobType::OneShot => {
+                        if s.last_tick().is_some() {
+                            s.set_last_tick(None);
+                            s.set_ran(true);
+                            true
+                        } else {
+                            false
+                        }
+                    }
                 }
             })
             .unwrap_or(false)
