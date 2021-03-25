@@ -68,7 +68,7 @@ impl JobsSchedulerLocked {
             let mut ws = self.0.write()?;
             ws.jobs.retain(|f| !{
                 if let Ok(f) = f.0.read() {
-                    f.job_id.eq(&to_be_removed)
+                    f.job_id().eq(&to_be_removed)
                 } else {
                     false
                 }
@@ -100,8 +100,7 @@ impl JobsSchedulerLocked {
                     tokio::spawn(async move {
                         let e = ref_for_later.write();
                         if let Ok(mut w) = e {
-                            let uuid = w.job_id;
-                            (w.run)(uuid, jobs);
+                            w.run(jobs);
                         }
                     });
                 }
@@ -162,11 +161,12 @@ impl JobsSchedulerLocked {
             .map(|j| {
                 let diff = {
                     j.0.read().ok().and_then(|j| {
-                        j.schedule
-                            .upcoming(Utc)
-                            .take(1)
-                            .find(|_| true)
-                            .map(|next| next - now)
+                        j.schedule()
+                            .and_then(|s| s.upcoming(Utc)
+                                .take(1)
+                                .find(|_| true)
+                                .map(|next| next - now))
+
                     })
                 };
                 diff
