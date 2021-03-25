@@ -185,9 +185,12 @@ impl Job for NonCronJob {
     }
 
     fn abort_join_handle(&mut self) {
-        if let Some(jh) = self.join_handle.as_ref() {
-            jh.abort();
+        let mut s: Option<JoinHandle<()>> = None;
+        std::mem::swap(&mut self.join_handle, &mut s);
+        if let Some(jh) = s {
             self.set_join_handle(None);
+            jh.abort();
+            drop(jh);
         }
     }
 

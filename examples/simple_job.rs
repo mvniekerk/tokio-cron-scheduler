@@ -25,17 +25,18 @@ async fn main() {
         }).unwrap()
     );
 
-    sched.add(
-        Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
-            println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
-        }).unwrap()
-    );
+    let jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
+        println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
+    }).unwrap();
+    let jj_guid = jj.guid();
+    sched.add(jj);
 
     tokio::spawn(sched.start());
     tokio::time::sleep(Duration::from_secs(30)).await;
 
-    println!("{:?} Remove 5 sec job", chrono::Utc::now());
+    println!("{:?} Remove 5 and 8 sec jobs", chrono::Utc::now());
     sched.remove(&five_s_job_guid);
+    sched.remove(&jj_guid);
 
     tokio::time::sleep(Duration::from_secs(40)).await;
 
