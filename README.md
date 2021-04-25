@@ -57,6 +57,17 @@ async fn main() {
     sched.add(Job::new("1/30 * * * * *", |uuid, l| {
         println!("I run every 30 seconds");
     }).unwrap());
+  
+    sched.add(
+      Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
+        println!("{:?} I'm only run once", chrono::Utc::now());
+      }).unwrap()
+    );
+
+    let jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
+      println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
+    }).unwrap();
+    sched.add(jj);
 
     sched.start().await;
 }
