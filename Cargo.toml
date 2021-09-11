@@ -7,7 +7,7 @@ edition = "2018"
 documentation = "https://docs.rs/tokio_cron_scheduler/"
 repository = "https://github.com/mvniekerk/tokio-cron-scheduler"
 
-description = "Schedule tasks on tokio using cron-like annotation"
+description = "Schedule tasks on tokio using cron-like annotation. Also schedule tasks in at an instant or repeat them at a duration"
 
 license = "MIT/Apache-2.0"
 
