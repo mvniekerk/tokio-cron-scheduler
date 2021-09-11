@@ -1,6 +1,7 @@
 # tokio-cron-scheduler
 
 Use cron-like scheduling in an async tokio environment.
+Also schedule tasks at an instant or repeat them at a fixed duration.
 
 Inspired by https://github.com/lholden/job_scheduler
 
