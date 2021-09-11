@@ -106,12 +106,12 @@ impl Job for CronJob {
 
     fn abort_join_handle(&mut self) {}
 
-    fn set_stopped(&mut self) {
-        self.stopped = true;
-    }
-
     fn stop(&self) -> bool {
         self.stopped
+    }
+
+    fn set_stopped(&mut self) {
+        self.stopped = true;
     }
 }
 
@@ -194,12 +194,12 @@ impl Job for NonCronJob {
         }
     }
 
-    fn set_stopped(&mut self) {
-        self.stopped = true;
-    }
-
     fn stop(&self) -> bool {
         self.stopped
+    }
+
+    fn set_stopped(&mut self) {
+        self.stopped = true;
     }
 }
 
@@ -208,10 +208,14 @@ impl JobLocked {
     /// Create a new cron job.
     ///
     /// ```rust,ignore
+    /// let mut sched = JobScheduler::new();
     /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
     /// // of any day in March and June that is a Friday of the year 2017.
-    /// let s: Schedule = "0 15 6,8,10 * Mar,Jun Fri 2017".into().unwrap();
-    /// Job::new(s, || println!("I have a complex schedule...") );
+    /// let job = Job::new("0 15 6,8,10 * Mar,Jun Fri 2017", |_uuid, _lock| {
+    ///             println!("{:?} Hi I ran", chrono::Utc::now());
+    ///         });
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
     /// ```
     pub fn new<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
@@ -235,10 +239,14 @@ impl JobLocked {
    /// Create a new cron job.
    ///
    /// ```rust,ignore
+   /// let mut sched = JobScheduler::new();
    /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
    /// // of any day in March and June that is a Friday of the year 2017.
-   /// let s: Schedule = "0 15 6,8,10 * Mar,Jun Fri 2017".into().unwrap();
-   /// Job::new_cron_job(s, || println!("I have a complex schedule...") );
+   /// let job = Job::new_cron_job("0 15 6,8,10 * Mar,Jun Fri 2017", |_uuid, _lock| {
+   ///             println!("{:?} Hi I ran", chrono::Utc::now());
+   ///         });
+   /// sched.add(job)
+   /// tokio::spawn(sched.start());
    /// ```
     pub fn new_cron_job<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
@@ -252,8 +260,12 @@ impl JobLocked {
     ///
     /// This is checked if it is running only after 500ms in 500ms intervals.
     /// ```rust,ignore
-    /// // Run after 10 seconds
-    /// Job::new_on_shot(std::time::Duration::from_seconds(10), || println!("I run once after 10 seconds") );
+    /// let mut sched = JobScheduler::new();
+    /// let job = Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
+    ///            println!("{:?} I'm only run once", chrono::Utc::now());
+    ///        }
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
     /// ```
     pub fn new_one_shot<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
@@ -302,8 +314,11 @@ impl JobLocked {
     ///
     /// ```rust,ignore
     /// // Run after 20 seconds
+    /// let mut sched = JobScheduler::new();
     /// let instant = std::time::Instant::now().checked_add(std::time::Duration::from_secs(20));
-    /// Job::new_one_shot_at_instant(instant, || println!("I run once after 20 seconds") );
+    /// let job = Job::new_one_shot_at_instant(instant, |_uuid, _lock| println!("I run once after 20 seconds") );
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
     /// ```
     pub fn new_one_shot_at_instant<T>(instant: std::time::Instant, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
@@ -348,12 +363,16 @@ impl JobLocked {
         })
     }
 
-    /// Create a new one shot job.
+    /// Create a new repeated job.
     ///
     /// This is checked if it is running only after 500ms in 500ms intervals.
     /// ```rust,ignore
-    /// // Repeats 10 seconds
-    /// Job::new_repeated(std::time::Duration::from_seconds(10), || println!("I run once after 10 seconds") );
+    /// let mut sched = JobScheduler::new();
+    /// let job = Job::new_repeated(Duration::from_secs(8), |_uuid, _lock| {
+    ///     println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
+    /// }
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
     /// ```
     pub fn new_repeated<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
         where
