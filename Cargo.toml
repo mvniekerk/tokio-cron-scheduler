@@ -17,7 +17,10 @@ keywords = ["cron", "crontab", "scheduler", "job", "tokio"]
 categories = ["date-and-time"]
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["time", "rt"] }
 cron = "0.8"
 chrono = "0.4"
 uuid = { version = "0.8", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
