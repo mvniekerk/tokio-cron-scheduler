@@ -31,19 +31,32 @@ async fn main() {
         }).unwrap()
     );
 
+    sched.add(
+        Job::new_one_shot_async(Duration::from_secs(16), |_uuid, _l| Box::pin( async move {
+            println!("{:?} I'm only run once async", chrono::Utc::now());
+        })).unwrap()
+    );
+
     let jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
         println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
     }).unwrap();
     let jj_guid = jj.guid();
     sched.add(jj);
 
+    let jja = Job::new_repeated_async(Duration::from_secs(7), |_uuid, _l| Box::pin(async move {
+        println!("{:?} I'm repeated async every 7 seconds", chrono::Utc::now());
+    })).unwrap();
+    let jja_guid = jja.guid();
+    sched.add(jja);
+
     tokio::spawn(sched.start());
     tokio::time::sleep(Duration::from_secs(30)).await;
 
-    println!("{:?} Remove 4, 5 and 8 sec jobs", chrono::Utc::now());
+    println!("{:?} Remove 4, 5, 7 and 8 sec jobs", chrono::Utc::now());
     sched.remove(&five_s_job_guid);
     sched.remove(&four_s_job_guid);
     sched.remove(&jj_guid);
+    sched.remove(&jja_guid);
 
     tokio::time::sleep(Duration::from_secs(40)).await;
 
