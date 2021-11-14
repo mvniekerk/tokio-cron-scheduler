@@ -7,8 +7,19 @@ use uuid::Uuid;
 use crate::JobScheduler;
 use std::time::Duration;
 use tokio::task::JoinHandle;
+use std::pin::Pin;
+use std::future::Future;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
+pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync;
+
+fn nop(_uuid: Uuid, _jobs: JobsSchedulerLocked) {
+    // Do nothing
+}
+
+fn nop_async(_uuid: Uuid, _jobs: JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> {
+    Box::pin(async move {})
+}
 
 ///
 /// A schedulable Job
@@ -42,11 +53,13 @@ pub trait Job {
 struct CronJob {
     pub schedule: Schedule,
     pub run: Box<JobToRun>,
+    pub run_async: Box<JobToRunAsync>,
     pub last_tick: Option<DateTime<Utc>>,
     pub job_id: Uuid,
     pub count: u32,
     pub ran: bool,
     pub stopped: bool,
+    pub async_job: bool
 }
 
 impl Job for CronJob {
@@ -87,7 +100,15 @@ impl Job for CronJob {
     }
 
     fn run(&mut self, jobs: JobScheduler) {
-        (self.run)(self.job_id, jobs)
+        let jobs = jobs.clone();
+        if !self.async_job {
+            (self.run)(self.job_id, jobs);
+        } else {
+            let future = (self.run_async)(self.job_id, jobs.clone());
+            tokio::task::spawn(async move {
+                future.await;
+            });
+        }
     }
 
     fn job_type(&self) -> &JobType {
@@ -227,11 +248,46 @@ impl JobLocked {
             0: Arc::new(RwLock::new(Box::new(CronJob {
                 schedule,
                 run: Box::new(run),
+                run_async: Box::new(nop_async),
                 last_tick: None,
                 job_id: Uuid::new_v4(),
                 count: 0,
                 ran: false,
-                stopped: false
+                stopped: false,
+                async_job: false
+            }))),
+        })
+    }
+
+    /// Create a new async cron job.
+    ///
+    /// ```rust,ignore
+    /// let mut sched = JobScheduler::new();
+    /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
+    /// // of any day in March and June that is a Friday of the year 2017.
+    /// let job = Job::new("0 15 6,8,10 * Mar,Jun Fri 2017", |_uuid, _lock| Box::pin( async move {
+    ///             println!("{:?} Hi I ran", chrono::Utc::now());
+    ///         }));
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
+    /// ```
+    pub fn new_async<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
+    {
+        let schedule: Schedule = Schedule::from_str(schedule)?;
+        Ok(Self {
+            0: Arc::new(RwLock::new(Box::new(CronJob {
+                schedule,
+                run: Box::new(nop),
+                run_async: Box::new(run),
+                last_tick: None,
+                job_id: Uuid::new_v4(),
+                count: 0,
+                ran: false,
+                stopped: false,
+                async_job: true
             }))),
         })
     }
@@ -254,6 +310,26 @@ impl JobLocked {
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
     {
         JobLocked::new(schedule, run)
+    }
+
+    /// Create a new async cron job.
+    ///
+    /// ```rust,ignore
+    /// let mut sched = JobScheduler::new();
+    /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
+    /// // of any day in March and June that is a Friday of the year 2017.
+    /// let job = Job::new("0 15 6,8,10 * Mar,Jun Fri 2017", |_uuid, _lock| Box::pin( async move {
+    ///             println!("{:?} Hi I ran", chrono::Utc::now());
+    ///         }));
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
+    /// ```
+    pub fn new_cron_job_async<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
+    {
+        JobLocked::new_async(schedule, run)
     }
 
     /// Create a new one shot job.

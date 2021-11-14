@@ -12,6 +12,12 @@ async fn main() {
     let five_s_job_guid = five_s_job.guid();
     sched.add(five_s_job);
 
+    let four_s_job_async = Job::new_async("1/4 * * * * *", |_uuid, _l| Box::pin(async move {
+        println!("{:?} I run async every 4 seconds", chrono::Utc::now());
+    })).unwrap();
+    let four_s_job_guid = four_s_job_async.guid();
+    sched.add(four_s_job_async);
+
     sched.add(
         Job::new("1/30 * * * * *", |_uuid, _l| {
             println!("{:?} I run every 30 seconds", chrono::Utc::now());
@@ -34,8 +40,9 @@ async fn main() {
     tokio::spawn(sched.start());
     tokio::time::sleep(Duration::from_secs(30)).await;
 
-    println!("{:?} Remove 5 and 8 sec jobs", chrono::Utc::now());
+    println!("{:?} Remove 4, 5 and 8 sec jobs", chrono::Utc::now());
     sched.remove(&five_s_job_guid);
+    sched.remove(&four_s_job_guid);
     sched.remove(&jj_guid);
 
     tokio::time::sleep(Duration::from_secs(40)).await;
