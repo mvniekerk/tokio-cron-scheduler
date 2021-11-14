@@ -103,7 +103,7 @@ impl Job for CronJob {
         if !self.async_job {
             (self.run)(self.job_id, jobs);
         } else {
-            let future = (self.run_async)(self.job_id, jobs.clone());
+            let future = (self.run_async)(self.job_id, jobs);
             tokio::task::spawn(async move {
                 future.await;
             });
@@ -190,7 +190,7 @@ impl Job for NonCronJob {
         if !self.async_job {
             (self.run)(self.job_id, jobs);
         } else {
-            let future = (self.run_async)(self.job_id, jobs.clone());
+            let future = (self.run_async)(self.job_id, jobs);
             tokio::task::spawn(async move {
                 future.await;
             });
@@ -592,7 +592,7 @@ impl JobLocked {
                             s.set_last_tick(Some(now));
                             return false;
                         }
-                        let last_tick = s.last_tick().unwrap().clone();
+                        let last_tick = *s.last_tick().unwrap();
                         s.set_last_tick(Some(now));
                         s.increment_count();
                         let must_run = s.schedule().unwrap()

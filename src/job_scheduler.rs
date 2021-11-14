@@ -69,7 +69,7 @@ impl JobsSchedulerLocked {
             let mut removed: Vec<JobLocked> = vec![];
             ws.jobs.retain(|f| !{
                 let not_to_be_removed = if let Ok(f) = f.0.read() {
-                    f.job_id().eq(&to_be_removed)
+                    f.job_id().eq(to_be_removed)
                 } else {
                     false
                 };
@@ -195,8 +195,7 @@ impl JobsSchedulerLocked {
                 };
                 diff
             })
-            .filter(|d| d.is_some())
-            .map(|d| d.unwrap())
+            .flatten()
             .min();
 
         let m = min
