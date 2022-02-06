@@ -1,34 +1,40 @@
 use crate::job_scheduler::JobsSchedulerLocked;
+use crate::JobScheduler;
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+use std::future::Future;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
-use uuid::Uuid;
-use crate::JobScheduler;
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use std::pin::Pin;
-use std::future::Future;
+use uuid::Uuid;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
-pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync;
+pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+    + Send
+    + Sync;
 
 fn nop(_uuid: Uuid, _jobs: JobsSchedulerLocked) {
     // Do nothing
 }
 
-fn nop_async(_uuid: Uuid, _jobs: JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> {
+fn nop_async(
+    _uuid: Uuid,
+    _jobs: JobsSchedulerLocked,
+) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> {
     Box::pin(async move {})
 }
 
 ///
 /// A schedulable Job
+#[derive(Clone)]
 pub struct JobLocked(pub(crate) Arc<RwLock<Box<dyn Job + Send + Sync>>>);
 
 pub enum JobType {
     CronJob,
     OneShot,
-    Repeated
+    Repeated,
 }
 
 pub trait Job {
@@ -59,7 +65,7 @@ struct CronJob {
     pub count: u32,
     pub ran: bool,
     pub stopped: bool,
-    pub async_job: bool
+    pub async_job: bool,
 }
 
 impl Job for CronJob {
@@ -145,7 +151,7 @@ struct NonCronJob {
     pub count: u32,
     pub job_type: JobType,
     pub stopped: bool,
-    pub async_job: bool
+    pub async_job: bool,
 }
 
 impl Job for NonCronJob {
@@ -166,7 +172,6 @@ impl Job for NonCronJob {
     }
 
     fn set_count(&mut self, count: u32) {
-
         self.count = count;
     }
 
@@ -233,7 +238,6 @@ impl Job for NonCronJob {
 }
 
 impl JobLocked {
-
     /// Create a new cron job.
     ///
     /// ```rust,ignore
@@ -262,7 +266,7 @@ impl JobLocked {
                 count: 0,
                 ran: false,
                 stopped: false,
-                async_job: false
+                async_job: false,
             }))),
         })
     }
@@ -282,7 +286,9 @@ impl JobLocked {
     pub fn new_async<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
-        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+            + Send
+            + Sync,
     {
         let schedule: Schedule = Schedule::from_str(schedule)?;
         Ok(Self {
@@ -295,23 +301,23 @@ impl JobLocked {
                 count: 0,
                 ran: false,
                 stopped: false,
-                async_job: true
+                async_job: true,
             }))),
         })
     }
 
-   /// Create a new cron job.
-   ///
-   /// ```rust,ignore
-   /// let mut sched = JobScheduler::new();
-   /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
-   /// // of any day in March and June that is a Friday of the year 2017.
-   /// let job = Job::new_cron_job("0 15 6,8,10 * Mar,Jun Fri 2017", |_uuid, _lock| {
-   ///             println!("{:?} Hi I ran", chrono::Utc::now());
-   ///         });
-   /// sched.add(job)
-   /// tokio::spawn(sched.start());
-   /// ```
+    /// Create a new cron job.
+    ///
+    /// ```rust,ignore
+    /// let mut sched = JobScheduler::new();
+    /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
+    /// // of any day in March and June that is a Friday of the year 2017.
+    /// let job = Job::new_cron_job("0 15 6,8,10 * Mar,Jun Fri 2017", |_uuid, _lock| {
+    ///             println!("{:?} Hi I ran", chrono::Utc::now());
+    ///         });
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
+    /// ```
     pub fn new_cron_job<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
@@ -335,12 +341,19 @@ impl JobLocked {
     pub fn new_cron_job_async<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
-        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+            + Send
+            + Sync,
     {
         JobLocked::new_async(schedule, run)
     }
 
-    fn make_one_shot_job(duration: Duration, run: Box<JobToRun>, run_async: Box<JobToRunAsync>, async_job: bool) -> Result<Self, Box<dyn std::error::Error>> {
+    fn make_one_shot_job(
+        duration: Duration,
+        run: Box<JobToRun>,
+        run_async: Box<JobToRunAsync>,
+        async_job: bool,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let job = NonCronJob {
             run,
             run_async,
@@ -351,10 +364,11 @@ impl JobLocked {
             count: 0,
             job_type: JobType::OneShot,
             stopped: false,
-            async_job
+            async_job,
         };
 
-        let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> = Arc::new(RwLock::new(Box::new(job)));
+        let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
+            Arc::new(RwLock::new(Box::new(job)));
         let job_for_trigger = job.clone();
 
         let jh = tokio::spawn(async move {
@@ -376,9 +390,7 @@ impl JobLocked {
             j.set_join_handle(Some(jh));
         }
 
-        Ok(Self {
-            0: job
-        })
+        Ok(Self { 0: job })
     }
 
     /// Create a new one shot job.
@@ -411,15 +423,25 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_one_shot_async<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
-        where
-            T: 'static,
-            T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
+    pub fn new_one_shot_async<T>(
+        duration: Duration,
+        run: T,
+    ) -> Result<Self, Box<dyn std::error::Error>>
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+            + Send
+            + Sync,
     {
         JobLocked::make_one_shot_job(duration, Box::new(nop), Box::new(run), true)
     }
 
-    fn make_new_one_shot_at_an_instant(instant: std::time::Instant, run: Box<JobToRun>, run_async: Box<JobToRunAsync>, async_job: bool) -> Result<Self, Box<dyn std::error::Error>> {
+    fn make_new_one_shot_at_an_instant(
+        instant: std::time::Instant,
+        run: Box<JobToRun>,
+        run_async: Box<JobToRunAsync>,
+        async_job: bool,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let job = NonCronJob {
             run,
             run_async,
@@ -430,10 +452,11 @@ impl JobLocked {
             count: 0,
             job_type: JobType::OneShot,
             stopped: false,
-            async_job
+            async_job,
         };
 
-        let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> = Arc::new(RwLock::new(Box::new(job)));
+        let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
+            Arc::new(RwLock::new(Box::new(job)));
         let job_for_trigger = job.clone();
 
         let jh = tokio::spawn(async move {
@@ -455,9 +478,7 @@ impl JobLocked {
             j.set_join_handle(Some(jh));
         }
 
-        Ok(Self {
-            0: job
-        })
+        Ok(Self { 0: job })
     }
 
     /// Create a new one shot job that runs at an instant
@@ -470,12 +491,20 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_one_shot_at_instant<T>(instant: std::time::Instant, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    pub fn new_one_shot_at_instant<T>(
+        instant: std::time::Instant,
+        run: T,
+    ) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
     {
-        JobLocked::make_new_one_shot_at_an_instant(instant, Box::new(run), Box::new(nop_async), false)
+        JobLocked::make_new_one_shot_at_an_instant(
+            instant,
+            Box::new(run),
+            Box::new(nop_async),
+            false,
+        )
     }
 
     /// Create a new async one shot job that runs at an instant
@@ -488,15 +517,25 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_one_shot_at_instant_async<T>(instant: std::time::Instant, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    pub fn new_one_shot_at_instant_async<T>(
+        instant: std::time::Instant,
+        run: T,
+    ) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
-        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+            + Send
+            + Sync,
     {
         JobLocked::make_new_one_shot_at_an_instant(instant, Box::new(nop), Box::new(run), true)
     }
 
-    fn make_new_repeated(duration: Duration, run: Box<JobToRun>, run_async: Box<JobToRunAsync>, async_job: bool) -> Result<Self, Box<dyn std::error::Error>> {
+    fn make_new_repeated(
+        duration: Duration,
+        run: Box<JobToRun>,
+        run_async: Box<JobToRunAsync>,
+        async_job: bool,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let job = NonCronJob {
             run,
             run_async,
@@ -507,10 +546,11 @@ impl JobLocked {
             count: 0,
             job_type: JobType::Repeated,
             stopped: false,
-            async_job
+            async_job,
         };
 
-        let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> = Arc::new(RwLock::new(Box::new(job)));
+        let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
+            Arc::new(RwLock::new(Box::new(job)));
         let job_for_trigger = job.clone();
 
         let jh = tokio::spawn(async move {
@@ -535,9 +575,7 @@ impl JobLocked {
             j.set_join_handle(Some(jh));
         }
 
-        Ok(Self {
-            0: job
-        })
+        Ok(Self { 0: job })
     }
 
     /// Create a new repeated job.
@@ -552,9 +590,9 @@ impl JobLocked {
     /// tokio::spawn(sched.start());
     /// ```
     pub fn new_repeated<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
-        where
-            T: 'static,
-            T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
     {
         JobLocked::make_new_repeated(duration, Box::new(run), Box::new(nop_async), false)
     }
@@ -570,10 +608,15 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_repeated_async<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
-        where
-            T: 'static,
-            T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync,
+    pub fn new_repeated_async<T>(
+        duration: Duration,
+        run: T,
+    ) -> Result<Self, Box<dyn std::error::Error>>
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+            + Send
+            + Sync,
     {
         JobLocked::make_new_repeated(duration, Box::new(nop), Box::new(run), true)
     }
@@ -585,52 +628,52 @@ impl JobLocked {
         let now = Utc::now();
         {
             let s = self.0.write();
-            s.map(|mut s| {
-                match s.job_type() {
-                    JobType::CronJob => {
-                        if s.last_tick().is_none() {
-                            s.set_last_tick(Some(now));
-                            return false;
-                        }
-                        let last_tick = *s.last_tick().unwrap();
+            s.map(|mut s| match s.job_type() {
+                JobType::CronJob => {
+                    if s.last_tick().is_none() {
                         s.set_last_tick(Some(now));
-                        s.increment_count();
-                        let must_run = s.schedule().unwrap()
-                            .after(&last_tick)
-                            .take(1)
-                            .map(|na| {
-                                let now_to_next = now.cmp(&na);
-                                let last_to_next = last_tick.cmp(&na);
+                        return false;
+                    }
+                    let last_tick = *s.last_tick().unwrap();
+                    s.set_last_tick(Some(now));
+                    s.increment_count();
+                    let must_run = s
+                        .schedule()
+                        .unwrap()
+                        .after(&last_tick)
+                        .take(1)
+                        .map(|na| {
+                            let now_to_next = now.cmp(&na);
+                            let last_to_next = last_tick.cmp(&na);
 
-                                matches!(now_to_next, std::cmp::Ordering::Greater) &&
-                                    matches!(last_to_next, std::cmp::Ordering::Less)
-                            })
-                            .into_iter()
-                            .find(|_| true)
-                            .unwrap_or(false);
+                            matches!(now_to_next, std::cmp::Ordering::Greater)
+                                && matches!(last_to_next, std::cmp::Ordering::Less)
+                        })
+                        .into_iter()
+                        .find(|_| true)
+                        .unwrap_or(false);
 
-                        if !s.ran() && must_run {
-                            s.set_ran(true);
-                        }
-                        must_run
-                    },
-                    JobType::OneShot => {
-                        if s.last_tick().is_some() {
-                            s.set_last_tick(None);
-                            s.set_ran(true);
-                            true
-                        } else {
-                            false
-                        }
-                    },
-                    JobType::Repeated => {
-                        if s.last_tick().is_some() {
-                            s.set_last_tick(None);
-                            s.set_ran(true);
-                            true
-                        } else {
-                            false
-                        }
+                    if !s.ran() && must_run {
+                        s.set_ran(true);
+                    }
+                    must_run
+                }
+                JobType::OneShot => {
+                    if s.last_tick().is_some() {
+                        s.set_last_tick(None);
+                        s.set_ran(true);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                JobType::Repeated => {
+                    if s.last_tick().is_some() {
+                        s.set_last_tick(None);
+                        s.set_ran(true);
+                        true
+                    } else {
+                        false
                     }
                 }
             })

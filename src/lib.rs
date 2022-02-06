@@ -1,3 +1,4 @@
+mod error;
 mod job;
 mod job_scheduler;
 
