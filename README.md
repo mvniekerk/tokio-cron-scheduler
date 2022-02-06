@@ -42,6 +42,9 @@ execute once per hour but only on day 5 through 10 of the month.
 Day of the week can be specified as an abbreviation or the full name. A
 schedule of `0 0 6 * * Sun,Sat` would execute at 6am on Sunday and Saturday.
 
+Per job you can be notified when the jobs were started, stopped and removed. Because these notifications
+are scheduled using tokio::spawn, the order of these are not guaranteed if the task finishes quickly.
+
 A simple usage example:
 
 ```rust
@@ -50,8 +53,6 @@ use tokio_cron_scheduler::{JobScheduler, JobToRun, Job};
 #[tokio::main]
 async fn main() {
     let mut sched = JobScheduler::new();
-
-  
   
     sched.add(Job::new("1/10 * * * * *", |uuid, l| {
         println!("I run every 10 seconds");
@@ -71,11 +72,28 @@ async fn main() {
       }).unwrap()
     );
 
-    let jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
+    let mut jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
       println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
     }).unwrap();
     sched.add(jj);
+  
+    jj.on_start_notification_add(Box::new(|job_id, notification_id, type_of_notification| {
+      Box::pin(async move {
+        println!("Job {:?} was started, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
+      })
+    }));
 
+    jj.on_stop_notification_add(Box::new(|job_id, notification_id, type_of_notification| {
+      Box::pin(async move {
+        println!("Job {:?} was completed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
+      })
+    }));
+    
+    jj.on_removed_notification_add(Box::new(|job_id, notification_id, type_of_notification| {
+      Box::pin(async move {
+        println!("Job {:?} was removed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
+      })
+    }));
 
     let five_s_job = Job::new("1/5 * * * * *", |_uuid, _l| {
       println!("{:?} I run every 5 seconds", chrono::Utc::now());
@@ -135,6 +153,11 @@ TokioCronScheduler is licensed under either of
   http://www.apache.org/licenses/LICENSE-2.0)
 * MIT license ([LICENSE-MIT](LICENSE-MIT) or
   http://opensource.org/licenses/MIT)
+
+## Custom scheduler
+Since version 0.4 a custom job scheduler can be used. In `src/simple_job_scheduler` you can find the 
+default implementation that is used when you call `JobScheduler::new()`. To use your own, call
+`JobScheduler::new_with_scheduler(your_own_scheduler_here)`;
 
 ## Contributing
 
