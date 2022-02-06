@@ -1,6 +1,7 @@
 mod error;
 mod job;
 mod job_scheduler;
+mod simple_job_scheduler;
 
 pub use job::JobLocked as Job;
 pub use job::JobToRun;
