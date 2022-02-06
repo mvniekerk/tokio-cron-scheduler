@@ -1,5 +1,5 @@
 use crate::job::{JobLocked, JobType};
-use crate::job_scheduler::{JobScheduler, JobSchedulerLockedType, JobsSchedulerLocked};
+use crate::job_scheduler::{JobSchedulerWithoutSync, JobSchedulerType, JobsSchedulerLocked};
 use chrono::Utc;
 use std::error::Error;
 use std::time::Duration;
@@ -13,7 +13,7 @@ pub struct SimpleJobScheduler {
 unsafe impl Send for SimpleJobScheduler {}
 unsafe impl Sync for SimpleJobScheduler {}
 
-impl JobScheduler for SimpleJobScheduler {
+impl JobSchedulerWithoutSync for SimpleJobScheduler {
     fn add(&mut self, job: JobLocked) -> Result<(), Box<dyn Error + '_>> {
         self.jobs.push(job);
         Ok(())
@@ -106,4 +106,4 @@ impl JobScheduler for SimpleJobScheduler {
         Ok(m)
     }
 }
-impl JobSchedulerLockedType for SimpleJobScheduler {}
+impl JobSchedulerType for SimpleJobScheduler {}

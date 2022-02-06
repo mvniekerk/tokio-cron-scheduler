@@ -5,7 +5,7 @@ use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-pub trait JobScheduler {
+pub trait JobSchedulerWithoutSync {
     /// Add a job to the `JobScheduler`
     fn add(&mut self, job: JobLocked) -> Result<(), Box<dyn std::error::Error + '_>>;
 
@@ -26,10 +26,10 @@ pub trait JobScheduler {
 }
 
 /// The scheduler type trait. Example implementation is `SimpleJobScheduler`
-pub trait JobSchedulerLockedType: JobScheduler + Send + Sync {}
+pub trait JobSchedulerType: JobSchedulerWithoutSync + Send + Sync {}
 
 /// The JobScheduler contains and executes the scheduled jobs.
-pub struct JobsSchedulerLocked(Arc<RwLock<Box<dyn JobSchedulerLockedType>>>);
+pub struct JobsSchedulerLocked(Arc<RwLock<Box<dyn JobSchedulerType>>>);
 
 impl Clone for JobsSchedulerLocked {
     fn clone(&self) -> Self {
@@ -51,8 +51,9 @@ impl JobsSchedulerLocked {
         ))))
     }
 
-    /// Create a new `JobsSchedulerLocked` using a custom scheduler
-    pub fn new_with_scheduler(scheduler: Box<dyn JobSchedulerLockedType>) -> Self {
+    /// Create a new `JobsSchedulerLocked` using a custom scheduler. The custom scheduler should
+    /// implement the trait `JobSchedulerType`
+    pub fn new_with_scheduler(scheduler: Box<dyn JobSchedulerType>) -> Self {
         JobsSchedulerLocked(Arc::new(RwLock::new(scheduler)))
     }
 

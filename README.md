@@ -157,7 +157,7 @@ TokioCronScheduler is licensed under either of
 ## Custom scheduler
 Since version 0.4 a custom job scheduler can be used. In `src/simple_job_scheduler` you can find the 
 default implementation that is used when you call `JobScheduler::new()`. To use your own, call
-`JobScheduler::new_with_scheduler(your_own_scheduler_here)`;
+`JobScheduler::new_with_scheduler(your_own_scheduler_here)`.
 
 ## Contributing
 
