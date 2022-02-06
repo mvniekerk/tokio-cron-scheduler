@@ -2,6 +2,7 @@ use crate::job_scheduler::JobsSchedulerLocked;
 use crate::JobScheduler;
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -12,6 +13,16 @@ use uuid::Uuid;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
 pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+    + Send
+    + Sync;
+
+pub enum JobNotification {
+    Started,
+    Stopped,
+    Removed,
+}
+
+pub type OnJobNotification = dyn FnMut(Uuid, Uuid, JobNotification) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
     + Send
     + Sync;
 
@@ -54,6 +65,13 @@ pub trait Job {
     fn abort_join_handle(&mut self);
     fn stop(&self) -> bool;
     fn set_stopped(&mut self);
+    fn on_start_notification_add(&mut self, on_start: Box<OnJobNotification>) -> Uuid;
+    fn on_start_notification_remove(&mut self, id: Uuid) -> bool;
+    fn on_stop_notification_add(&mut self, on_stop: Box<OnJobNotification>) -> Uuid;
+    fn on_stop_notification_remove(&mut self, id: Uuid) -> bool;
+    fn on_removed_notification_add(&mut self, on_removed: Box<OnJobNotification>) -> Uuid;
+    fn on_removed_notification_remove(&mut self, id: Uuid) -> bool;
+    fn notify_on_removal(&mut self);
 }
 
 struct CronJob {
@@ -66,6 +84,9 @@ struct CronJob {
     pub ran: bool,
     pub stopped: bool,
     pub async_job: bool,
+    pub on_start: HashMap<Uuid, Box<OnJobNotification>>,
+    pub on_stop: HashMap<Uuid, Box<OnJobNotification>>,
+    pub on_removed: HashMap<Uuid, Box<OnJobNotification>>,
 }
 
 impl Job for CronJob {
@@ -106,12 +127,35 @@ impl Job for CronJob {
     }
 
     fn run(&mut self, jobs: JobScheduler) {
-        if !self.async_job {
-            (self.run)(self.job_id, jobs);
-        } else {
-            let future = (self.run_async)(self.job_id, jobs);
+        for (uuid, on_start) in self.on_start.iter_mut() {
+            let future = (on_start)(self.job_id, *uuid, JobNotification::Started);
             tokio::task::spawn(async move {
                 future.await;
+            });
+        }
+
+        let job_id = self.job_id;
+        let on_stops = self
+            .on_stop
+            .iter_mut()
+            .map(|(uuid, on_stopped)| (on_stopped)(job_id, *uuid, JobNotification::Stopped))
+            .collect::<Vec<_>>();
+        if !self.async_job {
+            (self.run)(job_id, jobs);
+            for on_stop in on_stops {
+                tokio::task::spawn(async move {
+                    on_stop.await;
+                });
+            }
+        } else {
+            let future = (self.run_async)(job_id, jobs);
+            tokio::task::spawn(async move {
+                future.await;
+                for on_stop in on_stops {
+                    tokio::task::spawn(async move {
+                        on_stop.await;
+                    });
+                }
             });
         }
     }
@@ -139,6 +183,48 @@ impl Job for CronJob {
     fn set_stopped(&mut self) {
         self.stopped = true;
     }
+
+    fn on_start_notification_add(&mut self, on_start: Box<OnJobNotification>) -> Uuid {
+        let uuid = Uuid::new_v4();
+        self.on_start.insert(uuid, on_start);
+        uuid
+    }
+
+    fn on_start_notification_remove(&mut self, id: Uuid) -> bool {
+        self.on_start.remove(&id).is_some()
+    }
+
+    fn on_stop_notification_add(&mut self, on_stop: Box<OnJobNotification>) -> Uuid {
+        let uuid = Uuid::new_v4();
+        self.on_stop.insert(uuid, on_stop);
+        uuid
+    }
+
+    fn on_stop_notification_remove(&mut self, id: Uuid) -> bool {
+        self.on_stop.remove(&id).is_some()
+    }
+
+    fn on_removed_notification_add(&mut self, on_removed: Box<OnJobNotification>) -> Uuid {
+        let uuid = Uuid::new_v4();
+        self.on_removed.insert(uuid, on_removed);
+        uuid
+    }
+
+    fn on_removed_notification_remove(&mut self, id: Uuid) -> bool {
+        self.on_removed.remove(&id).is_some()
+    }
+
+    fn notify_on_removal(&mut self) {
+        let job_id = self.job_id;
+        self.on_removed
+            .iter_mut()
+            .map(|(uuid, on_removed)| (on_removed)(job_id, *uuid, JobNotification::Removed))
+            .for_each(|v| {
+                tokio::task::spawn(async move {
+                    v.await;
+                });
+            });
+    }
 }
 
 struct NonCronJob {
@@ -152,6 +238,9 @@ struct NonCronJob {
     pub job_type: JobType,
     pub stopped: bool,
     pub async_job: bool,
+    pub on_start: HashMap<Uuid, Box<OnJobNotification>>,
+    pub on_stop: HashMap<Uuid, Box<OnJobNotification>>,
+    pub on_removed: HashMap<Uuid, Box<OnJobNotification>>,
 }
 
 impl Job for NonCronJob {
@@ -235,6 +324,48 @@ impl Job for NonCronJob {
     fn set_stopped(&mut self) {
         self.stopped = true;
     }
+
+    fn on_start_notification_add(&mut self, on_start: Box<OnJobNotification>) -> Uuid {
+        let uuid = Uuid::new_v4();
+        self.on_start.insert(uuid, on_start);
+        uuid
+    }
+
+    fn on_start_notification_remove(&mut self, id: Uuid) -> bool {
+        self.on_start.remove(&id).is_some()
+    }
+
+    fn on_stop_notification_add(&mut self, on_stop: Box<OnJobNotification>) -> Uuid {
+        let uuid = Uuid::new_v4();
+        self.on_stop.insert(uuid, on_stop);
+        uuid
+    }
+
+    fn on_stop_notification_remove(&mut self, id: Uuid) -> bool {
+        self.on_stop.remove(&id).is_some()
+    }
+
+    fn on_removed_notification_add(&mut self, on_removed: Box<OnJobNotification>) -> Uuid {
+        let uuid = Uuid::new_v4();
+        self.on_removed.insert(uuid, on_removed);
+        uuid
+    }
+
+    fn on_removed_notification_remove(&mut self, id: Uuid) -> bool {
+        self.on_removed.remove(&id).is_some()
+    }
+
+    fn notify_on_removal(&mut self) {
+        let job_id = self.job_id;
+        self.on_removed
+            .iter_mut()
+            .map(|(uuid, on_removed)| (on_removed)(job_id, *uuid, JobNotification::Removed))
+            .for_each(|v| {
+                tokio::task::spawn(async move {
+                    v.await;
+                });
+            });
+    }
 }
 
 impl JobLocked {
@@ -267,6 +398,9 @@ impl JobLocked {
                 ran: false,
                 stopped: false,
                 async_job: false,
+                on_stop: HashMap::new(),
+                on_start: HashMap::new(),
+                on_removed: HashMap::new(),
             }))),
         })
     }
@@ -302,6 +436,9 @@ impl JobLocked {
                 ran: false,
                 stopped: false,
                 async_job: true,
+                on_stop: HashMap::new(),
+                on_start: HashMap::new(),
+                on_removed: HashMap::new(),
             }))),
         })
     }
@@ -365,6 +502,9 @@ impl JobLocked {
             job_type: JobType::OneShot,
             stopped: false,
             async_job,
+            on_stop: HashMap::new(),
+            on_start: HashMap::new(),
+            on_removed: HashMap::new(),
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
@@ -453,6 +593,9 @@ impl JobLocked {
             job_type: JobType::OneShot,
             stopped: false,
             async_job,
+            on_stop: HashMap::new(),
+            on_start: HashMap::new(),
+            on_removed: HashMap::new(),
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
@@ -547,6 +690,9 @@ impl JobLocked {
             job_type: JobType::Repeated,
             stopped: false,
             async_job,
+            on_stop: HashMap::new(),
+            on_start: HashMap::new(),
+            on_removed: HashMap::new(),
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =

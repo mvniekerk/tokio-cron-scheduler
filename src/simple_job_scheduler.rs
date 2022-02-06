@@ -1,9 +1,9 @@
-use std::error::Error;
-use uuid::Uuid;
 use crate::job::{JobLocked, JobType};
 use crate::job_scheduler::{JobScheduler, JobSchedulerLockedType, JobsSchedulerLocked};
-use std::time::Duration;
 use chrono::Utc;
+use std::error::Error;
+use std::time::Duration;
+use uuid::Uuid;
 
 #[derive(Default, Clone)]
 pub struct SimpleJobScheduler {
@@ -35,12 +35,13 @@ impl JobScheduler for SimpleJobScheduler {
                 not_to_be_removed
             });
             for job in removed {
-                let mut job_r = job.0.write().unwrap();
-                job_r.set_stopped();
-                let job_type = job_r.job_type();
+                let mut job_w = job.0.write().unwrap();
+                job_w.set_stopped();
+                let job_type = job_w.job_type();
                 if matches!(job_type, JobType::OneShot) || matches!(job_type, JobType::Repeated) {
-                    job_r.abort_join_handle();
+                    job_w.abort_join_handle();
                 }
+                job_w.notify_on_removal();
             }
         }
         Ok(())

@@ -1,9 +1,9 @@
 use crate::error::JobSchedulerError;
 use crate::job::JobLocked;
+use crate::simple_job_scheduler::SimpleJobScheduler;
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
-use crate::simple_job_scheduler::SimpleJobScheduler;
 
 pub trait JobScheduler {
     /// Add a job to the `JobScheduler`
@@ -46,7 +46,9 @@ impl Default for JobsSchedulerLocked {
 impl JobsSchedulerLocked {
     /// Create a new `JobSchedulerLocked` using the `SimpleJobScheduler` as scheduler
     pub fn new() -> Self {
-        JobsSchedulerLocked(Arc::new(RwLock::new(Box::new(SimpleJobScheduler::default()))))
+        JobsSchedulerLocked(Arc::new(RwLock::new(Box::new(
+            SimpleJobScheduler::default(),
+        ))))
     }
 
     /// Create a new `JobsSchedulerLocked` using a custom scheduler
