@@ -834,4 +834,52 @@ impl JobLocked {
         let r = self.0.read().unwrap();
         r.job_id()
     }
+
+    ///
+    /// Run something when the task is started. Returns a UUID as handle for this notification. This
+    /// UUID needs to be used when you want to remove the notification handle using `on_start_notification_remove`.
+    pub fn on_start_notification_add(&mut self, on_start: Box<OnJobNotification>) -> Uuid {
+        let mut w = self.0.write().unwrap();
+        w.on_start_notification_add(on_start)
+    }
+
+    ///
+    /// Remove the notification when the task was started. Uses the same UUID that was returned by
+    /// `on_start_notification_add`
+    pub fn on_start_notification_remove(&mut self, id: Uuid) -> bool {
+        let mut w = self.0.write().unwrap();
+        w.on_start_notification_remove(id)
+    }
+
+    ///
+    /// Run something when the task is stopped. Returns a UUID as handle for this notification. This
+    /// UUID needs to be used when you want to remove the notification handle using `on_stop_notification_remove`.
+    pub fn on_stop_notification_add(&mut self, on_stop: Box<OnJobNotification>) -> Uuid {
+        let mut w = self.0.write().unwrap();
+        w.on_stop_notification_add(on_stop)
+    }
+
+    ///
+    /// Remove the notification when the task was stopped. Uses the same UUID that was returned by
+    /// `on_stop_notification_add`
+    pub fn on_stop_notification_remove(&mut self, id: Uuid) -> bool {
+        let mut w = self.0.write().unwrap();
+        w.on_stop_notification_remove(id)
+    }
+
+    ///
+    /// Run something when the task was removed. Returns a UUID as handle for this notification. This
+    /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
+    pub fn on_removed_notification_add(&mut self, on_removed: Box<OnJobNotification>) -> Uuid {
+        let mut w = self.0.write().unwrap();
+        w.on_stop_notification_add(on_removed)
+    }
+
+    ///
+    /// Remove the notification when the task was removed. Uses the same UUID that was returned by
+    /// `on_removed_notification_add`
+    pub fn on_removed_notification_remove(&mut self, id: Uuid) -> bool {
+        let mut w = self.0.write().unwrap();
+        w.on_removed_notification_remove(id)
+    }
 }
