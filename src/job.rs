@@ -16,6 +16,7 @@ pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Fut
     + Send
     + Sync;
 
+#[derive(Debug)]
 pub enum JobNotification {
     Started,
     Stopped,
@@ -872,7 +873,7 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
     pub fn on_removed_notification_add(&mut self, on_removed: Box<OnJobNotification>) -> Uuid {
         let mut w = self.0.write().unwrap();
-        w.on_stop_notification_add(on_removed)
+        w.on_removed_notification_add(on_removed)
     }
 
     ///
