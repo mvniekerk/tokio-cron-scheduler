@@ -75,7 +75,6 @@ async fn main() {
     let mut jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
       println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
     }).unwrap();
-    sched.add(jj);
   
     jj.on_start_notification_add(Box::new(|job_id, notification_id, type_of_notification| {
       Box::pin(async move {
@@ -94,6 +93,7 @@ async fn main() {
         println!("Job {:?} was removed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
       })
     }));
+    sched.add(jj);
 
     let five_s_job = Job::new("1/5 * * * * *", |_uuid, _l| {
       println!("{:?} I run every 5 seconds", chrono::Utc::now());
@@ -166,3 +166,14 @@ for inclusion in the work by you, as defined in the Apache-2.0 license, shall
 be dual licensed as above, without any additional terms or conditions.
 
 Please see the [CONTRIBUTING](CONTRIBUTING.md) file for more information.
+
+## Unstable features
+
+### signal
+Since 0.5
+
+Adds `shutdown_on_signal` and `shutdown_on_ctrl_c` to the scheduler. 
+Both shuts the system down (stops the scheduler, removes all the tasks) when a signal
+was received.
+
+`shutdown_on_ctrl_c` currently panics. Hence the unstable marker (as of 0.5).  

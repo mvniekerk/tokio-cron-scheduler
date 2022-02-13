@@ -1,5 +1,6 @@
 use crate::job::{JobLocked, JobType};
-use crate::job_scheduler::{JobSchedulerWithoutSync, JobSchedulerType, JobsSchedulerLocked};
+use crate::job_scheduler::{JobSchedulerType, JobSchedulerWithoutSync, JobsSchedulerLocked};
+use crate::JobSchedulerError;
 use chrono::Utc;
 use std::error::Error;
 use std::time::Duration;
@@ -104,6 +105,21 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             .to_std()
             .unwrap_or_else(|_| std::time::Duration::new(0, 0));
         Ok(m)
+    }
+
+    fn shutdown(&mut self, mut scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError> {
+        for j in self.jobs.clone() {
+            let job_id = {
+                let r =
+                    j.0.read()
+                        .map_err(|_| JobSchedulerError::ProblemShuttingDown)?;
+                r.job_id()
+            };
+            println!("Read unlocked {job_id}");
+            scheduler.remove(&job_id)
+                .map_err(|_| JobSchedulerError::ProblemShuttingDown)?;
+        }
+        Ok(())
     }
 }
 impl JobSchedulerType for SimpleJobScheduler {}

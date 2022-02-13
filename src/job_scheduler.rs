@@ -2,6 +2,7 @@ use crate::error::JobSchedulerError;
 use crate::job::JobLocked;
 use crate::simple_job_scheduler::SimpleJobScheduler;
 use std::sync::{Arc, RwLock};
+use tokio::signal::unix::SignalKind;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -23,6 +24,10 @@ pub trait JobSchedulerWithoutSync {
     /// is supposed to run. This can be used to sleep until then without waking
     /// up at a fixed interval.
     fn time_till_next_job(&self) -> Result<std::time::Duration, Box<dyn std::error::Error + '_>>;
+
+    ///
+    /// Shuts the scheduler down
+    fn shutdown(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError>;
 }
 
 /// The scheduler type trait. Example implementation is `SimpleJobScheduler`
@@ -87,10 +92,17 @@ impl JobsSchedulerLocked {
     /// sched.remove(job_id);
     /// ```
     pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
-        let mut ws = self.0.write().map_err(|_| JobSchedulerError::CantRemove)?;
-        if ws.remove(to_be_removed).is_err() {
-            return Err(JobSchedulerError::CantRemove);
-        }
+        tokio::task::block_in_place(|| {
+            let mut ws = self.0.write().map_err(|_| JobSchedulerError::CantRemove)?;
+            ws.remove(to_be_removed).map_err(|_| JobSchedulerError::CantRemove)
+        });
+        // tokio::task::spawn_blocking(async move {
+        //
+        // });
+        // let result = {
+        //
+        // }?;
+
         Ok(())
     }
 
@@ -158,5 +170,48 @@ impl JobsSchedulerLocked {
             .time_till_next_job()
             .map_err(|_| JobSchedulerError::CantGetTimeUntil)?;
         Ok(l)
+    }
+
+    ///
+    /// Shut the scheduler down
+    pub fn shutdown(&mut self) -> Result<(), JobSchedulerError> {
+        let l = self.clone();
+        let mut w = self
+            .0
+            .write()
+            .map_err(|_| JobSchedulerError::ProblemShuttingDown)?;
+        println!("Unlocked?");
+        w.shutdown(l)
+            .map_err(|_| JobSchedulerError::ProblemShuttingDown)?;
+        Ok(())
+    }
+
+    ///
+    /// Wait for a signal to shut the runtime down with
+    #[cfg(feature = "signal")]
+    pub fn shutdown_on_signal(&self, signal: SignalKind) {
+        let mut l = self.clone();
+        tokio::spawn(async move {
+            if let Some(_k) = tokio::signal::unix::signal(signal)
+                .expect("Can't wait for signal")
+                .recv()
+                .await
+            {
+                l.shutdown().expect("Problem shutting down");
+            }
+        });
+    }
+
+    ///
+    /// Wait for a signal to shut the runtime down with
+    #[cfg(feature = "signal")]
+    pub fn shutdown_on_ctrl_c(&self) {
+        let mut l = self.clone();
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("Could not await ctrl-c");
+            l.shutdown().expect("Problem shutting down");
+        });
     }
 }

@@ -4,16 +4,22 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 #[tokio::main]
 async fn main() {
     let mut sched = JobScheduler::new();
+    sched.shutdown_on_ctrl_c();
 
     let mut five_s_job = Job::new("1/5 * * * * *", |_uuid, _l| {
         println!("{:?} I run every 5 seconds", chrono::Utc::now());
     })
     .unwrap();
-    five_s_job.on_removed_notification_add(Box::new(|job_id, notification_id, type_of_notification| {
-        Box::pin(async move {
-            println!("Job {:?} was removed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
-        })
-    }));
+    five_s_job.on_removed_notification_add(Box::new(
+        |job_id, notification_id, type_of_notification| {
+            Box::pin(async move {
+                println!(
+                    "Job {:?} was removed, notification {:?} ran ({:?})",
+                    job_id, notification_id, type_of_notification
+                );
+            })
+        },
+    ));
     let five_s_job_guid = five_s_job.guid();
     sched.add(five_s_job);
 
@@ -33,11 +39,16 @@ async fn main() {
         })
     }));
 
-    four_s_job_async.on_stop_notification_add(Box::new(|job_id, notification_id, type_of_notification| {
-        Box::pin(async move {
-            println!("Job {:?} completed and ran notification {:?} ({:?})", job_id, notification_id, type_of_notification);
-        })
-    }));
+    four_s_job_async.on_stop_notification_add(Box::new(
+        |job_id, notification_id, type_of_notification| {
+            Box::pin(async move {
+                println!(
+                    "Job {:?} completed and ran notification {:?} ({:?})",
+                    job_id, notification_id, type_of_notification
+                );
+            })
+        },
+    ));
 
     let four_s_job_guid = four_s_job_async.guid();
     sched.add(four_s_job_async);
