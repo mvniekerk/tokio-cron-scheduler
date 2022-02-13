@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Command::new("cp")
         .args(&[
             "za.co.agriio.job.rs",
-            format!("{:}/src/nats/job.rs", manifest_dir).as_str(),
+            format!("{:}/src/job_data.rs", manifest_dir).as_str(),
         ])
         .current_dir(&Path::new(&out_dir))
         .status()

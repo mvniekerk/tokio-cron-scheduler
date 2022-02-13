@@ -29,11 +29,13 @@ pub struct Job {
     pub next_tick: u64,
     #[prost(enumeration="JobType", tag="5")]
     pub job_type: i32,
-    #[prost(message, repeated, tag="8")]
-    pub on_start: ::prost::alloc::vec::Vec<Uuid>,
+    #[prost(uint64, tag="8")]
+    pub count: u64,
     #[prost(message, repeated, tag="9")]
-    pub on_stop: ::prost::alloc::vec::Vec<Uuid>,
+    pub on_start: ::prost::alloc::vec::Vec<Uuid>,
     #[prost(message, repeated, tag="10")]
+    pub on_stop: ::prost::alloc::vec::Vec<Uuid>,
+    #[prost(message, repeated, tag="11")]
     pub on_remove: ::prost::alloc::vec::Vec<Uuid>,
     #[prost(oneof="job::Job", tags="6, 7")]
     pub job: ::core::option::Option<job::Job>,

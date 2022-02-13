@@ -5,6 +5,7 @@ mod simple_job_scheduler;
 #[cfg(feature = "nats_scheduler")]
 mod nats;
 mod job_store;
+mod job_data;
 
 pub use error::JobSchedulerError;
 pub use job::JobLocked as Job;
