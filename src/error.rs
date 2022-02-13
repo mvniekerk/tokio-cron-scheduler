@@ -8,4 +8,6 @@ pub enum JobSchedulerError {
     ShutdownNotifier,
     AddShutdownNotifier,
     RemoveShutdownNotifier,
+    FetchJob,
+    SaveJob,
 }

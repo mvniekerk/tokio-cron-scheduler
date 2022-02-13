@@ -3,16 +3,16 @@ syntax = "proto3";
 package za.co.agriio.job;
 
 enum JobState {
-  STOP = 0;
-  SCHEDULED = 1;
-  STARTED = 2;
-  DONE = 3;
+  Stop = 0;
+  Scheduled = 1;
+  Started = 2;
+  Done = 3;
 }
 
 enum JobType {
-  CRON = 0;
-  REPEATED = 1;
-  ONE_SHOT = 2;
+  Cron = 0;
+  Repeated = 1;
+  OneShot = 2;
 }
 
 message CronJob {
