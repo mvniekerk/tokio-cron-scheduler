@@ -1,10 +1,16 @@
 use crate::error::JobSchedulerError;
 use crate::job::JobLocked;
 use crate::simple_job_scheduler::SimpleJobScheduler;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, RwLock};
+#[cfg(feature = "signal")]
 use tokio::signal::unix::SignalKind;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
+
+pub type ShutdownNotification =
+    dyn FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync;
 
 pub trait JobSchedulerWithoutSync {
     /// Add a job to the `JobScheduler`
@@ -27,7 +33,18 @@ pub trait JobSchedulerWithoutSync {
 
     ///
     /// Shuts the scheduler down
-    fn shutdown(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError>;
+    fn shutdown(&mut self) -> Result<(), JobSchedulerError>;
+
+    ///
+    /// Code that is run after the shutdown was run
+    fn set_shutdown_handler(
+        &mut self,
+        job: Box<ShutdownNotification>,
+    ) -> Result<(), JobSchedulerError>;
+
+    ///
+    /// Remove the shutdown handler
+    fn remove_shutdown_handler(&mut self) -> Result<(), JobSchedulerError>;
 }
 
 /// The scheduler type trait. Example implementation is `SimpleJobScheduler`
@@ -92,16 +109,11 @@ impl JobsSchedulerLocked {
     /// sched.remove(job_id);
     /// ```
     pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
-        tokio::task::block_in_place(|| {
+        {
             let mut ws = self.0.write().map_err(|_| JobSchedulerError::CantRemove)?;
-            ws.remove(to_be_removed).map_err(|_| JobSchedulerError::CantRemove)
-        });
-        // tokio::task::spawn_blocking(async move {
-        //
-        // });
-        // let result = {
-        //
-        // }?;
+            ws.remove(to_be_removed)
+                .map_err(|_| JobSchedulerError::CantRemove)?;
+        }
 
         Ok(())
     }
@@ -175,14 +187,8 @@ impl JobsSchedulerLocked {
     ///
     /// Shut the scheduler down
     pub fn shutdown(&mut self) -> Result<(), JobSchedulerError> {
-        let l = self.clone();
-        let mut w = self
-            .0
-            .write()
-            .map_err(|_| JobSchedulerError::ProblemShuttingDown)?;
-        println!("Unlocked?");
-        w.shutdown(l)
-            .map_err(|_| JobSchedulerError::ProblemShuttingDown)?;
+        let mut w = self.0.write().map_err(|_| JobSchedulerError::Shutdown)?;
+        w.shutdown().map_err(|_| JobSchedulerError::Shutdown)?;
         Ok(())
     }
 
@@ -211,7 +217,35 @@ impl JobsSchedulerLocked {
             tokio::signal::ctrl_c()
                 .await
                 .expect("Could not await ctrl-c");
-            l.shutdown().expect("Problem shutting down");
+
+            if let Err(err) = l.shutdown() {
+                eprintln!("{:?}", err);
+            }
         });
+    }
+
+    ///
+    /// Code that is run after the shutdown was run
+    pub fn set_shutdown_handler(
+        &mut self,
+        job: Box<ShutdownNotification>,
+    ) -> Result<(), JobSchedulerError> {
+        let mut w = self
+            .0
+            .write()
+            .map_err(|_| JobSchedulerError::AddShutdownNotifier)?;
+        w.set_shutdown_handler(job)?;
+        Ok(())
+    }
+
+    ///
+    /// Remove the shutdown handler
+    pub fn remove_shutdown_handler(&mut self) -> Result<(), JobSchedulerError> {
+        let mut w = self
+            .0
+            .write()
+            .map_err(|_| JobSchedulerError::RemoveShutdownNotifier)?;
+        w.remove_shutdown_handler()?;
+        Ok(())
     }
 }

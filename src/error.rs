@@ -4,5 +4,8 @@ pub enum JobSchedulerError {
     CantAdd,
     TickError,
     CantGetTimeUntil,
-    ProblemShuttingDown,
+    Shutdown,
+    ShutdownNotifier,
+    AddShutdownNotifier,
+    RemoveShutdownNotifier,
 }

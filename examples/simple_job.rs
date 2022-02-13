@@ -4,7 +4,14 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 #[tokio::main]
 async fn main() {
     let mut sched = JobScheduler::new();
+    #[cfg(feature = "signal")]
     sched.shutdown_on_ctrl_c();
+
+    sched.set_shutdown_handler(Box::new(|| {
+        Box::pin(async move {
+            println!("Shut down done");
+        })
+    }));
 
     let mut five_s_job = Job::new("1/5 * * * * *", |_uuid, _l| {
         println!("{:?} I run every 5 seconds", chrono::Utc::now());

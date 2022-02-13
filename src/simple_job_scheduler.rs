@@ -1,14 +1,18 @@
 use crate::job::{JobLocked, JobType};
-use crate::job_scheduler::{JobSchedulerType, JobSchedulerWithoutSync, JobsSchedulerLocked};
+use crate::job_scheduler::{
+    JobSchedulerType, JobSchedulerWithoutSync, JobsSchedulerLocked, ShutdownNotification,
+};
 use crate::JobSchedulerError;
 use chrono::Utc;
 use std::error::Error;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use uuid::Uuid;
 
 #[derive(Default, Clone)]
 pub struct SimpleJobScheduler {
     jobs: Vec<JobLocked>,
+    shutdown_handler: Option<Arc<RwLock<Box<ShutdownNotification>>>>,
 }
 
 unsafe impl Send for SimpleJobScheduler {}
@@ -107,18 +111,42 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
         Ok(m)
     }
 
-    fn shutdown(&mut self, mut scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError> {
+    fn shutdown(&mut self) -> Result<(), JobSchedulerError> {
         for j in self.jobs.clone() {
             let job_id = {
-                let r =
-                    j.0.read()
-                        .map_err(|_| JobSchedulerError::ProblemShuttingDown)?;
+                let r = j.0.read().map_err(|_| JobSchedulerError::Shutdown)?;
                 r.job_id()
             };
-            println!("Read unlocked {job_id}");
-            scheduler.remove(&job_id)
-                .map_err(|_| JobSchedulerError::ProblemShuttingDown)?;
+            self.remove(&job_id)
+                .map_err(|_| JobSchedulerError::Shutdown)?;
         }
+        if let Some(e) = self.shutdown_handler.clone() {
+            let fut = {
+                e.write()
+                    .map(|mut w| (w)())
+                    .map_err(|_| JobSchedulerError::ShutdownNotifier)
+            }?;
+            tokio::task::spawn(async move {
+                fut.await;
+            });
+        }
+        Ok(())
+    }
+
+    ///
+    /// Code that is run after the shutdown was run
+    fn set_shutdown_handler(
+        &mut self,
+        job: Box<ShutdownNotification>,
+    ) -> Result<(), JobSchedulerError> {
+        self.shutdown_handler = Some(Arc::new(RwLock::new(job)));
+        Ok(())
+    }
+
+    ///
+    /// Remove the shutdown handler
+    fn remove_shutdown_handler(&mut self) -> Result<(), JobSchedulerError> {
+        self.shutdown_handler = None;
         Ok(())
     }
 }

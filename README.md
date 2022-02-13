@@ -135,6 +135,15 @@ async fn main() {
     })).unwrap();
     sched.add(jja);
 
+    #[cfg(feature = "signal")]
+    sched.shutdown_on_ctrl_c();
+
+    sched.set_shutdown_handler(Box::new(|| {
+      Box::pin(async move {
+        println!("Shut down done");
+      })
+    }));
+
     sched.start().await;
 }
 ```
@@ -167,7 +176,7 @@ be dual licensed as above, without any additional terms or conditions.
 
 Please see the [CONTRIBUTING](CONTRIBUTING.md) file for more information.
 
-## Unstable features
+## Features
 
 ### signal
 Since 0.5
@@ -175,5 +184,3 @@ Since 0.5
 Adds `shutdown_on_signal` and `shutdown_on_ctrl_c` to the scheduler. 
 Both shuts the system down (stops the scheduler, removes all the tasks) when a signal
 was received.
-
-`shutdown_on_ctrl_c` currently panics. Hence the unstable marker (as of 0.5).  
