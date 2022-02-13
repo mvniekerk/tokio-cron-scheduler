@@ -22,9 +22,23 @@ cron = "0.8"
 chrono = "0.4"
 uuid = { version = "0.8", features = ["v4"] }
 
+
+[dependencies.nats]
+git = "ssh://git@github.com/nats-io/nats.rs.git"
+rev = "9e556c059f29752165eaa029885fb8836ca34dcf"
+#branch = "main"
+features = ["unstable"]
+optional = true
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
+[build-dependencies]
+prost-build = { version = "0.9" }
+
 [features]
 signal = ["tokio/signal"]
+nats_scheduler = ["nats" ]
 default = []
+
+
