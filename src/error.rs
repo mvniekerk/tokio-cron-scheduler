@@ -10,4 +10,5 @@ pub enum JobSchedulerError {
     RemoveShutdownNotifier,
     FetchJob,
     SaveJob,
+    StartScheduler
 }

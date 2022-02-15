@@ -45,6 +45,10 @@ pub trait JobSchedulerWithoutSync {
     ///
     /// Remove the shutdown handler
     fn remove_shutdown_handler(&mut self) -> Result<(), JobSchedulerError>;
+
+    ///
+    /// Start the scheduler
+    fn start(&self, scheduler: JobsSchedulerLocked) -> Result<JoinHandle<()>, JobSchedulerError>;
 }
 
 /// The scheduler type trait. Example implementation is `SimpleJobScheduler`
@@ -147,20 +151,11 @@ impl JobsSchedulerLocked {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
-    pub fn start(&self) -> JoinHandle<()> {
+    pub fn start(&self) -> Result<JoinHandle<()>, JobSchedulerError> {
         let jl: JobsSchedulerLocked = self.clone();
-        let jh: JoinHandle<()> = tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(core::time::Duration::from_millis(500)).await;
-                let mut jsl = jl.clone();
-                let tick = jsl.tick();
-                if let Err(e) = tick {
-                    eprintln!("Error on job scheduler tick {:?}", e);
-                    break;
-                }
-            }
-        });
-        jh
+        let r = self.0.read().map_err(|_| JobSchedulerError::StartScheduler)?;
+        let jh = r.start(jl)?;
+        Ok(jh)
     }
 
     /// The `time_till_next_job` method returns the duration till the next job

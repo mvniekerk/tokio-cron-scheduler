@@ -7,6 +7,7 @@ use chrono::Utc;
 use std::error::Error;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 #[derive(Default, Clone)]
@@ -148,6 +149,21 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
     fn remove_shutdown_handler(&mut self) -> Result<(), JobSchedulerError> {
         self.shutdown_handler = None;
         Ok(())
+    }
+
+    fn start(&self, scheduler: JobsSchedulerLocked) -> Result<JoinHandle<()>, JobSchedulerError> {
+        let jh: JoinHandle<()> = tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(core::time::Duration::from_millis(500)).await;
+                let mut jsl = scheduler.clone();
+                let tick = jsl.tick();
+                if let Err(e) = tick {
+                    eprintln!("Error on job scheduler tick {:?}", e);
+                    break;
+                }
+            }
+        });
+        Ok(jh)
     }
 }
 impl JobSchedulerType for SimpleJobScheduler {}
