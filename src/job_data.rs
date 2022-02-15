@@ -29,8 +29,8 @@ pub struct Job {
     pub next_tick: u64,
     #[prost(enumeration="JobType", tag="5")]
     pub job_type: i32,
-    #[prost(uint64, tag="8")]
-    pub count: u64,
+    #[prost(uint32, tag="8")]
+    pub count: u32,
     #[prost(message, repeated, tag="9")]
     pub on_start: ::prost::alloc::vec::Vec<Uuid>,
     #[prost(message, repeated, tag="10")]

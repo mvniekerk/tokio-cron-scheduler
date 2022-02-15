@@ -39,7 +39,7 @@ message Job {
     CronJob cron_job = 6;
     NonCronJob non_cron_job = 7;
   }
-  uint64 count = 8;
+  uint32 count = 8;
   repeated Uuid on_start = 9;
   repeated Uuid on_stop = 10;
   repeated Uuid on_remove = 11;

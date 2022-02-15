@@ -1,6 +1,6 @@
 use crate::error::JobSchedulerError;
 use crate::job::JobLocked;
-use crate::simple_job_scheduler::SimpleJobScheduler;
+use crate::simple::SimpleJobScheduler;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
