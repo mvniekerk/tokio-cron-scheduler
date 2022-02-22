@@ -8,16 +8,17 @@ use std::sync::{Arc, RwLock};
 use tokio::signal::unix::SignalKind;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
+use crate::job_store::JobStoreLocked;
 
 pub type ShutdownNotification =
     dyn FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync;
 
 pub trait JobSchedulerWithoutSync {
     /// Add a job to the `JobScheduler`
-    fn add(&mut self, job: JobLocked) -> Result<(), Box<dyn std::error::Error + '_>>;
+    fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError>;
 
     /// Remove a job from the `JobScheduler`
-    fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), Box<dyn std::error::Error + '_>>;
+    fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError>;
 
     /// The `tick` method increments time for the JobScheduler and executes
     /// any pending jobs.
@@ -49,6 +50,14 @@ pub trait JobSchedulerWithoutSync {
     ///
     /// Start the scheduler
     fn start(&self, scheduler: JobsSchedulerLocked) -> Result<JoinHandle<()>, JobSchedulerError>;
+
+    ///
+    /// Set the job store
+    fn set_job_store(&mut self, job_store: JobStoreLocked) -> Result<(), JobSchedulerError>;
+
+    ///
+    /// Get the job store
+    fn get_job_store(&self) -> Result<JobStoreLocked, JobSchedulerError>;
 }
 
 /// The scheduler type trait. Example implementation is `SimpleJobScheduler`
@@ -95,9 +104,7 @@ impl JobsSchedulerLocked {
     pub fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
         {
             let mut self_w = self.0.write().map_err(|_e| JobSchedulerError::CantAdd)?;
-            if self_w.add(job).is_err() {
-                return Err(JobSchedulerError::CantAdd);
-            }
+            self_w.add(job)?;
         }
         Ok(())
     }

@@ -10,6 +10,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
+use crate::job_data::JobType;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
 pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
@@ -42,12 +43,6 @@ fn nop_async(
 /// A schedulable Job
 #[derive(Clone)]
 pub struct JobLocked(pub(crate) Arc<RwLock<Box<dyn Job + Send + Sync>>>);
-
-pub enum JobType {
-    CronJob,
-    OneShot,
-    Repeated,
-}
 
 pub trait Job {
     fn is_cron_job(&self) -> bool;
@@ -162,7 +157,7 @@ impl Job for CronJob {
     }
 
     fn job_type(&self) -> &JobType {
-        &JobType::CronJob
+        &JobType::Cron
     }
 
     fn ran(&self) -> bool {
@@ -776,7 +771,7 @@ impl JobLocked {
         {
             let s = self.0.write();
             s.map(|mut s| match s.job_type() {
-                JobType::CronJob => {
+                JobType::Cron => {
                     if s.last_tick().is_none() {
                         s.set_last_tick(Some(now));
                         return false;

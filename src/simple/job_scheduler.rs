@@ -1,4 +1,4 @@
-use crate::job::{JobLocked, JobType};
+use crate::job::JobLocked;
 use crate::job_scheduler::{
     JobSchedulerType, JobSchedulerWithoutSync, JobsSchedulerLocked, ShutdownNotification,
 };
@@ -9,10 +9,13 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
+use crate::job_store::JobStoreLocked;
+use crate::job_data::JobType;
 
 #[derive(Default, Clone)]
 pub struct SimpleJobScheduler {
-    jobs: Vec<JobLocked>,
+    job_store: JobStoreLocked,
+    // jobs: Vec<JobLocked>,
     shutdown_handler: Option<Arc<RwLock<Box<ShutdownNotification>>>>,
 }
 
@@ -20,36 +23,13 @@ unsafe impl Send for SimpleJobScheduler {}
 unsafe impl Sync for SimpleJobScheduler {}
 
 impl JobSchedulerWithoutSync for SimpleJobScheduler {
-    fn add(&mut self, job: JobLocked) -> Result<(), Box<dyn Error + '_>> {
-        self.jobs.push(job);
+    fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
+        self.job_store.add(job)?;
         Ok(())
     }
 
-    fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), Box<dyn Error + '_>> {
-        {
-            let mut removed: Vec<JobLocked> = vec![];
-            self.jobs.retain(|f| !{
-                let not_to_be_removed = if let Ok(f) = f.0.read() {
-                    f.job_id().eq(to_be_removed)
-                } else {
-                    false
-                };
-                if !not_to_be_removed {
-                    let f = f.0.clone();
-                    removed.push(JobLocked(f))
-                }
-                not_to_be_removed
-            });
-            for job in removed {
-                let mut job_w = job.0.write().unwrap();
-                job_w.set_stopped();
-                let job_type = job_w.job_type();
-                if matches!(job_type, JobType::OneShot) || matches!(job_type, JobType::Repeated) {
-                    job_w.abort_join_handle();
-                }
-                job_w.notify_on_removal();
-            }
-        }
+    fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
+        self.job_store.remove(to_be_removed)?;
         Ok(())
     }
 
@@ -151,6 +131,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
         Ok(())
     }
 
+    /// Start the simple job scheduler
     fn start(&self, scheduler: JobsSchedulerLocked) -> Result<JoinHandle<()>, JobSchedulerError> {
         let jh: JoinHandle<()> = tokio::spawn(async move {
             loop {
@@ -164,6 +145,15 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             }
         });
         Ok(jh)
+    }
+
+    fn set_job_store(&mut self, job_store: JobStoreLocked) -> Result<(), JobSchedulerError> {
+        self.job_store = job_store;
+        Ok(())
+    }
+
+    fn get_job_store(&self) -> Result<JobStoreLocked, JobSchedulerError> {
+        Ok(self.job_store.clone())
     }
 }
 impl JobSchedulerType for SimpleJobScheduler {}
