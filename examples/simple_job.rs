@@ -102,7 +102,11 @@ async fn main() {
     let jja_guid = jja.guid();
     sched.add(jja);
 
-    tokio::spawn(sched.start());
+    let start = sched.start();
+    if start.is_err() {
+        eprintln!("Error starting scheduler");
+        return;
+    }
     tokio::time::sleep(Duration::from_secs(30)).await;
 
     println!("{:?} Remove 4, 5, 7 and 8 sec jobs", chrono::Utc::now());
