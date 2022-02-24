@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use crate::{JobSchedulerError, OnJobNotification};
 use crate::job::JobLocked;
@@ -25,6 +26,8 @@ pub trait OnJobRemove {
 pub trait JobStore {
     fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError>;
     fn remove(&mut self, job: &Uuid) -> Result<(), JobSchedulerError>;
+    fn list_job_guids(&mut self) -> Result<Vec<Uuid>, JobSchedulerError>;
+    fn get_job(&mut self, job: &Uuid) -> Result<Option<JobLocked>, JobSchedulerError>;
 }
 
 #[derive(Clone)]
@@ -32,7 +35,7 @@ pub struct JobStoreLocked(Arc<RwLock<Box<dyn JobStore>>>);
 
 impl Default for JobStoreLocked {
     fn default() -> Self {
-        JobStoreLocked(Arc::new(RwLock::new(Box::new(SimpleJobStore { jobs: vec![] }))))
+        JobStoreLocked(Arc::new(RwLock::new(Box::new(SimpleJobStore { jobs: HashMap::new() }))))
     }
 }
 
@@ -51,5 +54,21 @@ impl JobStoreLocked {
             w.remove(job)?;
         }
         Ok(())
+    }
+
+    pub fn list_job_guids(&mut self) -> Result<Vec<Uuid>, JobSchedulerError> {
+        let guids = {
+            let mut w = self.0.write().map_err(|_| JobSchedulerError::ErrorLoadingGuidList)?;
+            w.list_job_guids()?
+        };
+        Ok(guids)
+    }
+
+    pub fn get_job(&mut self, guid: &Uuid) -> Result<Option<JobLocked>, JobSchedulerError> {
+        let job = {
+            let mut w = self.0.write().map_err(|_| JobSchedulerError::ErrorLoadingJob)?;
+            w.get_job(guid)?
+        };
+        Ok(job)
     }
 }

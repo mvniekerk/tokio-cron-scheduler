@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::job::JobLocked;
 use crate::job_data::JobType;
 
@@ -6,18 +7,21 @@ use crate::JobSchedulerError;
 use uuid::Uuid;
 
 pub struct SimpleJobStore {
-    pub jobs: Vec<JobLocked>,
+    pub jobs: HashMap<Uuid, JobLocked>,
 }
 
 impl JobStore for SimpleJobStore {
     fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
-        self.jobs.push(job);
+        let job_for_insert = job.clone();
+        let id = job.0.read().unwrap();
+        let id = id.job_id();
+        self.jobs.insert(id, job_for_insert);
         Ok(())
     }
 
     fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
         let mut removed: Vec<JobLocked> = vec![];
-        self.jobs.retain(|f| !{
+        self.jobs.retain(|_id, f| !{
             let not_to_be_removed = if let Ok(f) = f.0.read() {
                 f.job_id().eq(to_be_removed)
             } else {
@@ -39,5 +43,13 @@ impl JobStore for SimpleJobStore {
             job_w.notify_on_removal();
         }
         Ok(())
+    }
+
+    fn list_job_guids(&mut self) -> Result<Vec<Uuid>, JobSchedulerError> {
+        Ok(self.jobs.keys().cloned().collect::<Vec<_>>())
+    }
+
+    fn get_job(&mut self, job: &Uuid) -> Result<Option<JobLocked>, JobSchedulerError> {
+        Ok(self.jobs.get(job).cloned())
     }
 }

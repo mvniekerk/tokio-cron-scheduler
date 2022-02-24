@@ -4,7 +4,6 @@ use crate::job_scheduler::{
 };
 use crate::JobSchedulerError;
 use chrono::Utc;
-use std::error::Error;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -33,8 +32,16 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
         Ok(())
     }
 
-    fn tick(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), Box<dyn Error + '_>> {
-        for jl in self.jobs.iter_mut() {
+    fn tick(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError> {
+        let guids = self.job_store.list_job_guids()?;
+        for guid in guids {
+            let mut jl = {
+                let job = self.job_store.get_job(&guid);
+                match job {
+                    Ok(Some(job)) => job,
+                    _ => continue
+                }
+            };
             if jl.tick() {
                 let ref_for_later = jl.0.clone();
                 let jobs = scheduler.clone();
@@ -60,15 +67,16 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
         Ok(())
     }
 
-    fn time_till_next_job(&self) -> Result<Duration, Box<dyn Error + '_>> {
-        if self.jobs.is_empty() {
+    fn time_till_next_job(&mut self) -> Result<Duration, JobSchedulerError> {
+        let guids = self.job_store.list_job_guids()?;
+        if guids.is_empty() {
             // Take a guess if there are no jobs.
             return Ok(std::time::Duration::from_millis(500));
         }
         let now = Utc::now();
-        let min = self
-            .jobs
-            .iter()
+        let min = guids.iter().map(|g| self.job_store.get_job(&g))
+            .flatten()
+            .flatten()
             .map(|j| {
                 let diff = {
                     j.0.read().ok().and_then(|j| {
@@ -93,13 +101,9 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
     }
 
     fn shutdown(&mut self) -> Result<(), JobSchedulerError> {
-        for j in self.jobs.clone() {
-            let job_id = {
-                let r = j.0.read().map_err(|_| JobSchedulerError::Shutdown)?;
-                r.job_id()
-            };
-            self.remove(&job_id)
-                .map_err(|_| JobSchedulerError::Shutdown)?;
+        let guids = self.job_store.list_job_guids()?;
+        for guid in guids {
+            self.remove(&guid)?;
         }
         if let Some(e) = self.shutdown_handler.clone() {
             let fut = {

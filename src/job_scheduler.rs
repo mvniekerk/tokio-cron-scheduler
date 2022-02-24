@@ -25,12 +25,12 @@ pub trait JobSchedulerWithoutSync {
     fn tick(
         &mut self,
         scheduler: JobsSchedulerLocked,
-    ) -> Result<(), Box<dyn std::error::Error + '_>>;
+    ) -> Result<(), JobSchedulerError>;
 
     /// The `time_till_next_job` method returns the duration till the next job
     /// is supposed to run. This can be used to sleep until then without waking
     /// up at a fixed interval.
-    fn time_till_next_job(&self) -> Result<std::time::Duration, Box<dyn std::error::Error + '_>>;
+    fn time_till_next_job(&mut self) -> Result<std::time::Duration, JobSchedulerError>;
 
     ///
     /// Shuts the scheduler down
@@ -176,11 +176,11 @@ impl JobsSchedulerLocked {
     /// }
     /// ```
     pub fn time_till_next_job(&self) -> Result<std::time::Duration, JobSchedulerError> {
-        let r = self
+        let mut w = self
             .0
-            .read()
+            .write()
             .map_err(|_| JobSchedulerError::CantGetTimeUntil)?;
-        let l = r
+        let l = w
             .time_till_next_job()
             .map_err(|_| JobSchedulerError::CantGetTimeUntil)?;
         Ok(l)

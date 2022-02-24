@@ -10,5 +10,8 @@ pub enum JobSchedulerError {
     RemoveShutdownNotifier,
     FetchJob,
     SaveJob,
-    StartScheduler
+    StartScheduler,
+    ErrorLoadingGuidList,
+    ErrorLoadingJob,
+    CouldNotGetTimeUntilNextTick
 }
