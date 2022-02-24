@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use crate::job::JobLocked;
 use crate::job_data::JobType;
+use std::collections::HashMap;
 
 use crate::job_store::JobStore;
 use crate::JobSchedulerError;

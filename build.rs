@@ -4,7 +4,6 @@ use std::path::Path;
 use std::process::Command;
 
 fn main() -> Result<(), Box<dyn Error>> {
-
     let out_dir = env::var("OUT_DIR").unwrap();
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     println!("Manifest {:}", manifest_dir);

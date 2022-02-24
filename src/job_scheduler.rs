@@ -1,5 +1,6 @@
 use crate::error::JobSchedulerError;
 use crate::job::JobLocked;
+use crate::job_store::JobStoreLocked;
 use crate::simple::SimpleJobScheduler;
 use std::future::Future;
 use std::pin::Pin;
@@ -8,7 +9,6 @@ use std::sync::{Arc, RwLock};
 use tokio::signal::unix::SignalKind;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
-use crate::job_store::JobStoreLocked;
 
 pub type ShutdownNotification =
     dyn FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync;
@@ -22,10 +22,7 @@ pub trait JobSchedulerWithoutSync {
 
     /// The `tick` method increments time for the JobScheduler and executes
     /// any pending jobs.
-    fn tick(
-        &mut self,
-        scheduler: JobsSchedulerLocked,
-    ) -> Result<(), JobSchedulerError>;
+    fn tick(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError>;
 
     /// The `time_till_next_job` method returns the duration till the next job
     /// is supposed to run. This can be used to sleep until then without waking
@@ -160,7 +157,10 @@ impl JobsSchedulerLocked {
     /// ```
     pub fn start(&self) -> Result<JoinHandle<()>, JobSchedulerError> {
         let jl: JobsSchedulerLocked = self.clone();
-        let r = self.0.read().map_err(|_| JobSchedulerError::StartScheduler)?;
+        let r = self
+            .0
+            .read()
+            .map_err(|_| JobSchedulerError::StartScheduler)?;
         let jh = r.start(jl)?;
         Ok(jh)
     }

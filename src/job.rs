@@ -1,3 +1,4 @@
+use crate::job_data::JobType;
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::JobScheduler;
 use chrono::{DateTime, Utc};
@@ -10,7 +11,6 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
-use crate::job_data::JobType;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
 pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>

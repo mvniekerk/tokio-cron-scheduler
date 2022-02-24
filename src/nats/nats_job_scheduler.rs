@@ -1,6 +1,5 @@
-
-use std::sync::{Arc, RwLock};
 use nats::jetstream::JetStream;
+use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
 pub struct NatsJobScheduler {

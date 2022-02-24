@@ -1,15 +1,15 @@
 use crate::job::JobLocked;
+use crate::job_data::JobType;
 use crate::job_scheduler::{
     JobSchedulerType, JobSchedulerWithoutSync, JobsSchedulerLocked, ShutdownNotification,
 };
+use crate::job_store::JobStoreLocked;
 use crate::JobSchedulerError;
 use chrono::Utc;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
-use crate::job_store::JobStoreLocked;
-use crate::job_data::JobType;
 
 #[derive(Default, Clone)]
 pub struct SimpleJobScheduler {
@@ -39,7 +39,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                 let job = self.job_store.get_job(&guid);
                 match job {
                     Ok(Some(job)) => job,
-                    _ => continue
+                    _ => continue,
                 }
             };
             if jl.tick() {
@@ -74,7 +74,9 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             return Ok(std::time::Duration::from_millis(500));
         }
         let now = Utc::now();
-        let min = guids.iter().map(|g| self.job_store.get_job(&g))
+        let min = guids
+            .iter()
+            .map(|g| self.job_store.get_job(g))
             .flatten()
             .flatten()
             .map(|j| {
