@@ -1,11 +1,14 @@
 mod error;
 mod job;
+#[cfg(feature = "job_data")]
 mod job_data;
 mod job_scheduler;
 mod job_store;
 #[cfg(feature = "nats_scheduler")]
 mod nats;
 mod simple;
+mod cron_job;
+mod non_cron_job;
 
 #[cfg(feature = "nats_scheduler")]
 pub use crate::nats::NatsJobScheduler;

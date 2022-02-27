@@ -14,7 +14,6 @@ use uuid::Uuid;
 #[derive(Default, Clone)]
 pub struct SimpleJobScheduler {
     job_store: JobStoreLocked,
-    // jobs: Vec<JobLocked>,
     shutdown_handler: Option<Arc<RwLock<Box<ShutdownNotification>>>>,
 }
 

@@ -38,7 +38,8 @@ prost-build = { version = "0.9" }
 
 [features]
 signal = ["tokio/signal"]
-nats_scheduler = ["nats" ]
-default = ["nats_scheduler"]
+nats_scheduler = ["nats"]
+job_data = []
+default = ["nats_scheduler", "job_data"]
 
 
