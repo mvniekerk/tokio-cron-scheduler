@@ -98,9 +98,7 @@ impl JobStore for SimpleJobStore {
                 .entry(js)
                 .or_insert_with(HashMap::new);
             let states = self.notification_guids.get_mut(&js).unwrap();
-            if !states.contains_key(job) {
-                states.insert(*job, HashSet::new());
-            }
+            states.entry(*job).or_insert_with(HashSet::new);
             let job_notifications_for_state = states.get_mut(job).unwrap();
             job_notifications_for_state.insert(*notification_guid);
         }

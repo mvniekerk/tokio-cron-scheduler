@@ -64,7 +64,7 @@ pub trait Job {
     ) -> Result<Uuid, JobSchedulerError>;
     fn on_start_notification_remove(
         &mut self,
-        id: &Uuid,
+        notification_id: &Uuid,
         job_store: JobStoreLocked,
     ) -> Result<bool, JobSchedulerError>;
     fn on_done_notification_add(
@@ -74,7 +74,7 @@ pub trait Job {
     ) -> Result<Uuid, JobSchedulerError>;
     fn on_done_notification_remove(
         &mut self,
-        id: &Uuid,
+        notification_id: &Uuid,
         job_store: JobStoreLocked,
     ) -> Result<bool, JobSchedulerError>;
     fn on_removed_notification_add(
@@ -84,7 +84,7 @@ pub trait Job {
     ) -> Result<Uuid, JobSchedulerError>;
     fn on_removed_notification_remove(
         &mut self,
-        id: &Uuid,
+        notification_id: &Uuid,
         job_store: JobStoreLocked,
     ) -> Result<bool, JobSchedulerError>;
     fn job_data_from_job_store(
@@ -135,7 +135,6 @@ impl JobLocked {
             },
             run: Box::new(run),
             run_async: Box::new(nop_async),
-            job_id: Uuid::new_v4(),
             async_job: false,
         })))))
     }
@@ -183,7 +182,6 @@ impl JobLocked {
             },
             run: Box::new(nop),
             run_async: Box::new(run),
-            job_id: Uuid::new_v4(),
             async_job: true,
         })))))
     }
@@ -576,8 +574,8 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_start_notification_remove`.
     pub fn on_start_notification_add(
         &mut self,
-        on_start: Box<OnJobNotification>,
         job_store: JobStoreLocked,
+        on_start: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
         w.on_start_notification_add(on_start, job_store)
@@ -588,20 +586,20 @@ impl JobLocked {
     /// `on_start_notification_add`
     pub fn on_start_notification_remove(
         &mut self,
-        id: &Uuid,
         job_store: JobStoreLocked,
+        notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
-        w.on_start_notification_remove(id, job_store)
+        w.on_start_notification_remove(notification_id, job_store)
     }
 
     ///
     /// Run something when the task is stopped. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_stop_notification_remove`.
-    pub fn on_stop_notification_add(
+    pub fn on_done_notification_add(
         &mut self,
-        on_stop: Box<OnJobNotification>,
         job_store: JobStoreLocked,
+        on_stop: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
         w.on_done_notification_add(on_stop, job_store)
@@ -609,11 +607,11 @@ impl JobLocked {
 
     ///
     /// Remove the notification when the task was stopped. Uses the same UUID that was returned by
-    /// `on_stop_notification_add`
-    pub fn on_stop_notification_remove(
+    /// `on_done_notification_add`
+    pub fn on_done_notification_remove(
         &mut self,
-        id: &Uuid,
         job_store: JobStoreLocked,
+        id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
         w.on_done_notification_remove(id, job_store)
@@ -624,8 +622,8 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
     pub fn on_removed_notification_add(
         &mut self,
-        on_removed: Box<OnJobNotification>,
         job_store: JobStoreLocked,
+        on_removed: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
         w.on_removed_notification_add(on_removed, job_store)
@@ -636,8 +634,8 @@ impl JobLocked {
     /// `on_removed_notification_add`
     pub fn on_removed_notification_remove(
         &mut self,
-        id: &Uuid,
         job_store: JobStoreLocked,
+        id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
         w.on_removed_notification_remove(id, job_store)

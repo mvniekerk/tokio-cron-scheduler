@@ -15,7 +15,6 @@ pub struct CronJob {
     pub data: JobStoredData,
     pub run: Box<JobToRun>,
     pub run_async: Box<JobToRunAsync>,
-    pub job_id: Uuid,
     pub async_job: bool,
 }
 
@@ -116,9 +115,10 @@ impl Job for CronJob {
         on_start: Box<OnJobNotification>,
         job_store: JobStoreLocked,
     ) -> Result<Uuid, JobSchedulerError> {
+        let job_id = self.job_id();
         let uuid = Uuid::new_v4();
         let mut js = job_store;
-        js.add_notification(&self.job_id, &uuid, on_start, vec![JobState::Started])?;
+        js.add_notification(&job_id, &uuid, on_start, vec![JobState::Started])?;
         Ok(uuid)
     }
 
@@ -136,9 +136,10 @@ impl Job for CronJob {
         on_stop: Box<OnJobNotification>,
         job_store: JobStoreLocked,
     ) -> Result<Uuid, JobSchedulerError> {
+        let job_id = self.job_id();
         let uuid = Uuid::new_v4();
         let mut js = job_store;
-        js.add_notification(&self.job_id, &uuid, on_stop, vec![JobState::Done])?;
+        js.add_notification(&job_id, &uuid, on_stop, vec![JobState::Done])?;
         Ok(uuid)
     }
 
@@ -156,9 +157,10 @@ impl Job for CronJob {
         on_removed: Box<OnJobNotification>,
         job_store: JobStoreLocked,
     ) -> Result<Uuid, JobSchedulerError> {
+        let job_id = self.job_id();
         let uuid = Uuid::new_v4();
         let mut js = job_store;
-        js.add_notification(&self.job_id, &uuid, on_removed, vec![JobState::Removed])?;
+        js.add_notification(&job_id, &uuid, on_removed, vec![JobState::Removed])?;
         Ok(uuid)
     }
 
@@ -176,7 +178,7 @@ impl Job for CronJob {
         job_store: JobStoreLocked,
     ) -> Result<Option<JobStoredData>, JobSchedulerError> {
         let mut job_store = job_store;
-        let jd = job_store.get_job_data(&self.job_id)?;
+        let jd = job_store.get_job_data(&self.job_id())?;
         Ok(jd)
     }
 
