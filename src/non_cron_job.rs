@@ -4,8 +4,9 @@ use cron::Schedule;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 use crate::job::{Job, JobToRunAsync};
-use crate::job_data::JobType;
-use crate::{JobNotification, JobScheduler, JobToRun, OnJobNotification};
+use crate::job_data::{JobData, JobType};
+use crate::{JobNotification, JobScheduler, JobSchedulerError, JobToRun, OnJobNotification};
+use crate::job_store::JobStoreLocked;
 
 pub struct NonCronJob {
     pub run: Box<JobToRun>,
@@ -28,12 +29,12 @@ impl Job for NonCronJob {
         false
     }
 
-    fn schedule(&self) -> Option<&Schedule> {
+    fn schedule(&self) -> Option<Schedule> {
         None
     }
 
-    fn last_tick(&self) -> Option<&DateTime<Utc>> {
-        self.last_tick.as_ref()
+    fn last_tick(&self) -> Option<DateTime<Utc>> {
+        self.last_tick.clone()
     }
 
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>) {
@@ -145,5 +146,15 @@ impl Job for NonCronJob {
                     v.await;
                 });
             });
+    }
+
+    fn job_data_from_job_store(&mut self, job_store: JobStoreLocked) -> Result<Option<JobData>, JobSchedulerError> {
+        let mut job_store = job_store.clone();
+        let jd = job_store.get_job_data(&self.job_id)?;
+        Ok(jd)
+    }
+
+    fn job_data_from_job(&mut self) -> Result<Option<JobData>, JobSchedulerError> {
+        Ok(None)
     }
 }

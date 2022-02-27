@@ -37,6 +37,12 @@ pub struct JobData {
     pub on_stop: ::prost::alloc::vec::Vec<Uuid>,
     #[prost(message, repeated, tag="11")]
     pub on_remove: ::prost::alloc::vec::Vec<Uuid>,
+    #[prost(bytes="vec", tag="12")]
+    pub extra: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bool, tag="13")]
+    pub ran: bool,
+    #[prost(bool, tag="14")]
+    pub stopped: bool,
     #[prost(oneof="job_data::Job", tags="6, 7")]
     pub job: ::core::option::Option<job_data::Job>,
 }

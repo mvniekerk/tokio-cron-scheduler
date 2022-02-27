@@ -4,6 +4,7 @@ use crate::{JobSchedulerError, OnJobNotification};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
+use crate::job_data::JobData;
 
 pub trait OnJobStart {
     fn list_on_start(
@@ -49,6 +50,7 @@ pub trait JobStore {
     fn remove(&mut self, job: &Uuid) -> Result<(), JobSchedulerError>;
     fn list_job_guids(&mut self) -> Result<Vec<Uuid>, JobSchedulerError>;
     fn get_job(&mut self, job: &Uuid) -> Result<Option<JobLocked>, JobSchedulerError>;
+    fn get_job_data(&mut self, job: &Uuid) -> Result<Option<JobData>, JobSchedulerError>;
 }
 
 #[derive(Clone)]
@@ -97,6 +99,17 @@ impl JobStoreLocked {
                 .write()
                 .map_err(|_| JobSchedulerError::ErrorLoadingJob)?;
             w.get_job(guid)?
+        };
+        Ok(job)
+    }
+
+    pub fn get_job_data(&mut self, guid: &Uuid) -> Result<Option<JobData>, JobSchedulerError> {
+        let job = {
+            let mut w = self
+                .0
+                .write()
+                .map_err(|_| JobSchedulerError::GetJobData)?;
+            w.get_job_data(guid)?
         };
         Ok(job)
     }

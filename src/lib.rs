@@ -1,6 +1,5 @@
 mod error;
 mod job;
-#[cfg(feature = "job_data")]
 mod job_data;
 mod job_scheduler;
 mod job_store;

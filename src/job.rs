@@ -12,6 +12,7 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 use crate::cron_job::CronJob;
+use crate::job_store::JobStoreLocked;
 use crate::non_cron_job::NonCronJob;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
@@ -48,8 +49,8 @@ pub struct JobLocked(pub(crate) Arc<RwLock<Box<dyn Job + Send + Sync>>>);
 
 pub trait Job {
     fn is_cron_job(&self) -> bool;
-    fn schedule(&self) -> Option<&Schedule>;
-    fn last_tick(&self) -> Option<&DateTime<Utc>>;
+    fn schedule(&self) -> Option<Schedule>;
+    fn last_tick(&self) -> Option<DateTime<Utc>>;
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>);
     fn set_count(&mut self, count: u32);
     fn count(&self) -> u32;
@@ -70,8 +71,8 @@ pub trait Job {
     fn on_removed_notification_add(&mut self, on_removed: Box<OnJobNotification>) -> Uuid;
     fn on_removed_notification_remove(&mut self, id: Uuid) -> bool;
     fn notify_on_removal(&mut self);
-    #[cfg(feature = "job_data")]
-    fn job_data(&mut self) -> Result<JobData, JobSchedulerError>;
+    fn job_data_from_job_store(&mut self, job_store: JobStoreLocked) -> Result<Option<JobData>, JobSchedulerError>;
+    fn job_data_from_job(&mut self) -> Result<Option<JobData>, JobSchedulerError>;
 }
 
 impl JobLocked {
@@ -92,17 +93,31 @@ impl JobLocked {
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
     {
-        let schedule: Schedule = Schedule::from_str(schedule)?;
+        let job_id = Uuid::new_v4();
         Ok(Self {
             0: Arc::new(RwLock::new(Box::new(CronJob {
-                schedule,
+                data: JobData {
+                    id: Some(job_id.into()),
+                    last_updated: None,
+                    last_tick: None,
+                    next_tick: 0,
+                    job_type: 0,
+                    count: 0,
+                    on_start: vec![],
+                    on_stop: vec![],
+                    on_remove: vec![],
+                    extra: vec![],
+                    ran: false,
+                    stopped: false,
+                    job: Some(crate::job_data::job_data::Job::CronJob(
+                        crate::job_data::CronJob {
+                            schedule: schedule.to_string(),
+                        }
+                    ))
+                },
                 run: Box::new(run),
                 run_async: Box::new(nop_async),
-                last_tick: None,
                 job_id: Uuid::new_v4(),
-                count: 0,
-                ran: false,
-                stopped: false,
                 async_job: false,
                 on_stop: HashMap::new(),
                 on_start: HashMap::new(),
@@ -131,16 +146,31 @@ impl JobLocked {
             + Sync,
     {
         let schedule: Schedule = Schedule::from_str(schedule)?;
+        let job_id = Uuid::new_v4();
         Ok(Self {
             0: Arc::new(RwLock::new(Box::new(CronJob {
-                schedule,
+                data: JobData {
+                    id: Some(job_id.into()),
+                    last_updated: None,
+                    last_tick: None,
+                    next_tick: 0,
+                    job_type: 0,
+                    count: 0,
+                    on_start: vec![],
+                    on_stop: vec![],
+                    on_remove: vec![],
+                    extra: vec![],
+                    ran: false,
+                    stopped: false,
+                    job: Some(crate::job_data::job_data::Job::CronJob(
+                        crate::job_data::CronJob {
+                            schedule: schedule.to_string(),
+                        }
+                    ))
+                },
                 run: Box::new(nop),
                 run_async: Box::new(run),
-                last_tick: None,
                 job_id: Uuid::new_v4(),
-                count: 0,
-                ran: false,
-                stopped: false,
                 async_job: true,
                 on_stop: HashMap::new(),
                 on_start: HashMap::new(),
@@ -486,7 +516,7 @@ impl JobLocked {
                         s.set_last_tick(Some(now));
                         return false;
                     }
-                    let last_tick = *s.last_tick().unwrap();
+                    let last_tick = s.last_tick().unwrap();
                     s.set_last_tick(Some(now));
                     s.increment_count();
                     let must_run = s

@@ -1,5 +1,5 @@
 use crate::job::JobLocked;
-use crate::job_data::JobType;
+use crate::job_data::{JobData, JobType};
 use std::collections::HashMap;
 
 use crate::job_store::JobStore;
@@ -51,5 +51,15 @@ impl JobStore for SimpleJobStore {
 
     fn get_job(&mut self, job: &Uuid) -> Result<Option<JobLocked>, JobSchedulerError> {
         Ok(self.jobs.get(job).cloned())
+    }
+
+    fn get_job_data(&mut self, job: &Uuid) -> Result<Option<JobData>, JobSchedulerError> {
+        let jd = {
+            self.jobs.get(job).map(|j| {
+                let mut j = j.0.write().map_err(|_| JobSchedulerError::GetJobData).ok()?;
+                j.job_data_from_job().ok()?
+            }).flatten()
+        };
+        Ok(jd)
     }
 }
