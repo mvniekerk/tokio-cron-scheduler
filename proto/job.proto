@@ -7,6 +7,7 @@ enum JobState {
   Scheduled = 1;
   Started = 2;
   Done = 3;
+  Removed = 4;
 }
 
 enum JobType {
@@ -29,7 +30,7 @@ message Uuid {
   uint64 id2 = 2;
 }
 
-message JobData {
+message JobStoredData {
   Uuid id = 1;
   optional uint64 last_updated = 2;
   optional uint64 last_tick = 3;

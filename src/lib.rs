@@ -1,3 +1,4 @@
+mod cron_job;
 mod error;
 mod job;
 mod job_data;
@@ -5,17 +6,16 @@ mod job_scheduler;
 mod job_store;
 #[cfg(feature = "nats_scheduler")]
 mod nats;
-mod simple;
-mod cron_job;
 mod non_cron_job;
+mod simple;
 
 #[cfg(feature = "nats_scheduler")]
 pub use crate::nats::NatsJobScheduler;
 pub use error::JobSchedulerError;
 pub use job::JobLocked as Job;
-pub use job::JobNotification;
 pub use job::JobToRun;
 pub use job::OnJobNotification;
+pub use job_data::JobState as JobNotification;
 pub use job_scheduler::JobSchedulerType;
 pub use job_scheduler::JobsSchedulerLocked as JobScheduler;
 

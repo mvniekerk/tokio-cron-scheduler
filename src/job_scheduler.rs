@@ -250,4 +250,14 @@ impl JobsSchedulerLocked {
         w.remove_shutdown_handler()?;
         Ok(())
     }
+
+    ///
+    /// Get the job store for this job scheduler
+    pub fn get_job_store(&self) -> Result<JobStoreLocked, JobSchedulerError> {
+        let js = {
+            let r = self.0.read().map_err(|_| JobSchedulerError::GetJobStore)?;
+            r.get_job_store()?
+        };
+        Ok(js)
+    }
 }

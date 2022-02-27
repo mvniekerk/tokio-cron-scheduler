@@ -1,10 +1,9 @@
 use crate::job::JobLocked;
+use crate::job_data::{JobState, JobStoredData};
 use crate::simple::SimpleJobStore;
 use crate::{JobSchedulerError, OnJobNotification};
-use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
-use crate::job_data::JobData;
 
 pub trait OnJobStart {
     fn list_on_start(
@@ -50,16 +49,34 @@ pub trait JobStore {
     fn remove(&mut self, job: &Uuid) -> Result<(), JobSchedulerError>;
     fn list_job_guids(&mut self) -> Result<Vec<Uuid>, JobSchedulerError>;
     fn get_job(&mut self, job: &Uuid) -> Result<Option<JobLocked>, JobSchedulerError>;
-    fn get_job_data(&mut self, job: &Uuid) -> Result<Option<JobData>, JobSchedulerError>;
+    fn get_job_data(&mut self, job: &Uuid) -> Result<Option<JobStoredData>, JobSchedulerError>;
+    fn add_notification(
+        &mut self,
+        job: &Uuid,
+        notification_guid: &Uuid,
+        on_notification: Box<OnJobNotification>,
+        notifications: Vec<JobState>,
+    ) -> Result<(), JobSchedulerError>;
+    fn remove_notification(&mut self, notification_guid: &Uuid) -> Result<(), JobSchedulerError>;
+    fn remove_notification_for_job_state(
+        &mut self,
+        notification_guid: &Uuid,
+        js: JobState,
+    ) -> Result<bool, JobSchedulerError>;
+    fn notify_on_job_state(&mut self, job_id: &Uuid, js: JobState)
+        -> Result<(), JobSchedulerError>;
 }
 
 #[derive(Clone)]
 pub struct JobStoreLocked(Arc<RwLock<Box<dyn JobStore>>>);
 
+unsafe impl Send for JobStoreLocked {}
+unsafe impl Sync for JobStoreLocked {}
+
 impl Default for JobStoreLocked {
     fn default() -> Self {
         JobStoreLocked(Arc::new(RwLock::new(Box::new(SimpleJobStore {
-            jobs: HashMap::new(),
+            ..Default::default()
         }))))
     }
 }
@@ -103,14 +120,51 @@ impl JobStoreLocked {
         Ok(job)
     }
 
-    pub fn get_job_data(&mut self, guid: &Uuid) -> Result<Option<JobData>, JobSchedulerError> {
+    pub fn get_job_data(
+        &mut self,
+        guid: &Uuid,
+    ) -> Result<Option<JobStoredData>, JobSchedulerError> {
         let job = {
-            let mut w = self
-                .0
-                .write()
-                .map_err(|_| JobSchedulerError::GetJobData)?;
+            let mut w = self.0.write().map_err(|_| JobSchedulerError::GetJobData)?;
             w.get_job_data(guid)?
         };
         Ok(job)
+    }
+
+    pub fn add_notification(
+        &mut self,
+        job: &Uuid,
+        notification_guid: &Uuid,
+        on_notification: Box<OnJobNotification>,
+        notifications: Vec<JobState>,
+    ) -> Result<(), JobSchedulerError> {
+        {
+            let mut w = self.0.write().map_err(|_| JobSchedulerError::CantAdd)?;
+            w.add_notification(job, notification_guid, on_notification, notifications)?;
+        }
+        Ok(())
+    }
+
+    pub fn remove_notification_for_job_state(
+        &mut self,
+        notification_guid: &Uuid,
+        js: JobState,
+    ) -> Result<bool, JobSchedulerError> {
+        let ret = {
+            let mut w = self.0.write().map_err(|_| JobSchedulerError::CantRemove)?;
+            w.remove_notification_for_job_state(notification_guid, js)?
+        };
+        Ok(ret)
+    }
+
+    pub fn notify_on_job_state(
+        &mut self,
+        job_id: &Uuid,
+        js: JobState,
+    ) -> Result<(), JobSchedulerError> {
+        let mut w = self.0.write().map_err(|_| JobSchedulerError::GetJobStore)?;
+        w.notify_on_job_state(job_id, js)?;
+
+        Ok(())
     }
 }

@@ -1,25 +1,22 @@
-use std::collections::HashMap;
-use std::ops::Add;
-use std::str::FromStr;
-use std::time::{Duration, SystemTime};
+use crate::job::{Job, JobToRunAsync};
+use crate::job_data::{JobState, JobStoredData, JobType};
+use crate::job_store::JobStoreLocked;
+use crate::{JobScheduler, JobSchedulerError, JobToRun, OnJobNotification};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+use std::ops::Add;
+use std::str::FromStr;
+use std::sync::mpsc::Receiver;
+use std::time::{Duration, SystemTime};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
-use crate::job::{Job, JobToRunAsync};
-use crate::{JobNotification, JobScheduler, JobSchedulerError, JobToRun, OnJobNotification};
-use crate::job_data::{JobData, JobType};
-use crate::job_store::JobStoreLocked;
 
 pub struct CronJob {
-    pub data: JobData,
+    pub data: JobStoredData,
     pub run: Box<JobToRun>,
     pub run_async: Box<JobToRunAsync>,
     pub job_id: Uuid,
     pub async_job: bool,
-    pub on_start: HashMap<Uuid, Box<OnJobNotification>>,
-    pub on_stop: HashMap<Uuid, Box<OnJobNotification>>,
-    pub on_removed: HashMap<Uuid, Box<OnJobNotification>>,
 }
 
 impl Job for CronJob {
@@ -28,17 +25,19 @@ impl Job for CronJob {
     }
 
     fn schedule(&self) -> Option<Schedule> {
-        self.data.job.as_ref().map(|j| match j {
-            crate::job_data::job_data::Job::CronJob(cj) => Some(&*cj.schedule),
-            _ => None
-        })
-            .flatten()
-            .map(|s| Schedule::from_str(s).ok())
-            .flatten()
+        self.data
+            .job
+            .as_ref()
+            .and_then(|j| match j {
+                crate::job_data::job_stored_data::Job::CronJob(cj) => Some(&*cj.schedule),
+                _ => None,
+            })
+            .and_then(|s| Schedule::from_str(s).ok())
     }
 
     fn last_tick(&self) -> Option<DateTime<Utc>> {
-        self.data.last_tick
+        self.data
+            .last_tick
             .map(|lt| SystemTime::UNIX_EPOCH.add(Duration::from_secs(lt)))
             .map(DateTime::from)
     }
@@ -67,38 +66,25 @@ impl Job for CronJob {
         self.data.id.as_ref().cloned().map(|e| e.into()).unwrap()
     }
 
-    fn run(&mut self, jobs: JobScheduler) {
+    fn run(&mut self, jobs: JobScheduler) -> Receiver<bool> {
+        let (tx, rx) = std::sync::mpsc::channel();
         let job_id = self.job_id();
-        for (uuid, on_start) in self.on_start.iter_mut() {
-            let future = (on_start)(job_id.clone(), *uuid, JobNotification::Started);
-            tokio::task::spawn(async move {
-                future.await;
-            });
-        }
 
-        let on_stops = self
-            .on_stop
-            .iter_mut()
-            .map(|(uuid, on_stopped)| (on_stopped)(job_id, *uuid, JobNotification::Stopped))
-            .collect::<Vec<_>>();
         if !self.async_job {
             (self.run)(job_id, jobs);
-            for on_stop in on_stops {
-                tokio::task::spawn(async move {
-                    on_stop.await;
-                });
+            if let Err(e) = tx.send(true) {
+                eprintln!("Error notifying done {:?}", e);
             }
         } else {
             let future = (self.run_async)(job_id, jobs);
             tokio::task::spawn(async move {
                 future.await;
-                for on_stop in on_stops {
-                    tokio::task::spawn(async move {
-                        on_stop.await;
-                    });
+                if let Err(e) = tx.send(true) {
+                    eprintln!("Error notifying done {:?}", e);
                 }
             });
         }
+        rx
     }
 
     fn job_type(&self) -> &JobType {
@@ -125,55 +111,76 @@ impl Job for CronJob {
         self.data.stopped = true;
     }
 
-    fn on_start_notification_add(&mut self, on_start: Box<OnJobNotification>) -> Uuid {
+    fn on_start_notification_add(
+        &mut self,
+        on_start: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+    ) -> Result<Uuid, JobSchedulerError> {
         let uuid = Uuid::new_v4();
-        self.on_start.insert(uuid, on_start);
-        uuid
+        let mut js = job_store;
+        js.add_notification(&self.job_id, &uuid, on_start, vec![JobState::Started])?;
+        Ok(uuid)
     }
 
-    fn on_start_notification_remove(&mut self, id: Uuid) -> bool {
-        self.on_start.remove(&id).is_some()
+    fn on_start_notification_remove(
+        &mut self,
+        id: &Uuid,
+        job_store: JobStoreLocked,
+    ) -> Result<bool, JobSchedulerError> {
+        let mut js = job_store;
+        js.remove_notification_for_job_state(id, JobState::Started)
     }
 
-    fn on_stop_notification_add(&mut self, on_stop: Box<OnJobNotification>) -> Uuid {
+    fn on_done_notification_add(
+        &mut self,
+        on_stop: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+    ) -> Result<Uuid, JobSchedulerError> {
         let uuid = Uuid::new_v4();
-        self.on_stop.insert(uuid, on_stop);
-        uuid
+        let mut js = job_store;
+        js.add_notification(&self.job_id, &uuid, on_stop, vec![JobState::Done])?;
+        Ok(uuid)
     }
 
-    fn on_stop_notification_remove(&mut self, id: Uuid) -> bool {
-        self.on_stop.remove(&id).is_some()
+    fn on_done_notification_remove(
+        &mut self,
+        id: &Uuid,
+        job_store: JobStoreLocked,
+    ) -> Result<bool, JobSchedulerError> {
+        let mut js = job_store;
+        js.remove_notification_for_job_state(id, JobState::Done)
     }
 
-    fn on_removed_notification_add(&mut self, on_removed: Box<OnJobNotification>) -> Uuid {
+    fn on_removed_notification_add(
+        &mut self,
+        on_removed: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+    ) -> Result<Uuid, JobSchedulerError> {
         let uuid = Uuid::new_v4();
-        self.on_removed.insert(uuid, on_removed);
-        uuid
+        let mut js = job_store;
+        js.add_notification(&self.job_id, &uuid, on_removed, vec![JobState::Removed])?;
+        Ok(uuid)
     }
 
-    fn on_removed_notification_remove(&mut self, id: Uuid) -> bool {
-        self.on_removed.remove(&id).is_some()
+    fn on_removed_notification_remove(
+        &mut self,
+        id: &Uuid,
+        job_store: JobStoreLocked,
+    ) -> Result<bool, JobSchedulerError> {
+        let mut js = job_store;
+        js.remove_notification_for_job_state(id, JobState::Removed)
     }
 
-    fn notify_on_removal(&mut self) {
-        let job_id = self.job_id;
-        self.on_removed
-            .iter_mut()
-            .map(|(uuid, on_removed)| (on_removed)(job_id, *uuid, JobNotification::Removed))
-            .for_each(|v| {
-                tokio::task::spawn(async move {
-                    v.await;
-                });
-            });
-    }
-
-    fn job_data_from_job_store(&mut self, job_store: JobStoreLocked) -> Result<Option<JobData>, JobSchedulerError> {
-        let mut job_store = job_store.clone();
+    fn job_data_from_job_store(
+        &mut self,
+        job_store: JobStoreLocked,
+    ) -> Result<Option<JobStoredData>, JobSchedulerError> {
+        let mut job_store = job_store;
         let jd = job_store.get_job_data(&self.job_id)?;
         Ok(jd)
     }
 
-    fn job_data_from_job(&mut self) -> Result<Option<JobData>, JobSchedulerError> {
+    fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError> {
         Ok(Some(self.data.clone()))
     }
 }

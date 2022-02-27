@@ -1,33 +1,26 @@
-use crate::job_data::{JobData, JobType};
+use crate::cron_job::CronJob;
+use crate::job_data::{JobState, JobStoredData, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
+use crate::job_store::JobStoreLocked;
+use crate::non_cron_job::NonCronJob;
 use crate::{JobScheduler, JobSchedulerError};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
-use crate::cron_job::CronJob;
-use crate::job_store::JobStoreLocked;
-use crate::non_cron_job::NonCronJob;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
 pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
     + Send
     + Sync;
 
-#[derive(Debug)]
-pub enum JobNotification {
-    Started,
-    Stopped,
-    Removed,
-}
-
-pub type OnJobNotification = dyn FnMut(Uuid, Uuid, JobNotification) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+pub type OnJobNotification = dyn FnMut(Uuid, Uuid, JobState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
     + Send
     + Sync;
 
@@ -56,7 +49,7 @@ pub trait Job {
     fn count(&self) -> u32;
     fn increment_count(&mut self);
     fn job_id(&self) -> Uuid;
-    fn run(&mut self, jobs: JobScheduler);
+    fn run(&mut self, jobs: JobScheduler) -> Receiver<bool>;
     fn job_type(&self) -> &JobType;
     fn ran(&self) -> bool;
     fn set_ran(&mut self, ran: bool);
@@ -64,15 +57,41 @@ pub trait Job {
     fn abort_join_handle(&mut self);
     fn stop(&self) -> bool;
     fn set_stopped(&mut self);
-    fn on_start_notification_add(&mut self, on_start: Box<OnJobNotification>) -> Uuid;
-    fn on_start_notification_remove(&mut self, id: Uuid) -> bool;
-    fn on_stop_notification_add(&mut self, on_stop: Box<OnJobNotification>) -> Uuid;
-    fn on_stop_notification_remove(&mut self, id: Uuid) -> bool;
-    fn on_removed_notification_add(&mut self, on_removed: Box<OnJobNotification>) -> Uuid;
-    fn on_removed_notification_remove(&mut self, id: Uuid) -> bool;
-    fn notify_on_removal(&mut self);
-    fn job_data_from_job_store(&mut self, job_store: JobStoreLocked) -> Result<Option<JobData>, JobSchedulerError>;
-    fn job_data_from_job(&mut self) -> Result<Option<JobData>, JobSchedulerError>;
+    fn on_start_notification_add(
+        &mut self,
+        on_start: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+    ) -> Result<Uuid, JobSchedulerError>;
+    fn on_start_notification_remove(
+        &mut self,
+        id: &Uuid,
+        job_store: JobStoreLocked,
+    ) -> Result<bool, JobSchedulerError>;
+    fn on_done_notification_add(
+        &mut self,
+        on_stop: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+    ) -> Result<Uuid, JobSchedulerError>;
+    fn on_done_notification_remove(
+        &mut self,
+        id: &Uuid,
+        job_store: JobStoreLocked,
+    ) -> Result<bool, JobSchedulerError>;
+    fn on_removed_notification_add(
+        &mut self,
+        on_removed: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+    ) -> Result<Uuid, JobSchedulerError>;
+    fn on_removed_notification_remove(
+        &mut self,
+        id: &Uuid,
+        job_store: JobStoreLocked,
+    ) -> Result<bool, JobSchedulerError>;
+    fn job_data_from_job_store(
+        &mut self,
+        job_store: JobStoreLocked,
+    ) -> Result<Option<JobStoredData>, JobSchedulerError>;
+    fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError>;
 }
 
 impl JobLocked {
@@ -94,36 +113,31 @@ impl JobLocked {
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
     {
         let job_id = Uuid::new_v4();
-        Ok(Self {
-            0: Arc::new(RwLock::new(Box::new(CronJob {
-                data: JobData {
-                    id: Some(job_id.into()),
-                    last_updated: None,
-                    last_tick: None,
-                    next_tick: 0,
-                    job_type: 0,
-                    count: 0,
-                    on_start: vec![],
-                    on_stop: vec![],
-                    on_remove: vec![],
-                    extra: vec![],
-                    ran: false,
-                    stopped: false,
-                    job: Some(crate::job_data::job_data::Job::CronJob(
-                        crate::job_data::CronJob {
-                            schedule: schedule.to_string(),
-                        }
-                    ))
-                },
-                run: Box::new(run),
-                run_async: Box::new(nop_async),
-                job_id: Uuid::new_v4(),
-                async_job: false,
-                on_stop: HashMap::new(),
-                on_start: HashMap::new(),
-                on_removed: HashMap::new(),
-            }))),
-        })
+        Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
+            data: JobStoredData {
+                id: Some(job_id.into()),
+                last_updated: None,
+                last_tick: None,
+                next_tick: 0,
+                job_type: 0,
+                count: 0,
+                on_start: vec![],
+                on_stop: vec![],
+                on_remove: vec![],
+                extra: vec![],
+                ran: false,
+                stopped: false,
+                job: Some(crate::job_data::job_stored_data::Job::CronJob(
+                    crate::job_data::CronJob {
+                        schedule: schedule.to_string(),
+                    },
+                )),
+            },
+            run: Box::new(run),
+            run_async: Box::new(nop_async),
+            job_id: Uuid::new_v4(),
+            async_job: false,
+        })))))
     }
 
     /// Create a new async cron job.
@@ -147,36 +161,31 @@ impl JobLocked {
     {
         let schedule: Schedule = Schedule::from_str(schedule)?;
         let job_id = Uuid::new_v4();
-        Ok(Self {
-            0: Arc::new(RwLock::new(Box::new(CronJob {
-                data: JobData {
-                    id: Some(job_id.into()),
-                    last_updated: None,
-                    last_tick: None,
-                    next_tick: 0,
-                    job_type: 0,
-                    count: 0,
-                    on_start: vec![],
-                    on_stop: vec![],
-                    on_remove: vec![],
-                    extra: vec![],
-                    ran: false,
-                    stopped: false,
-                    job: Some(crate::job_data::job_data::Job::CronJob(
-                        crate::job_data::CronJob {
-                            schedule: schedule.to_string(),
-                        }
-                    ))
-                },
-                run: Box::new(nop),
-                run_async: Box::new(run),
-                job_id: Uuid::new_v4(),
-                async_job: true,
-                on_stop: HashMap::new(),
-                on_start: HashMap::new(),
-                on_removed: HashMap::new(),
-            }))),
-        })
+        Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
+            data: JobStoredData {
+                id: Some(job_id.into()),
+                last_updated: None,
+                last_tick: None,
+                next_tick: 0,
+                job_type: 0,
+                count: 0,
+                on_start: vec![],
+                on_stop: vec![],
+                on_remove: vec![],
+                extra: vec![],
+                ran: false,
+                stopped: false,
+                job: Some(crate::job_data::job_stored_data::Job::CronJob(
+                    crate::job_data::CronJob {
+                        schedule: schedule.to_string(),
+                    },
+                )),
+            },
+            run: Box::new(nop),
+            run_async: Box::new(run),
+            job_id: Uuid::new_v4(),
+            async_job: true,
+        })))))
     }
 
     /// Create a new cron job.
@@ -238,9 +247,6 @@ impl JobLocked {
             job_type: JobType::OneShot,
             stopped: false,
             async_job,
-            on_stop: HashMap::new(),
-            on_start: HashMap::new(),
-            on_removed: HashMap::new(),
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
@@ -266,7 +272,7 @@ impl JobLocked {
             j.set_join_handle(Some(jh));
         }
 
-        Ok(Self { 0: job })
+        Ok(Self(job))
     }
 
     /// Create a new one shot job.
@@ -329,9 +335,6 @@ impl JobLocked {
             job_type: JobType::OneShot,
             stopped: false,
             async_job,
-            on_stop: HashMap::new(),
-            on_start: HashMap::new(),
-            on_removed: HashMap::new(),
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
@@ -357,7 +360,7 @@ impl JobLocked {
             j.set_join_handle(Some(jh));
         }
 
-        Ok(Self { 0: job })
+        Ok(Self(job))
     }
 
     /// Create a new one shot job that runs at an instant
@@ -426,9 +429,6 @@ impl JobLocked {
             job_type: JobType::Repeated,
             stopped: false,
             async_job,
-            on_stop: HashMap::new(),
-            on_start: HashMap::new(),
-            on_removed: HashMap::new(),
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
@@ -457,7 +457,7 @@ impl JobLocked {
             j.set_join_handle(Some(jh));
         }
 
-        Ok(Self { 0: job })
+        Ok(Self(job))
     }
 
     /// Create a new repeated job.
@@ -574,48 +574,72 @@ impl JobLocked {
     ///
     /// Run something when the task is started. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_start_notification_remove`.
-    pub fn on_start_notification_add(&mut self, on_start: Box<OnJobNotification>) -> Uuid {
+    pub fn on_start_notification_add(
+        &mut self,
+        on_start: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+    ) -> Result<Uuid, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
-        w.on_start_notification_add(on_start)
+        w.on_start_notification_add(on_start, job_store)
     }
 
     ///
     /// Remove the notification when the task was started. Uses the same UUID that was returned by
     /// `on_start_notification_add`
-    pub fn on_start_notification_remove(&mut self, id: Uuid) -> bool {
+    pub fn on_start_notification_remove(
+        &mut self,
+        id: &Uuid,
+        job_store: JobStoreLocked,
+    ) -> Result<bool, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
-        w.on_start_notification_remove(id)
+        w.on_start_notification_remove(id, job_store)
     }
 
     ///
     /// Run something when the task is stopped. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_stop_notification_remove`.
-    pub fn on_stop_notification_add(&mut self, on_stop: Box<OnJobNotification>) -> Uuid {
+    pub fn on_stop_notification_add(
+        &mut self,
+        on_stop: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+    ) -> Result<Uuid, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
-        w.on_stop_notification_add(on_stop)
+        w.on_done_notification_add(on_stop, job_store)
     }
 
     ///
     /// Remove the notification when the task was stopped. Uses the same UUID that was returned by
     /// `on_stop_notification_add`
-    pub fn on_stop_notification_remove(&mut self, id: Uuid) -> bool {
+    pub fn on_stop_notification_remove(
+        &mut self,
+        id: &Uuid,
+        job_store: JobStoreLocked,
+    ) -> Result<bool, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
-        w.on_stop_notification_remove(id)
+        w.on_done_notification_remove(id, job_store)
     }
 
     ///
     /// Run something when the task was removed. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
-    pub fn on_removed_notification_add(&mut self, on_removed: Box<OnJobNotification>) -> Uuid {
+    pub fn on_removed_notification_add(
+        &mut self,
+        on_removed: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+    ) -> Result<Uuid, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
-        w.on_removed_notification_add(on_removed)
+        w.on_removed_notification_add(on_removed, job_store)
     }
 
     ///
     /// Remove the notification when the task was removed. Uses the same UUID that was returned by
     /// `on_removed_notification_add`
-    pub fn on_removed_notification_remove(&mut self, id: Uuid) -> bool {
+    pub fn on_removed_notification_remove(
+        &mut self,
+        id: &Uuid,
+        job_store: JobStoreLocked,
+    ) -> Result<bool, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
-        w.on_removed_notification_remove(id)
+        w.on_removed_notification_remove(id, job_store)
     }
 }

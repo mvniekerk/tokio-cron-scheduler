@@ -1,5 +1,5 @@
 use crate::job::JobLocked;
-use crate::job_data::JobType;
+use crate::job_data::{JobState, JobType};
 use crate::job_scheduler::{
     JobSchedulerType, JobSchedulerWithoutSync, JobsSchedulerLocked, ShutdownNotification,
 };
@@ -48,16 +48,40 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                     let e = ref_for_later.write();
                     if let Ok(mut w) = e {
                         let jt = w.job_type();
+
+                        let job_id = w.job_id();
                         if matches!(jt, JobType::OneShot) {
                             let mut jobs = jobs.clone();
-                            let job_id = w.job_id();
+                            let job_id = job_id;
                             tokio::spawn(async move {
                                 if let Err(e) = jobs.remove(&job_id) {
                                     eprintln!("Error removing job {:?}", e);
                                 }
                             });
                         }
-                        w.run(jobs);
+                        match jobs.get_job_store() {
+                            Ok(mut job_store) => {
+                                if let Err(err) =
+                                    job_store.notify_on_job_state(&job_id, JobState::Started)
+                                {
+                                    eprintln!("Error notifying on job started {:?}", err);
+                                }
+                                let rx = w.run(jobs);
+                                tokio::spawn(async move {
+                                    if let Err(e) = rx.recv() {
+                                        eprintln!("Error waiting for task to finish {:?}", e);
+                                    }
+                                    if let Err(err) =
+                                        job_store.notify_on_job_state(&job_id, JobState::Done)
+                                    {
+                                        eprintln!("Error notifying on job started {:?}", err);
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                eprintln!("Error getting job store {:?}", e);
+                            }
+                        };
                     }
                 });
             }
@@ -75,10 +99,9 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
         let now = Utc::now();
         let min = guids
             .iter()
-            .map(|g| self.job_store.get_job(g))
+            .flat_map(|g| self.job_store.get_job(g))
             .flatten()
-            .flatten()
-            .map(|j| {
+            .filter_map(|j| {
                 let diff = {
                     j.0.read().ok().and_then(|j| {
                         j.schedule().and_then(|s| {
@@ -91,7 +114,6 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                 };
                 diff
             })
-            .flatten()
             .min();
 
         let m = min

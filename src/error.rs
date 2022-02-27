@@ -14,5 +14,6 @@ pub enum JobSchedulerError {
     ErrorLoadingGuidList,
     ErrorLoadingJob,
     CouldNotGetTimeUntilNextTick,
-    GetJobData
+    GetJobData,
+    GetJobStore,
 }
