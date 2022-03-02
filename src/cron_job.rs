@@ -86,8 +86,8 @@ impl Job for CronJob {
         rx
     }
 
-    fn job_type(&self) -> &JobType {
-        &JobType::Cron
+    fn job_type(&self) -> JobType {
+        JobType::Cron
     }
 
     fn ran(&self) -> bool {

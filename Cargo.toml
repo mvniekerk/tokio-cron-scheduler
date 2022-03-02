@@ -20,6 +20,7 @@ categories = ["date-and-time"]
 tokio = { version = "1", features = ["time", "rt"] }
 cron = "0.8"
 chrono = "0.4"
+time = "0.1.44"
 uuid = { version = "0.8", features = ["v4"] }
 prost = "0.9"
 

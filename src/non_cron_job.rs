@@ -4,20 +4,17 @@ use crate::job_store::JobStoreLocked;
 use crate::{JobScheduler, JobSchedulerError, JobToRun, OnJobNotification};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+use std::ops::Add;
 use std::sync::mpsc::Receiver;
+use std::time::{Duration, SystemTime};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 pub struct NonCronJob {
     pub run: Box<JobToRun>,
     pub run_async: Box<JobToRunAsync>,
-    pub last_tick: Option<DateTime<Utc>>,
-    pub job_id: Uuid,
     pub join_handle: Option<JoinHandle<()>>,
-    pub ran: bool,
-    pub count: u32,
-    pub job_type: JobType,
-    pub stopped: bool,
+    pub data: JobStoredData,
     pub async_job: bool,
 }
 
@@ -31,31 +28,34 @@ impl Job for NonCronJob {
     }
 
     fn last_tick(&self) -> Option<DateTime<Utc>> {
-        self.last_tick
+        self.data
+            .last_tick
+            .map(|lt| SystemTime::UNIX_EPOCH.add(Duration::from_secs(lt)))
+            .map(DateTime::from)
     }
 
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>) {
-        self.last_tick = tick;
+        self.data.last_tick = tick.map(|t| t.timestamp() as u64);
     }
 
     fn set_count(&mut self, count: u32) {
-        self.count = count;
+        self.data.count = count;
     }
 
     fn count(&self) -> u32 {
-        self.count
+        self.data.count
     }
 
     fn increment_count(&mut self) {
-        self.count = if self.count + 1 < u32::MAX {
-            self.count + 1
+        self.data.count = if self.data.count + 1 < u32::MAX {
+            self.data.count + 1
         } else {
             0
         }; // Overflow check
     }
 
     fn job_id(&self) -> Uuid {
-        self.job_id
+        self.data.id.as_ref().cloned().map(|e| e.into()).unwrap()
     }
 
     fn run(&mut self, jobs: JobScheduler) -> Receiver<bool> {
@@ -79,16 +79,16 @@ impl Job for NonCronJob {
         rx
     }
 
-    fn job_type(&self) -> &JobType {
-        &self.job_type
+    fn job_type(&self) -> JobType {
+        self.data.job_type()
     }
 
     fn ran(&self) -> bool {
-        self.ran
+        self.data.ran
     }
 
     fn set_ran(&mut self, ran: bool) {
-        self.ran = ran;
+        self.data.ran = ran;
     }
 
     fn set_join_handle(&mut self, handle: Option<JoinHandle<()>>) {
@@ -106,11 +106,11 @@ impl Job for NonCronJob {
     }
 
     fn stop(&self) -> bool {
-        self.stopped
+        self.data.stopped
     }
 
     fn set_stopped(&mut self) {
-        self.stopped = true;
+        self.data.stopped = true;
     }
 
     fn on_start_notification_add(
@@ -118,9 +118,10 @@ impl Job for NonCronJob {
         on_start: Box<OnJobNotification>,
         job_store: JobStoreLocked,
     ) -> Result<Uuid, JobSchedulerError> {
+        let job_id = self.job_id();
         let uuid = Uuid::new_v4();
         let mut js = job_store;
-        js.add_notification(&self.job_id, &uuid, on_start, vec![JobState::Started])?;
+        js.add_notification(&job_id, &uuid, on_start, vec![JobState::Started])?;
         Ok(uuid)
     }
 
@@ -138,9 +139,10 @@ impl Job for NonCronJob {
         on_stop: Box<OnJobNotification>,
         job_store: JobStoreLocked,
     ) -> Result<Uuid, JobSchedulerError> {
+        let job_id = self.job_id();
         let uuid = Uuid::new_v4();
         let mut js = job_store;
-        js.add_notification(&self.job_id, &uuid, on_stop, vec![JobState::Done])?;
+        js.add_notification(&job_id, &uuid, on_stop, vec![JobState::Done])?;
         Ok(uuid)
     }
 
@@ -158,9 +160,10 @@ impl Job for NonCronJob {
         on_removed: Box<OnJobNotification>,
         job_store: JobStoreLocked,
     ) -> Result<Uuid, JobSchedulerError> {
+        let job_id = self.job_id();
         let uuid = Uuid::new_v4();
         let mut js = job_store;
-        js.add_notification(&self.job_id, &uuid, on_removed, vec![JobState::Removed])?;
+        js.add_notification(&job_id, &uuid, on_removed, vec![JobState::Removed])?;
         Ok(uuid)
     }
 
@@ -178,11 +181,11 @@ impl Job for NonCronJob {
         job_store: JobStoreLocked,
     ) -> Result<Option<JobStoredData>, JobSchedulerError> {
         let mut job_store = job_store;
-        let jd = job_store.get_job_data(&self.job_id)?;
+        let jd = job_store.get_job_data(&self.job_id())?;
         Ok(jd)
     }
 
     fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError> {
-        Ok(None)
+        Ok(Some(self.data.clone()))
     }
 }

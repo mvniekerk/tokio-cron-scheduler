@@ -11,7 +11,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -50,7 +50,7 @@ pub trait Job {
     fn increment_count(&mut self);
     fn job_id(&self) -> Uuid;
     fn run(&mut self, jobs: JobScheduler) -> Receiver<bool>;
-    fn job_type(&self) -> &JobType;
+    fn job_type(&self) -> JobType;
     fn ran(&self) -> bool;
     fn set_ran(&mut self, ran: bool);
     fn set_join_handle(&mut self, handle: Option<JoinHandle<()>>);
@@ -112,14 +112,19 @@ impl JobLocked {
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
     {
+        let schedule: Schedule = Schedule::from_str(schedule)?;
         let job_id = Uuid::new_v4();
         Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
             data: JobStoredData {
                 id: Some(job_id.into()),
                 last_updated: None,
                 last_tick: None,
-                next_tick: 0,
-                job_type: 0,
+                next_tick: schedule
+                    .upcoming(Utc)
+                    .next()
+                    .map(|t| t.timestamp() as u64)
+                    .unwrap_or(0),
+                job_type: JobType::Cron.into(),
                 count: 0,
                 on_start: vec![],
                 on_stop: vec![],
@@ -165,8 +170,12 @@ impl JobLocked {
                 id: Some(job_id.into()),
                 last_updated: None,
                 last_tick: None,
-                next_tick: 0,
-                job_type: 0,
+                next_tick: schedule
+                    .upcoming(Utc)
+                    .next()
+                    .map(|t| t.timestamp() as u64)
+                    .unwrap_or(0),
+                job_type: JobType::Cron.into(),
                 count: 0,
                 on_start: vec![],
                 on_stop: vec![],
@@ -234,17 +243,36 @@ impl JobLocked {
         run_async: Box<JobToRunAsync>,
         async_job: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let id = Uuid::new_v4();
         let job = NonCronJob {
             run,
             run_async,
-            last_tick: None,
-            job_id: Uuid::new_v4(),
             join_handle: None,
-            ran: false,
-            count: 0,
-            job_type: JobType::OneShot,
-            stopped: false,
             async_job,
+            data: JobStoredData {
+                id: Some(id.into()),
+                last_updated: None,
+                last_tick: None,
+                next_tick: SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|p| p.as_secs())
+                    .unwrap_or(0)
+                    + duration.as_secs(),
+                job_type: JobType::OneShot.into(),
+                count: 0,
+                on_start: vec![],
+                on_stop: vec![],
+                on_remove: vec![],
+                extra: vec![],
+                ran: false,
+                stopped: false,
+                job: Some(crate::job_data::job_stored_data::Job::NonCronJob(
+                    crate::job_data::NonCronJob {
+                        repeating: false,
+                        repeated_every: duration.as_secs(),
+                    },
+                )),
+            },
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
@@ -322,17 +350,38 @@ impl JobLocked {
         run_async: Box<JobToRunAsync>,
         async_job: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let id = Uuid::new_v4();
+
         let job = NonCronJob {
             run,
             run_async,
-            last_tick: None,
-            job_id: Uuid::new_v4(),
             join_handle: None,
-            ran: false,
-            count: 0,
-            job_type: JobType::OneShot,
-            stopped: false,
             async_job,
+            data: JobStoredData {
+                id: Some(id.into()),
+                last_updated: None,
+                last_tick: None,
+                next_tick: chrono::Utc::now()
+                    .checked_add_signed(time::Duration::seconds(
+                        instant.duration_since(Instant::now()).as_secs() as i64,
+                    ))
+                    .map(|t| t.timestamp() as u64)
+                    .unwrap_or(0),
+                job_type: JobType::OneShot.into(),
+                count: 0,
+                on_start: vec![],
+                on_stop: vec![],
+                on_remove: vec![],
+                extra: vec![],
+                ran: false,
+                stopped: false,
+                job: Some(crate::job_data::job_stored_data::Job::NonCronJob(
+                    crate::job_data::NonCronJob {
+                        repeating: false,
+                        repeated_every: instant.duration_since(Instant::now()).as_secs(),
+                    },
+                )),
+            },
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
@@ -416,17 +465,35 @@ impl JobLocked {
         run_async: Box<JobToRunAsync>,
         async_job: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let id = Uuid::new_v4();
         let job = NonCronJob {
             run,
             run_async,
-            last_tick: None,
-            job_id: Uuid::new_v4(),
             join_handle: None,
-            ran: false,
-            count: 0,
-            job_type: JobType::Repeated,
-            stopped: false,
             async_job,
+            data: JobStoredData {
+                id: Some(id.into()),
+                last_updated: None,
+                last_tick: None,
+                next_tick: chrono::Utc::now()
+                    .checked_add_signed(time::Duration::seconds(duration.as_secs() as i64))
+                    .map(|t| t.timestamp() as u64)
+                    .unwrap_or(0),
+                job_type: JobType::Repeated.into(),
+                count: 0,
+                on_start: vec![],
+                on_stop: vec![],
+                on_remove: vec![],
+                extra: vec![],
+                ran: false,
+                stopped: false,
+                job: Some(crate::job_data::job_stored_data::Job::NonCronJob(
+                    crate::job_data::NonCronJob {
+                        repeating: true,
+                        repeated_every: duration.as_secs(),
+                    },
+                )),
+            },
         };
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
