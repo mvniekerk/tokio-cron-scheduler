@@ -100,8 +100,6 @@ impl Job for CronJob {
 
     fn set_join_handle(&mut self, _handle: Option<JoinHandle<()>>) {}
 
-    fn abort_join_handle(&mut self) {}
-
     fn stop(&self) -> bool {
         self.data.stopped
     }

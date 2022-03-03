@@ -3,6 +3,7 @@ use crate::job_data::{JobState, JobStoredData};
 use crate::simple::SimpleJobStore;
 use crate::{JobSchedulerError, OnJobNotification};
 use std::sync::{Arc, RwLock};
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 pub trait OnJobStart {
@@ -65,6 +66,12 @@ pub trait JobStore {
     ) -> Result<bool, JobSchedulerError>;
     fn notify_on_job_state(&mut self, job_id: &Uuid, js: JobState)
         -> Result<(), JobSchedulerError>;
+    fn add_job_join_handle(
+        &mut self,
+        job_id: &Uuid,
+        job_handle: Option<JoinHandle<()>>,
+    ) -> Result<(), JobSchedulerError>;
+    fn stop_join_handle(&mut self, job_id: &Uuid) -> Result<(), JobSchedulerError>;
 }
 
 #[derive(Clone)]
@@ -166,5 +173,63 @@ impl JobStoreLocked {
         w.notify_on_job_state(job_id, js)?;
 
         Ok(())
+    }
+
+    pub fn add_join_handle(
+        &mut self,
+        job_id: &Uuid,
+        job_handle: Option<JoinHandle<()>>,
+    ) -> Result<(), JobSchedulerError> {
+        let mut w = self.0.write().map_err(|_| JobSchedulerError::CantAdd)?;
+        w.add_job_join_handle(job_id, job_handle)?;
+        Ok(())
+    }
+
+    pub fn stop_join_handle(&mut self, job_id: &Uuid) -> Result<(), JobSchedulerError> {
+        {
+            let mut w = self.0.write().map_err(|_| JobSchedulerError::CantRemove)?;
+            w.stop_join_handle(job_id)?;
+        }
+        Ok(())
+        // println!("###1");
+        // let (tx, rx) = std::sync::mpsc::channel();
+        // println!("###2");
+        // let js = self.clone();
+        // println!("###3");
+        // let job_id = job_id.clone();
+        // println!("###4");
+        // tokio::task::spawn(async move {
+        //     println!("Try to stop 1 {:?}", job_id);
+        //     match js.0.write().map_err(|_| JobSchedulerError::CantRemove) {
+        //         Ok(mut w) => {
+        //             println!("Try to stop 2 {:?}", job_id);
+        //             match w.stop_join_handle(&job_id) {
+        //                 Ok(_) => {
+        //                     if let Err(e) = tx.send(None) {
+        //                         eprintln!("Could not send {:?}", e);
+        //                     }
+        //                 }
+        //                 Err(e) => {
+        //                     if let Err(e) = tx.send(Some(e)) {
+        //                         eprintln!("Could not send {:?}", e);
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //         Err(e) => {
+        //             println!("Try to stop 3 {:?} {:?}", job_id, e);
+        //             if let Err(e) = tx.send(Some(e)) {
+        //                 eprintln!("Could not send {:?}", e);
+        //             }
+        //         }
+        //     }
+        // });
+        // println!("Stop {:?}", job_id);
+        // let e = rx.recv().map_err(|_| JobSchedulerError::CantRemove)?;
+        // println!("Stop done {:?}", job_id);
+        // match e {
+        //     None => Ok(()),
+        //     Some(e) => Err(e),
+        // }
     }
 }

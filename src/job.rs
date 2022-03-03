@@ -54,7 +54,6 @@ pub trait Job {
     fn ran(&self) -> bool;
     fn set_ran(&mut self, ran: bool);
     fn set_join_handle(&mut self, handle: Option<JoinHandle<()>>);
-    fn abort_join_handle(&mut self);
     fn stop(&self) -> bool;
     fn set_stopped(&mut self);
     fn on_start_notification_add(
@@ -242,7 +241,8 @@ impl JobLocked {
         run: Box<JobToRun>,
         run_async: Box<JobToRunAsync>,
         async_job: bool,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+        job_store: JobStoreLocked,
+    ) -> Result<Self, JobSchedulerError> {
         let id = Uuid::new_v4();
         let job = NonCronJob {
             run,
@@ -293,10 +293,8 @@ impl JobLocked {
             }
         });
 
-        {
-            let mut j = job.write().unwrap();
-            j.set_join_handle(Some(jh));
-        }
+        let mut job_store = job_store;
+        job_store.add_join_handle(&id, Some(jh))?;
 
         Ok(Self(job))
     }
@@ -312,12 +310,22 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_one_shot<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    pub fn new_one_shot<T>(
+        job_store: JobStoreLocked,
+        duration: Duration,
+        run: T,
+    ) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
     {
-        JobLocked::make_one_shot_job(duration, Box::new(run), Box::new(nop_async), false)
+        JobLocked::make_one_shot_job(
+            duration,
+            Box::new(run),
+            Box::new(nop_async),
+            false,
+            job_store,
+        )
     }
 
     /// Create a new async one shot job.
@@ -332,16 +340,17 @@ impl JobLocked {
     /// tokio::spawn(sched.start());
     /// ```
     pub fn new_one_shot_async<T>(
+        job_store: JobStoreLocked,
         duration: Duration,
         run: T,
-    ) -> Result<Self, Box<dyn std::error::Error>>
+    ) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
             + Send
             + Sync,
     {
-        JobLocked::make_one_shot_job(duration, Box::new(nop), Box::new(run), true)
+        JobLocked::make_one_shot_job(duration, Box::new(nop), Box::new(run), true, job_store)
     }
 
     fn make_new_one_shot_at_an_instant(
@@ -349,7 +358,7 @@ impl JobLocked {
         run: Box<JobToRun>,
         run_async: Box<JobToRunAsync>,
         async_job: bool,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, JobSchedulerError> {
         let id = Uuid::new_v4();
 
         let job = NonCronJob {
@@ -423,7 +432,7 @@ impl JobLocked {
     pub fn new_one_shot_at_instant<T>(
         instant: std::time::Instant,
         run: T,
-    ) -> Result<Self, Box<dyn std::error::Error>>
+    ) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
@@ -449,7 +458,7 @@ impl JobLocked {
     pub fn new_one_shot_at_instant_async<T>(
         instant: std::time::Instant,
         run: T,
-    ) -> Result<Self, Box<dyn std::error::Error>>
+    ) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
@@ -464,7 +473,7 @@ impl JobLocked {
         run: Box<JobToRun>,
         run_async: Box<JobToRunAsync>,
         async_job: bool,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, JobSchedulerError> {
         let id = Uuid::new_v4();
         let job = NonCronJob {
             run,
@@ -536,7 +545,7 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_repeated<T>(duration: Duration, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    pub fn new_repeated<T>(duration: Duration, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
@@ -555,10 +564,7 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_repeated_async<T>(
-        duration: Duration,
-        run: T,
-    ) -> Result<Self, Box<dyn std::error::Error>>
+    pub fn new_repeated_async<T>(duration: Duration, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>

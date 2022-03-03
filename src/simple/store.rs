@@ -1,6 +1,7 @@
 use crate::job::JobLocked;
 use crate::job_data::{JobState, JobStoredData, JobType};
 use std::collections::{HashMap, HashSet};
+use tokio::task::JoinHandle;
 
 use crate::job_store::JobStore;
 use crate::{JobSchedulerError, OnJobNotification};
@@ -11,6 +12,7 @@ pub struct SimpleJobStore {
     pub jobs: HashMap<Uuid, JobLocked>,
     pub notification_guids: HashMap<JobState, HashMap<Uuid, HashSet<Uuid>>>,
     pub job_notification_guids: HashMap<Uuid, Box<OnJobNotification>>,
+    pub job_handlers: HashMap<Uuid, Option<JoinHandle<()>>>,
 }
 
 impl JobStore for SimpleJobStore {
@@ -37,11 +39,12 @@ impl JobStore for SimpleJobStore {
             not_to_be_removed
         });
         for job in removed {
+            let guid = job.guid();
             let mut job_w = job.0.write().unwrap();
             job_w.set_stopped();
             let job_type = job_w.job_type();
             if matches!(job_type, JobType::OneShot) || matches!(job_type, JobType::Repeated) {
-                job_w.abort_join_handle();
+                self.stop_join_handle(&guid)?;
             }
             let job_id = to_be_removed;
             if let Err(e) = self.notify_on_job_state(job_id, JobState::Removed) {
@@ -153,6 +156,24 @@ impl JobStore for SimpleJobStore {
                     });
                 }
             }
+        }
+        Ok(())
+    }
+
+    fn add_job_join_handle(
+        &mut self,
+        job_id: &Uuid,
+        job_handle: Option<JoinHandle<()>>,
+    ) -> Result<(), JobSchedulerError> {
+        self.job_handlers.insert(*job_id, job_handle);
+        Ok(())
+    }
+
+    fn stop_join_handle(&mut self, job_id: &Uuid) -> Result<(), JobSchedulerError> {
+        let jh = self.job_handlers.insert(*job_id, Option::None).flatten();
+        if let Some(jh) = jh {
+            jh.abort();
+            drop(jh);
         }
         Ok(())
     }
