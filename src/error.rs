@@ -16,4 +16,7 @@ pub enum JobSchedulerError {
     CouldNotGetTimeUntilNextTick,
     GetJobData,
     GetJobStore,
+    JobTick,
+    UpdateJobData,
+    NoNextTick,
 }

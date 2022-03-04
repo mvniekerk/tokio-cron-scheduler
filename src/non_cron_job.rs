@@ -27,6 +27,13 @@ impl Job for NonCronJob {
         None
     }
 
+    fn repeated_every(&self) -> Option<u64> {
+        self.data.job.as_ref().and_then(|jt| match jt {
+            crate::job_data::job_stored_data::Job::CronJob(_) => None,
+            crate::job_data::job_stored_data::Job::NonCronJob(ncj) => Some(ncj.repeated_every),
+        })
+    }
+
     fn last_tick(&self) -> Option<DateTime<Utc>> {
         self.data
             .last_tick
@@ -36,6 +43,23 @@ impl Job for NonCronJob {
 
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>) {
         self.data.last_tick = tick.map(|t| t.timestamp() as u64);
+    }
+
+    fn next_tick(&self) -> Option<DateTime<Utc>> {
+        if self.data.next_tick == 0 {
+            None
+        } else {
+            Some(self.data.next_tick)
+                .map(|lt| SystemTime::UNIX_EPOCH.add(Duration::from_secs(lt)))
+                .map(DateTime::from)
+        }
+    }
+
+    fn set_next_tick(&mut self, tick: Option<DateTime<Utc>>) {
+        self.data.next_tick = match tick {
+            Some(t) => t.timestamp() as u64,
+            None => 0,
+        }
     }
 
     fn set_count(&mut self, count: u32) {
@@ -91,16 +115,13 @@ impl Job for NonCronJob {
         self.data.ran = ran;
     }
 
-    fn set_join_handle(&mut self, handle: Option<JoinHandle<()>>) {
-        self.join_handle = handle;
-    }
-
     fn stop(&self) -> bool {
         self.data.stopped
     }
 
     fn set_stopped(&mut self) {
         self.data.stopped = true;
+        self.data.next_tick = 0;
     }
 
     fn on_start_notification_add(
@@ -177,5 +198,10 @@ impl Job for NonCronJob {
 
     fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError> {
         Ok(Some(self.data.clone()))
+    }
+
+    fn set_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError> {
+        self.data = job_data;
+        Ok(())
     }
 }

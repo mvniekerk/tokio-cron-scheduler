@@ -1,5 +1,5 @@
 use crate::job::JobLocked;
-use crate::job_data::{JobState, JobStoredData, JobType};
+use crate::job_data::{JobState, JobStoredData};
 use std::collections::{HashMap, HashSet};
 use tokio::task::JoinHandle;
 
@@ -39,13 +39,8 @@ impl JobStore for SimpleJobStore {
             not_to_be_removed
         });
         for job in removed {
-            let guid = job.guid();
             let mut job_w = job.0.write().unwrap();
             job_w.set_stopped();
-            let job_type = job_w.job_type();
-            if matches!(job_type, JobType::OneShot) || matches!(job_type, JobType::Repeated) {
-                self.stop_join_handle(&guid)?;
-            }
             let job_id = to_be_removed;
             if let Err(e) = self.notify_on_job_state(job_id, JobState::Removed) {
                 eprintln!("Error notifying on job state {:?}", e);
@@ -160,21 +155,17 @@ impl JobStore for SimpleJobStore {
         Ok(())
     }
 
-    fn add_job_join_handle(
-        &mut self,
-        job_id: &Uuid,
-        job_handle: Option<JoinHandle<()>>,
-    ) -> Result<(), JobSchedulerError> {
-        self.job_handlers.insert(*job_id, job_handle);
-        Ok(())
-    }
-
-    fn stop_join_handle(&mut self, job_id: &Uuid) -> Result<(), JobSchedulerError> {
-        let jh = self.job_handlers.insert(*job_id, Option::None).flatten();
-        if let Some(jh) = jh {
-            jh.abort();
-            drop(jh);
+    fn update_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError> {
+        let job = job_data
+            .id
+            .as_ref()
+            .map(|i| i.clone().into())
+            .and_then(|id| self.jobs.get_mut(&id));
+        if job.is_none() {
+            return Err(JobSchedulerError::UpdateJobData);
         }
-        Ok(())
+
+        let job = job.unwrap();
+        job.set_job_data(job_data)
     }
 }

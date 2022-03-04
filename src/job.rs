@@ -12,7 +12,6 @@ use std::str::FromStr;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
-use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
@@ -43,8 +42,11 @@ pub struct JobLocked(pub(crate) Arc<RwLock<Box<dyn Job + Send + Sync>>>);
 pub trait Job {
     fn is_cron_job(&self) -> bool;
     fn schedule(&self) -> Option<Schedule>;
+    fn repeated_every(&self) -> Option<u64>;
     fn last_tick(&self) -> Option<DateTime<Utc>>;
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>);
+    fn next_tick(&self) -> Option<DateTime<Utc>>;
+    fn set_next_tick(&mut self, tick: Option<DateTime<Utc>>);
     fn set_count(&mut self, count: u32);
     fn count(&self) -> u32;
     fn increment_count(&mut self);
@@ -53,7 +55,6 @@ pub trait Job {
     fn job_type(&self) -> JobType;
     fn ran(&self) -> bool;
     fn set_ran(&mut self, ran: bool);
-    fn set_join_handle(&mut self, handle: Option<JoinHandle<()>>);
     fn stop(&self) -> bool;
     fn set_stopped(&mut self);
     fn on_start_notification_add(
@@ -91,6 +92,7 @@ pub trait Job {
         job_store: JobStoreLocked,
     ) -> Result<Option<JobStoredData>, JobSchedulerError>;
     fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError>;
+    fn set_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError>;
 }
 
 impl JobLocked {
@@ -241,7 +243,6 @@ impl JobLocked {
         run: Box<JobToRun>,
         run_async: Box<JobToRunAsync>,
         async_job: bool,
-        job_store: JobStoreLocked,
     ) -> Result<Self, JobSchedulerError> {
         let id = Uuid::new_v4();
         let job = NonCronJob {
@@ -277,24 +278,6 @@ impl JobLocked {
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
             Arc::new(RwLock::new(Box::new(job)));
-        let job_for_trigger = job.clone();
-
-        let jh = tokio::spawn(async move {
-            tokio::time::sleep(duration).await;
-            {
-                let j = job_for_trigger.read().unwrap();
-                if j.stop() {
-                    return;
-                }
-            }
-            {
-                let mut j = job_for_trigger.write().unwrap();
-                j.set_last_tick(Some(Utc::now()));
-            }
-        });
-
-        let mut job_store = job_store;
-        job_store.add_join_handle(&id, Some(jh))?;
 
         Ok(Self(job))
     }
@@ -310,22 +293,12 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_one_shot<T>(
-        job_store: JobStoreLocked,
-        duration: Duration,
-        run: T,
-    ) -> Result<Self, JobSchedulerError>
+    pub fn new_one_shot<T>(duration: Duration, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
     {
-        JobLocked::make_one_shot_job(
-            duration,
-            Box::new(run),
-            Box::new(nop_async),
-            false,
-            job_store,
-        )
+        JobLocked::make_one_shot_job(duration, Box::new(run), Box::new(nop_async), false)
     }
 
     /// Create a new async one shot job.
@@ -339,18 +312,14 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_one_shot_async<T>(
-        job_store: JobStoreLocked,
-        duration: Duration,
-        run: T,
-    ) -> Result<Self, JobSchedulerError>
+    pub fn new_one_shot_async<T>(duration: Duration, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
             + Send
             + Sync,
     {
-        JobLocked::make_one_shot_job(duration, Box::new(nop), Box::new(run), true, job_store)
+        JobLocked::make_one_shot_job(duration, Box::new(nop), Box::new(run), true)
     }
 
     fn make_new_one_shot_at_an_instant(
@@ -395,26 +364,6 @@ impl JobLocked {
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
             Arc::new(RwLock::new(Box::new(job)));
-        let job_for_trigger = job.clone();
-
-        let jh = tokio::spawn(async move {
-            tokio::time::sleep_until(tokio::time::Instant::from(instant)).await;
-            {
-                let j = job_for_trigger.read().unwrap();
-                if j.stop() {
-                    return;
-                }
-            }
-            {
-                let mut j = job_for_trigger.write().unwrap();
-                j.set_last_tick(Some(Utc::now()));
-            }
-        });
-
-        {
-            let mut j = job.write().unwrap();
-            j.set_join_handle(Some(jh));
-        }
 
         Ok(Self(job))
     }
@@ -507,29 +456,6 @@ impl JobLocked {
 
         let job: Arc<RwLock<Box<dyn Job + Send + Sync + 'static>>> =
             Arc::new(RwLock::new(Box::new(job)));
-        let job_for_trigger = job.clone();
-
-        let jh = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(duration);
-            loop {
-                interval.tick().await;
-                {
-                    let j = job_for_trigger.read().unwrap();
-                    if j.stop() {
-                        return;
-                    }
-                }
-                {
-                    let mut j = job_for_trigger.write().unwrap();
-                    j.set_last_tick(Some(Utc::now()));
-                }
-            }
-        });
-
-        {
-            let mut j = job.write().unwrap();
-            j.set_join_handle(Some(jh));
-        }
 
         Ok(Self(job))
     }
@@ -577,61 +503,66 @@ impl JobLocked {
     ///
     /// The `tick` method returns a true if there was an invocation needed after it was last called
     /// This method will also change the last tick on itself
-    pub fn tick(&mut self) -> bool {
+    pub fn tick(&mut self) -> Result<bool, JobSchedulerError> {
         let now = Utc::now();
-        {
-            let s = self.0.write();
-            s.map(|mut s| match s.job_type() {
-                JobType::Cron => {
-                    if s.last_tick().is_none() {
-                        s.set_last_tick(Some(now));
-                        return false;
-                    }
-                    let last_tick = s.last_tick().unwrap();
-                    s.set_last_tick(Some(now));
-                    s.increment_count();
-                    let must_run = s
-                        .schedule()
-                        .unwrap()
-                        .after(&last_tick)
-                        .take(1)
-                        .map(|na| {
-                            let now_to_next = now.cmp(&na);
-                            let last_to_next = last_tick.cmp(&na);
+        let (job_type, last_tick, next_tick, schedule, repeated_every, ran) = {
+            let r = self.0.read().map_err(|_| JobSchedulerError::TickError)?;
+            (
+                r.job_type(),
+                r.last_tick(),
+                r.next_tick(),
+                r.schedule(),
+                r.repeated_every(),
+                r.ran(),
+            )
+        };
 
-                            matches!(now_to_next, std::cmp::Ordering::Greater)
-                                && matches!(last_to_next, std::cmp::Ordering::Less)
-                        })
-                        .into_iter()
-                        .find(|_| true)
-                        .unwrap_or(false);
-
-                    if !s.ran() && must_run {
-                        s.set_ran(true);
-                    }
-                    must_run
-                }
-                JobType::OneShot => {
-                    if s.last_tick().is_some() {
-                        s.set_last_tick(None);
-                        s.set_ran(true);
-                        true
-                    } else {
-                        false
-                    }
-                }
-                JobType::Repeated => {
-                    if s.last_tick().is_some() {
-                        s.set_last_tick(None);
-                        s.set_ran(true);
-                        true
-                    } else {
-                        false
-                    }
-                }
-            })
-            .unwrap_or(false)
+        // Don't bother processing a cancelled job
+        if next_tick.is_none() {
+            return Ok(false);
         }
+
+        let must_run = match (last_tick.as_ref(), next_tick.as_ref(), job_type) {
+            (None, Some(next_tick), JobType::OneShot) => {
+                let now_to_next = now.cmp(next_tick);
+                matches!(now_to_next, std::cmp::Ordering::Greater)
+            }
+            (None, Some(next_tick), JobType::Repeated) => {
+                let now_to_next = now.cmp(next_tick);
+                matches!(now_to_next, std::cmp::Ordering::Greater)
+            }
+            (Some(last_tick), Some(next_tick), _) => {
+                let now_to_next = now.cmp(next_tick);
+                let last_to_next = last_tick.cmp(next_tick);
+
+                matches!(now_to_next, std::cmp::Ordering::Greater)
+                    && matches!(last_to_next, std::cmp::Ordering::Less)
+            }
+            _ => false,
+        };
+
+        let next_tick = if must_run {
+            match job_type {
+                JobType::Cron => schedule.and_then(|s| s.after(&now).next()),
+                JobType::OneShot => None,
+                JobType::Repeated => repeated_every.and_then(|r| {
+                    next_tick
+                        .and_then(|nt| nt.checked_add_signed(time::Duration::seconds(r as i64)))
+                }),
+            }
+        } else {
+            next_tick
+        };
+        let last_tick = Some(now);
+
+        {
+            let mut w = self.0.write().map_err(|_| JobSchedulerError::JobTick)?;
+            w.set_next_tick(next_tick);
+            w.set_last_tick(last_tick);
+            w.set_ran(ran || must_run);
+        }
+
+        Ok(must_run)
     }
 
     ///
@@ -712,5 +643,12 @@ impl JobLocked {
     ) -> Result<bool, JobSchedulerError> {
         let mut w = self.0.write().unwrap();
         w.on_removed_notification_remove(id, job_store)
+    }
+
+    ///
+    /// Override the job's data for use in data storage
+    pub fn set_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError> {
+        let mut w = self.0.write().unwrap();
+        w.set_job_data(job_data)
     }
 }

@@ -86,14 +86,14 @@ async fn main() {
     );
 
     sched.add(
-        Job::new_one_shot(job_store.clone(), Duration::from_secs(18), |_uuid, _l| {
+        Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
             println!("{:?} I'm only run once", chrono::Utc::now());
         })
         .unwrap(),
     );
 
     sched.add(
-        Job::new_one_shot_async(job_store.clone(), Duration::from_secs(16), |_uuid, _l| {
+        Job::new_one_shot_async(Duration::from_secs(16), |_uuid, _l| {
             Box::pin(async move {
                 println!("{:?} I'm only run once async", chrono::Utc::now());
             })

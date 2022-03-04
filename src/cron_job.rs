@@ -8,7 +8,6 @@ use std::ops::Add;
 use std::str::FromStr;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, SystemTime};
-use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 pub struct CronJob {
@@ -34,6 +33,10 @@ impl Job for CronJob {
             .and_then(|s| Schedule::from_str(s).ok())
     }
 
+    fn repeated_every(&self) -> Option<u64> {
+        None
+    }
+
     fn last_tick(&self) -> Option<DateTime<Utc>> {
         self.data
             .last_tick
@@ -43,6 +46,23 @@ impl Job for CronJob {
 
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>) {
         self.data.last_tick = tick.map(|t| t.timestamp() as u64);
+    }
+
+    fn next_tick(&self) -> Option<DateTime<Utc>> {
+        if self.data.next_tick == 0 {
+            None
+        } else {
+            Some(self.data.next_tick)
+                .map(|lt| SystemTime::UNIX_EPOCH.add(Duration::from_secs(lt)))
+                .map(DateTime::from)
+        }
+    }
+
+    fn set_next_tick(&mut self, tick: Option<DateTime<Utc>>) {
+        self.data.next_tick = match tick {
+            Some(t) => t.timestamp() as u64,
+            None => 0,
+        }
     }
 
     fn set_count(&mut self, count: u32) {
@@ -98,14 +118,13 @@ impl Job for CronJob {
         self.data.ran = ran;
     }
 
-    fn set_join_handle(&mut self, _handle: Option<JoinHandle<()>>) {}
-
     fn stop(&self) -> bool {
         self.data.stopped
     }
 
     fn set_stopped(&mut self) {
         self.data.stopped = true;
+        self.data.next_tick = 0;
     }
 
     fn on_start_notification_add(
@@ -182,5 +201,10 @@ impl Job for CronJob {
 
     fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError> {
         Ok(Some(self.data.clone()))
+    }
+
+    fn set_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError> {
+        self.data = job_data;
+        Ok(())
     }
 }
