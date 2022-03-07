@@ -5,9 +5,9 @@ use chrono::{DateTime, Utc};
 use cron::Schedule;
 use cron_job::CronJob;
 use non_cron_job::NonCronJob;
+use std::convert::TryInto;
 use std::future::Future;
 use std::pin::Pin;
-use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::oneshot::Receiver;
@@ -86,12 +86,13 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    pub fn new<S, T>(schedule: S, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+        S: TryInto<Schedule, Error=cron::error::Error>
     {
-        let schedule: Schedule = Schedule::from_str(schedule)?;
+        let schedule: Schedule = schedule.try_into()?;
         let job_id = Uuid::new_v4();
         Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
             data: JobStoredData {
@@ -130,14 +131,15 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_async<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    pub fn new_async<S, T>(schedule: S, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
+        S: TryInto<Schedule, Error=cron::error::Error>
     {
-        let schedule: Schedule = Schedule::from_str(schedule)?;
+        let schedule: Schedule = schedule.try_into()?;
         let job_id = Uuid::new_v4();
         Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
             data: JobStoredData {
@@ -176,10 +178,11 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_cron_job<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    pub fn new_cron_job<S, T>(schedule: S, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+        S: TryInto<Schedule, Error=cron::error::Error>
     {
         JobLocked::new(schedule, run)
     }
@@ -196,12 +199,13 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_cron_job_async<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
+    pub fn new_cron_job_async<S, T>(schedule: S, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
+        S: TryInto<Schedule, Error=cron::error::Error>
     {
         JobLocked::new_async(schedule, run)
     }
