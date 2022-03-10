@@ -248,7 +248,6 @@ impl JobLocked {
         let job = NonCronJob {
             run,
             run_async,
-            join_handle: None,
             async_job,
             data: JobStoredData {
                 id: Some(id.into()),
@@ -333,7 +332,6 @@ impl JobLocked {
         let job = NonCronJob {
             run,
             run_async,
-            join_handle: None,
             async_job,
             data: JobStoredData {
                 id: Some(id.into()),
@@ -427,7 +425,6 @@ impl JobLocked {
         let job = NonCronJob {
             run,
             run_async,
-            join_handle: None,
             async_job,
             data: JobStoredData {
                 id: Some(id.into()),
@@ -519,24 +516,28 @@ impl JobLocked {
 
         // Don't bother processing a cancelled job
         if next_tick.is_none() {
-            return Ok(false);
+            return Err(JobSchedulerError::NoNextTick);
         }
 
         let must_run = match (last_tick.as_ref(), next_tick.as_ref(), job_type) {
             (None, Some(next_tick), JobType::OneShot) => {
                 let now_to_next = now.cmp(next_tick);
                 matches!(now_to_next, std::cmp::Ordering::Greater)
+                    || matches!(now_to_next, std::cmp::Ordering::Equal)
             }
             (None, Some(next_tick), JobType::Repeated) => {
                 let now_to_next = now.cmp(next_tick);
                 matches!(now_to_next, std::cmp::Ordering::Greater)
+                    || matches!(now_to_next, std::cmp::Ordering::Equal)
             }
             (Some(last_tick), Some(next_tick), _) => {
                 let now_to_next = now.cmp(next_tick);
                 let last_to_next = last_tick.cmp(next_tick);
 
-                matches!(now_to_next, std::cmp::Ordering::Greater)
-                    && matches!(last_to_next, std::cmp::Ordering::Less)
+                (matches!(now_to_next, std::cmp::Ordering::Greater)
+                    || matches!(now_to_next, std::cmp::Ordering::Equal))
+                    && (matches!(last_to_next, std::cmp::Ordering::Less)
+                        || matches!(last_to_next, std::cmp::Ordering::Equal))
             }
             _ => false,
         };

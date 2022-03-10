@@ -2,6 +2,7 @@
 pub enum JobSchedulerError {
     CantRemove,
     CantAdd,
+    CantInit,
     TickError,
     CantGetTimeUntil,
     Shutdown,
@@ -19,4 +20,5 @@ pub enum JobSchedulerError {
     JobTick,
     UpdateJobData,
     NoNextTick,
+    CantListGuids,
 }

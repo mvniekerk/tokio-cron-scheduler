@@ -46,7 +46,10 @@ pub trait JobSchedulerWithoutSync {
 
     ///
     /// Start the scheduler
-    fn start(&self, scheduler: JobsSchedulerLocked) -> Result<JoinHandle<()>, JobSchedulerError>;
+    fn start(
+        &mut self,
+        scheduler: JobsSchedulerLocked,
+    ) -> Result<JoinHandle<()>, JobSchedulerError>;
 
     ///
     /// Set the job store
@@ -155,11 +158,11 @@ impl JobsSchedulerLocked {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
-    pub fn start(&self) -> Result<JoinHandle<()>, JobSchedulerError> {
+    pub fn start(&mut self) -> Result<JoinHandle<()>, JobSchedulerError> {
         let jl: JobsSchedulerLocked = self.clone();
-        let r = self
+        let mut r = self
             .0
-            .read()
+            .write()
             .map_err(|_| JobSchedulerError::StartScheduler)?;
         let jh = r.start(jl)?;
         Ok(jh)

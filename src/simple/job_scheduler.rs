@@ -64,9 +64,12 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             let mut js = self.job_store.clone();
             let jd = {
                 let mut w = jl.0.write().unwrap();
-                w.job_data_from_job()?
+                w.job_data_from_job()
             };
-            if let Some(jd) = jd {
+            if jd.is_err() {
+                eprintln!("Error")
+            }
+            if let Ok(Some(jd)) = jd {
                 tokio::spawn(async move {
                     if let Err(e) = js.update_job_data(jd) {
                         eprintln!("Error updating job data {:?}", e);
@@ -190,7 +193,10 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
     }
 
     /// Start the simple job scheduler
-    fn start(&self, scheduler: JobsSchedulerLocked) -> Result<JoinHandle<()>, JobSchedulerError> {
+    fn start(
+        &mut self,
+        scheduler: JobsSchedulerLocked,
+    ) -> Result<JoinHandle<()>, JobSchedulerError> {
         let jh: JoinHandle<()> = tokio::spawn(async move {
             loop {
                 tokio::time::sleep(core::time::Duration::from_millis(500)).await;
@@ -209,6 +215,8 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
     /// Set the job store for this scheduler
     fn set_job_store(&mut self, job_store: JobStoreLocked) -> Result<(), JobSchedulerError> {
         self.job_store = job_store;
+
+        self.job_store.init()?;
         Ok(())
     }
 

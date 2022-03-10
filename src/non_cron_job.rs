@@ -7,13 +7,11 @@ use cron::Schedule;
 use std::ops::Add;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, SystemTime};
-use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 pub struct NonCronJob {
     pub run: Box<JobToRun>,
     pub run_async: Box<JobToRunAsync>,
-    pub join_handle: Option<JoinHandle<()>>,
     pub data: JobStoredData,
     pub async_job: bool,
 }

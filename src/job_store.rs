@@ -45,6 +45,7 @@ pub trait OnJobRemove {
 }
 
 pub trait JobStore {
+    fn init(&mut self) -> Result<(), JobSchedulerError>;
     fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError>;
     fn remove(&mut self, job: &Uuid) -> Result<(), JobSchedulerError>;
     fn list_job_guids(&mut self) -> Result<Vec<Uuid>, JobSchedulerError>;
@@ -83,6 +84,14 @@ impl Default for JobStoreLocked {
 }
 
 impl JobStoreLocked {
+    pub fn init(&mut self) -> Result<(), JobSchedulerError> {
+        {
+            let mut w = self.0.write().map_err(|_| JobSchedulerError::CantInit)?;
+            w.init()?;
+        }
+        Ok(())
+    }
+
     pub fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
         {
             let mut w = self.0.write().map_err(|_| JobSchedulerError::CantAdd)?;

@@ -14,84 +14,98 @@ async fn main() {
         })
     }));
 
-    let mut five_s_job = Job::new("1/5 * * * * *", |uuid, _l| {
-        println!(
-            "{:?} I run every 5 seconds id {:?}",
-            chrono::Utc::now(),
-            uuid
-        );
-    })
-    .unwrap();
-    five_s_job.on_removed_notification_add(
-        job_store.clone(),
-        Box::new(|job_id, notification_id, type_of_notification| {
-            Box::pin(async move {
-                println!(
-                    "Job {:?} was removed, notification {:?} ran ({:?})",
-                    job_id, notification_id, type_of_notification
-                );
-            })
-        }),
+    // let mut five_s_job = Job::new("1/5 * * * * *", |uuid, _l| {
+    //     println!(
+    //         "{:?} I run every 5 seconds id {:?}",
+    //         chrono::Utc::now(),
+    //         uuid
+    //     );
+    // })
+    // .unwrap();
+    // five_s_job.on_removed_notification_add(
+    //     job_store.clone(),
+    //     Box::new(|job_id, notification_id, type_of_notification| {
+    //         Box::pin(async move {
+    //             println!(
+    //                 "Job {:?} was removed, notification {:?} ran ({:?})",
+    //                 job_id, notification_id, type_of_notification
+    //             );
+    //         })
+    //     }),
+    // );
+    // let five_s_job_guid = five_s_job.guid();
+    // sched.add(five_s_job);
+    //
+    // let mut four_s_job_async = Job::new_async("1/4 * * * * *", |uuid, _l| {
+    //     Box::pin(async move {
+    //         println!(
+    //             "{:?} I run async every 4 seconds id {:?}",
+    //             chrono::Utc::now(),
+    //             uuid
+    //         );
+    //     })
+    // })
+    // .unwrap();
+    // let four_s_job_async_clone = four_s_job_async.clone();
+    // let js = job_store.clone();
+    // println!("4s job id {:?}", four_s_job_async.guid());
+    // four_s_job_async.on_start_notification_add(job_store.clone(), Box::new(move |job_id, notification_id, type_of_notification| {
+    //     let mut four_s_job_async_clone = four_s_job_async_clone.clone();
+    //     let js = js.clone();
+    //     Box::pin(async move {
+    //         println!("Job {:?} ran on start notification {:?} ({:?})", job_id, notification_id, type_of_notification);
+    //         println!("This should only run once since we're going to remove this notification immediately.");
+    //         println!("Removed? {:?}", four_s_job_async_clone.on_start_notification_remove(js, &notification_id));
+    //     })
+    // }));
+    //
+    // four_s_job_async.on_done_notification_add(
+    //     job_store.clone(),
+    //     Box::new(|job_id, notification_id, type_of_notification| {
+    //         Box::pin(async move {
+    //             println!(
+    //                 "Job {:?} completed and ran notification {:?} ({:?})",
+    //                 job_id, notification_id, type_of_notification
+    //             );
+    //         })
+    //     }),
+    // );
+    //
+    // let four_s_job_guid = four_s_job_async.guid();
+    // sched.add(four_s_job_async);
+
+    // sched.add(
+    //     Job::new("1/30 * * * * *", |uuid, _l| {
+    //         println!(
+    //             "{:?} I run every 30 seconds id {:?}",
+    //             chrono::Utc::now(),
+    //             uuid
+    //         );
+    //     })
+    //     .unwrap(),
+    // );
+
+    println!(
+        "{:?} Sched one shot for {:?}",
+        chrono::Utc::now(),
+        chrono::Utc::now()
+            .checked_add_signed(time::Duration::seconds(10))
+            .unwrap()
     );
-    let five_s_job_guid = five_s_job.guid();
-    sched.add(five_s_job);
-
-    let mut four_s_job_async = Job::new_async("1/4 * * * * *", |uuid, _l| {
-        Box::pin(async move {
-            println!(
-                "{:?} I run async every 4 seconds id {:?}",
-                chrono::Utc::now(),
-                uuid
-            );
-        })
-    })
-    .unwrap();
-    let four_s_job_async_clone = four_s_job_async.clone();
-    let js = job_store.clone();
-    println!("4s job id {:?}", four_s_job_async.guid());
-    four_s_job_async.on_start_notification_add(job_store.clone(), Box::new(move |job_id, notification_id, type_of_notification| {
-        let mut four_s_job_async_clone = four_s_job_async_clone.clone();
-        let js = js.clone();
-        Box::pin(async move {
-            println!("Job {:?} ran on start notification {:?} ({:?})", job_id, notification_id, type_of_notification);
-            println!("This should only run once since we're going to remove this notification immediately.");
-            println!("Removed? {:?}", four_s_job_async_clone.on_start_notification_remove(js, &notification_id));
-        })
-    }));
-
-    four_s_job_async.on_done_notification_add(
-        job_store.clone(),
-        Box::new(|job_id, notification_id, type_of_notification| {
-            Box::pin(async move {
-                println!(
-                    "Job {:?} completed and ran notification {:?} ({:?})",
-                    job_id, notification_id, type_of_notification
-                );
-            })
-        }),
-    );
-
-    let four_s_job_guid = four_s_job_async.guid();
-    sched.add(four_s_job_async);
-
     sched.add(
-        Job::new("1/30 * * * * *", |uuid, _l| {
-            println!(
-                "{:?} I run every 30 seconds id {:?}",
-                chrono::Utc::now(),
-                uuid
-            );
-        })
-        .unwrap(),
-    );
-
-    sched.add(
-        Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
+        Job::new_one_shot(Duration::from_secs(10), |_uuid, _l| {
             println!("{:?} I'm only run once", chrono::Utc::now());
         })
         .unwrap(),
     );
 
+    println!(
+        "{:?} Sched one shot async for {:?}",
+        chrono::Utc::now(),
+        chrono::Utc::now()
+            .checked_add_signed(time::Duration::seconds(16))
+            .unwrap()
+    );
     sched.add(
         Job::new_one_shot_async(Duration::from_secs(16), |_uuid, _l| {
             Box::pin(async move {
@@ -119,7 +133,7 @@ async fn main() {
     .unwrap();
     let jja_guid = jja.guid();
     sched.add(jja);
-
+    //
     let start = sched.start();
     if start.is_err() {
         eprintln!("Error starting scheduler");
@@ -128,8 +142,8 @@ async fn main() {
     tokio::time::sleep(Duration::from_secs(30)).await;
 
     println!("{:?} Remove 4, 5, 7 and 8 sec jobs", chrono::Utc::now());
-    sched.remove(&five_s_job_guid);
-    sched.remove(&four_s_job_guid);
+    // sched.remove(&five_s_job_guid);
+    // sched.remove(&four_s_job_guid);
     sched.remove(&jj_guid);
     sched.remove(&jja_guid);
 
