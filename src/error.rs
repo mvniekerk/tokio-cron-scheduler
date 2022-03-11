@@ -21,4 +21,5 @@ pub enum JobSchedulerError {
     UpdateJobData,
     NoNextTick,
     CantListGuids,
+    NotifyOnStateError,
 }
