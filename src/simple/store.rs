@@ -9,10 +9,13 @@ use crate::job_store::JobStore;
 use crate::{JobSchedulerError, OnJobNotification};
 use uuid::Uuid;
 
+type LockedNotificationGuids = Arc<RwLock<HashMap<JobState, HashMap<Uuid, HashSet<Uuid>>>>>;
+type LockedJobNotificationGuids = Arc<RwLock<HashMap<Uuid, Box<OnJobNotification>>>>;
+
 pub struct SimpleJobStore {
     pub jobs: Arc<RwLock<HashMap<Uuid, JobLocked>>>,
-    pub notification_guids: Arc<RwLock<HashMap<JobState, HashMap<Uuid, HashSet<Uuid>>>>>,
-    pub job_notification_guids: Arc<RwLock<HashMap<Uuid, Box<OnJobNotification>>>>,
+    pub notification_guids: LockedNotificationGuids,
+    pub job_notification_guids: LockedJobNotificationGuids,
     pub job_handlers: HashMap<Uuid, Option<JoinHandle<()>>>,
     pub tx_add_job: Option<Sender<Message<JobLocked, ()>>>,
     pub tx_remove_job: Option<Sender<Message<Uuid, ()>>>,
@@ -98,8 +101,8 @@ async fn listen_for_additions(
 
 async fn listen_for_removals(
     jobs: Arc<RwLock<HashMap<Uuid, JobLocked>>>,
-    notification_guids: Arc<RwLock<HashMap<JobState, HashMap<Uuid, HashSet<Uuid>>>>>,
-    job_notification_guids: Arc<RwLock<HashMap<Uuid, Box<OnJobNotification>>>>,
+    notification_guids: LockedNotificationGuids,
+    job_notification_guids: LockedJobNotificationGuids,
     rx_remove: Receiver<Message<Uuid, ()>>,
     tx_notify: Sender<Message<NotifyOnJobState, ()>>,
 ) {
@@ -214,7 +217,7 @@ async fn listen_for_removals(
 }
 
 async fn listen_for_notifications(
-    notification_guids: Arc<RwLock<HashMap<JobState, HashMap<Uuid, HashSet<Uuid>>>>>,
+    notification_guids: LockedNotificationGuids,
     job_notification_guids: Arc<RwLock<HashMap<Uuid, Box<OnJobNotification>>>>,
     rx_notify: Receiver<Message<NotifyOnJobState, ()>>,
 ) {
@@ -267,8 +270,8 @@ async fn listen_for_notifications(
 }
 
 async fn listen_for_notification_additions(
-    notification_guids: Arc<RwLock<HashMap<JobState, HashMap<Uuid, HashSet<Uuid>>>>>,
-    job_notification_guids: Arc<RwLock<HashMap<Uuid, Box<OnJobNotification>>>>,
+    notification_guids: LockedNotificationGuids,
+    job_notification_guids: LockedJobNotificationGuids,
     rx_notify: Receiver<Message<AddJobNotification, ()>>,
 ) {
     while let Ok(Message { data, resp }) = rx_notify.recv() {
@@ -317,8 +320,8 @@ async fn listen_for_notification_additions(
 }
 
 async fn listen_for_notification_removals(
-    notification_guids: Arc<RwLock<HashMap<JobState, HashMap<Uuid, HashSet<Uuid>>>>>,
-    job_notification_guids: Arc<RwLock<HashMap<Uuid, Box<OnJobNotification>>>>,
+    notification_guids: LockedNotificationGuids,
+    job_notification_guids: LockedJobNotificationGuids,
     rx_notify: Receiver<Message<RemoveJobNotification, bool>>,
 ) {
     while let Ok(Message { data, resp }) = rx_notify.recv() {
@@ -436,7 +439,7 @@ impl JobStore for SimpleJobStore {
         let jobs = self.jobs.clone();
         tokio::task::spawn(listen_for_additions(jobs.clone(), rx_add));
         tokio::task::spawn(listen_for_removals(
-            jobs.clone(),
+            jobs,
             self.notification_guids.clone(),
             self.job_notification_guids.clone(),
             rx_remove,
@@ -468,7 +471,7 @@ impl JobStore for SimpleJobStore {
     fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
         send_to_tx_channel(
             self.tx_remove_job.as_ref(),
-            to_be_removed.clone(),
+            *to_be_removed,
             JobSchedulerError::CantRemove,
         )
     }
@@ -520,8 +523,8 @@ impl JobStore for SimpleJobStore {
         send_to_tx_channel(
             self.tx_add_notification.as_ref(),
             AddJobNotification {
-                job: job.clone(),
-                notification_guid: notification_guid.clone(),
+                job: *job,
+                notification_guid: *notification_guid,
                 on_notification,
                 notifications,
             },
@@ -533,7 +536,7 @@ impl JobStore for SimpleJobStore {
         send_to_tx_channel(
             self.tx_remove_notification.as_ref(),
             RemoveJobNotification {
-                notification_guid: notification_guid.clone(),
+                notification_guid: *notification_guid,
                 states: vec![],
             },
             JobSchedulerError::CantRemove,
@@ -549,7 +552,7 @@ impl JobStore for SimpleJobStore {
         send_to_tx_channel(
             self.tx_remove_notification.as_ref(),
             RemoveJobNotification {
-                notification_guid: notification_guid.clone(),
+                notification_guid: *notification_guid,
                 states: vec![js],
             },
             JobSchedulerError::CantRemove,
@@ -565,7 +568,7 @@ impl JobStore for SimpleJobStore {
             self.tx_notify_on_job_state.as_ref(),
             NotifyOnJobState {
                 state: js,
-                job: job_id.clone(),
+                job: *job_id,
             },
             JobSchedulerError::NotifyOnStateError,
         )
