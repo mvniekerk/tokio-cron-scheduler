@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum JobSchedulerError {
     CantRemove,
     CantAdd,
