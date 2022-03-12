@@ -121,9 +121,16 @@ impl JobsSchedulerLocked {
     /// ```
     pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
         {
-            let mut ws = self.0.write().map_err(|_| JobSchedulerError::CantRemove)?;
-            ws.remove(to_be_removed)
-                .map_err(|_| JobSchedulerError::CantRemove)?;
+            let ws = self.0.write();
+            if let Err(e) = ws {
+                eprintln!(
+                    "Could not lock self for removal of {:?} {:?}",
+                    to_be_removed, e
+                );
+                return Err(JobSchedulerError::CantRemove);
+            }
+            let mut ws = ws.unwrap();
+            ws.remove(to_be_removed)?;
         }
 
         Ok(())

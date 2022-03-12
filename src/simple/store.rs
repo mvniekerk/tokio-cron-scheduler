@@ -102,11 +102,11 @@ async fn listen_for_additions(
 async fn listen_for_removals(
     jobs: Arc<RwLock<HashMap<Uuid, JobLocked>>>,
     notification_guids: LockedNotificationGuids,
-    job_notification_guids: LockedJobNotificationGuids,
     rx_remove: Receiver<Message<Uuid, ()>>,
     tx_notify: Sender<Message<NotifyOnJobState, ()>>,
+    tx_notify_remove: Sender<Message<RemoveJobNotification, bool>>,
 ) {
-    while let Ok(Message {
+    'next_message: while let Ok(Message {
         data: to_be_removed,
         resp,
     }) = rx_remove.recv()
@@ -115,8 +115,8 @@ async fn listen_for_removals(
 
         {
             let w = jobs.write();
-            if w.is_err() {
-                eprintln!("Could not remove job");
+            if let Err(e) = w {
+                eprintln!("Could not remove job {:?}", e);
                 if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
                     eprintln!("Could not send error {:?}", e);
                 }
@@ -137,81 +137,66 @@ async fn listen_for_removals(
             });
         }
 
-        for job in removed {
-            let mut job_w = job.0.write().unwrap();
+        'job_removal: for job in removed {
+            let job_w = job.0.write();
+            if let Err(e) = job_w {
+                eprintln!("Error getting lock on job {:?}", e);
+                if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
+                    eprintln!("Could not send failed response {:?}", e);
+                }
+                continue 'next_message;
+            }
+            let mut job_w = job_w.unwrap();
             job_w.set_stopped();
             let job_id = to_be_removed;
 
-            let (tx_resp_notify, rx_resp) = channel();
-            let msg = Message {
-                data: NotifyOnJobState {
-                    job: job_id,
+            let response_from_notification = send_to_tx_channel(
+                Some(tx_notify.clone()).as_ref(),
+                NotifyOnJobState {
                     state: JobState::Removed,
+                    job: job_id,
                 },
-                resp: tx_resp_notify,
-            };
+                JobSchedulerError::NotifyOnStateError,
+            );
 
-            // TODO This statement could have used .flatten(), but this is unstable at the moment
-            let response_from_notification = tx_notify
-                .send(msg)
-                .map_err(|_| JobSchedulerError::NotifyOnStateError)
-                .and_then(|_| {
-                    rx_resp
-                        .recv()
-                        .map_err(|_| JobSchedulerError::NotifyOnStateError)
-                });
-            match response_from_notification {
-                Err(e) => eprintln!("Error notifying on job state {:?}", e),
-                Ok(Err(e)) => eprintln!("Error notifying on job state {:?}", e),
-                _ => {}
+            if let Err(e) = response_from_notification {
+                eprintln!("Error notifying job state {:?}", e);
             }
 
-            let job_notification_uuids = {
-                let w = notification_guids
-                    .write()
-                    .map_err(|_| JobSchedulerError::CantRemove);
-                if let Err(e) = w {
-                    eprintln!("Error unlocking notification guids {:?}", e);
-                    if let Err(e) = resp.send(Err(e)) {
-                        eprintln!("Could not send failure of removal {:?}", e);
-                    }
-                    continue;
+            let guids = {
+                let r = notification_guids.read();
+                if let Err(e) = r {
+                    eprintln!("Could not get notification guids for {:?} {:?}", job_id, e);
+                    continue 'job_removal;
                 }
-                let mut w = w.unwrap();
-                w.iter_mut()
-                    .filter_map(|(_js, v)| v.get(&job_id))
-                    .flat_map(|hs| hs.iter().cloned())
+                let r = r.unwrap();
+                r.iter()
+                    .map(|(_k, v)| v.get(&job_id))
+                    .flatten()
+                    .flat_map(|l| l.iter())
+                    .cloned()
                     .collect::<Vec<_>>()
             };
-
-            {
-                let w = job_notification_guids.write();
-                if let Err(e) = w {
-                    eprintln!("Could not lock job notification guids {:?}", e);
-                    if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
-                        eprintln!("Could not send result of removal error {:?}", e);
-                    }
-                    continue;
-                }
-                let mut w = w.unwrap();
-                for job_notification_uuid in job_notification_uuids {
-                    w.remove(&job_notification_uuid);
-                }
-            }
-            {
-                let w = notification_guids.write();
-                if let Err(e) = w {
-                    eprintln!("Error unlocking notification guids {:?}", e);
-                    if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
-                        eprintln!("Could not send result of removal error {:?}", e);
-                    }
-                    continue;
-                }
-                let mut w = w.unwrap();
-                for (_js, v) in w.iter_mut() {
-                    v.remove(&job_id);
+            'notification_removal: for notification_guid in guids {
+                let ret = send_to_tx_channel(
+                    Some(tx_notify_remove.clone()).as_ref(),
+                    RemoveJobNotification {
+                        states: vec![],
+                        notification_guid,
+                    },
+                    JobSchedulerError::CantRemove,
+                );
+                if let Err(e) = ret {
+                    eprintln!(
+                        "Could not remove notification {:?} for {:?}, continuing {:?}",
+                        notification_guid, job_id, e
+                    );
+                    continue 'notification_removal;
                 }
             }
+        }
+        if let Err(e) = resp.send(Ok(())) {
+            eprintln!("Error sending success response {:?}", e);
         }
     }
 }
@@ -406,10 +391,17 @@ fn send_to_tx_channel<T, RET>(
     data: T,
     error: JobSchedulerError,
 ) -> Result<RET, JobSchedulerError> {
-    let tx = tx.ok_or(error)?;
+    if tx.is_none() {
+        eprintln!("Sender is not set {:?}", error);
+        return Err(error);
+    }
+    let tx = tx.unwrap();
     let (resp, rx_result) = channel();
     let msg = Message { data, resp };
-    tx.send(msg).map_err(|_| error)?;
+    tx.send(msg).map_err(|e| {
+        eprintln!("Error sending to channel {:?}", e);
+        error
+    })?;
     let msg = rx_result.recv();
     match msg {
         Ok(Ok(ret)) => Ok(ret),
@@ -434,16 +426,16 @@ impl JobStore for SimpleJobStore {
         self.tx_add_notification = Some(tx_add_notify);
 
         let (tx_remove_notify, rx_remove_notify) = channel();
-        self.tx_remove_notification = Some(tx_remove_notify);
+        self.tx_remove_notification = Some(tx_remove_notify.clone());
 
         let jobs = self.jobs.clone();
         tokio::task::spawn(listen_for_additions(jobs.clone(), rx_add));
         tokio::task::spawn(listen_for_removals(
             jobs,
             self.notification_guids.clone(),
-            self.job_notification_guids.clone(),
             rx_remove,
             tx_notify,
+            tx_remove_notify,
         ));
         tokio::task::spawn(listen_for_notifications(
             self.notification_guids.clone(),

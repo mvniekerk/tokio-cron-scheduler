@@ -102,7 +102,12 @@ impl JobStoreLocked {
 
     pub fn remove(&mut self, job: &Uuid) -> Result<(), JobSchedulerError> {
         {
-            let mut w = self.0.write().map_err(|_| JobSchedulerError::CantRemove)?;
+            let w = self.0.write();
+            if let Err(e) = w {
+                eprintln!("Error locking job store for removal of {:?} {:?}", job, e);
+                return Err(JobSchedulerError::CantRemove);
+            }
+            let mut w = w.unwrap();
             w.remove(job)?;
         }
         Ok(())

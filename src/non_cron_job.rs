@@ -5,8 +5,8 @@ use crate::{JobScheduler, JobSchedulerError, JobToRun, OnJobNotification};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
 use std::ops::Add;
-use std::sync::mpsc::Receiver;
 use std::time::{Duration, SystemTime};
+use tokio::sync::oneshot::Receiver;
 use uuid::Uuid;
 
 pub struct NonCronJob {
@@ -81,7 +81,7 @@ impl Job for NonCronJob {
     }
 
     fn run(&mut self, jobs: JobScheduler) -> Receiver<bool> {
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = tokio::sync::oneshot::channel();
         let job_id = self.job_id();
 
         if !self.async_job {

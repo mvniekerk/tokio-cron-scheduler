@@ -1,5 +1,5 @@
 use crate::job::JobLocked;
-use crate::job_data::{JobState, JobType};
+use crate::job_data::JobState;
 use crate::job_scheduler::{
     JobSchedulerType, JobSchedulerWithoutSync, JobsSchedulerLocked, ShutdownNotification,
 };
@@ -53,6 +53,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                 });
                 continue;
             }
+
             if tick.is_err() {
                 eprintln!("Error running tick on {:?}", guid);
                 continue;
@@ -82,18 +83,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             tokio::spawn(async move {
                 let e = ref_for_later.write();
                 if let Ok(mut w) = e {
-                    let jt = w.job_type();
-
                     let job_id = w.job_id();
-                    if matches!(jt, JobType::OneShot) {
-                        let mut jobs = jobs.clone();
-                        let job_id = job_id;
-                        tokio::spawn(async move {
-                            if let Err(e) = jobs.remove(&job_id) {
-                                eprintln!("Error removing job {:?}", e);
-                            }
-                        });
-                    }
                     match jobs.get_job_store() {
                         Ok(mut job_store) => {
                             if let Err(err) =
@@ -103,7 +93,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                             }
                             let rx = w.run(jobs);
                             tokio::spawn(async move {
-                                if let Err(e) = rx.recv() {
+                                if let Err(e) = rx.await {
                                     eprintln!("Error waiting for task to finish {:?}", e);
                                 }
                                 if let Err(err) =

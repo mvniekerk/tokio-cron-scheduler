@@ -9,9 +9,9 @@ use cron::Schedule;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
+use tokio::sync::oneshot::Receiver;
 use uuid::Uuid;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
