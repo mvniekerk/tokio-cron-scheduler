@@ -64,8 +64,12 @@ pub trait JobStore {
         notification_guid: &Uuid,
         js: JobState,
     ) -> Result<bool, JobSchedulerError>;
-    fn notify_on_job_state(&mut self, job_id: &Uuid, js: JobState)
-        -> Result<(), JobSchedulerError>;
+    fn notify_on_job_state(
+        &mut self,
+        job_id: &Uuid,
+        js: JobState,
+        notification_ids: Vec<Uuid>,
+    ) -> Result<(), JobSchedulerError>;
     fn update_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError>;
     fn has_job(&mut self, job_id: &Uuid) -> Result<bool, JobSchedulerError>;
 }
@@ -186,10 +190,10 @@ impl JobStoreLocked {
         &mut self,
         job_id: &Uuid,
         js: JobState,
+        notification_ids: Vec<Uuid>,
     ) -> Result<(), JobSchedulerError> {
         let mut w = self.0.write().map_err(|_| JobSchedulerError::GetJobStore)?;
-        w.notify_on_job_state(job_id, js)?;
-
+        w.notify_on_job_state(job_id, js, notification_ids)?;
         Ok(())
     }
 

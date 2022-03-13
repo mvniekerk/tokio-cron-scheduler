@@ -47,6 +47,7 @@ pub struct Message<T, RET> {
 pub struct NotifyOnJobState {
     pub job: Uuid,
     pub state: JobState,
+    pub notification_ids: Vec<Uuid>,
 }
 
 pub struct AddJobNotification {
@@ -124,6 +125,11 @@ async fn listen_for_removals(
             NotifyOnJobState {
                 state: JobState::Removed,
                 job: to_be_removed,
+                notification_ids: job_data
+                    .on_removed
+                    .iter()
+                    .map(|i| i.into())
+                    .collect::<Vec<_>>(),
             },
             JobSchedulerError::NotifyOnStateError,
         );
@@ -207,7 +213,6 @@ async fn listen_for_removals(
 }
 
 async fn listen_for_notifications(
-    jobs: Arc<RwLock<HashMap<Uuid, JobLocked>>>,
     job_notification_guids: Arc<RwLock<HashMap<Uuid, Box<OnJobNotification>>>>,
     rx_notify: Receiver<Message<NotifyOnJobState, ()>>,
 ) {
@@ -215,19 +220,10 @@ async fn listen_for_notifications(
         let NotifyOnJobState {
             job: job_id,
             state: js,
+            notification_ids,
         } = data;
-        println!("Need to notify {:?} of {:?}", job_id, js);
-        let uuids = match get_job_data(jobs.clone(), &job_id, resp.clone()) {
-            Ok(job_data) => match js {
-                JobState::Stop => job_data.on_stop,
-                JobState::Scheduled => job_data.on_scheduled,
-                JobState::Started => job_data.on_started,
-                JobState::Done => job_data.on_done,
-                JobState::Removed => job_data.on_removed,
-            },
-            _ => continue 'next_notification,
-        };
-        for uuid in uuids {
+        // println!("Need to notify {:?} of {:?}", job_id, js);
+        for uuid in notification_ids {
             let uuid: Uuid = uuid.into();
             let job_notification_guids = job_notification_guids.write();
             if let Err(e) = job_notification_guids {
@@ -246,6 +242,7 @@ async fn listen_for_notifications(
                 });
             }
         }
+        // println!("Done notifying");
         if let Err(e) = resp.send(Ok(())) {
             eprintln!("Error sending result of response {:?}", e);
         }
@@ -602,7 +599,6 @@ impl JobStore for SimpleJobStore {
             tx_remove_notify,
         ));
         tokio::task::spawn(listen_for_notifications(
-            self.jobs.clone(),
             self.job_notification_guids.clone(),
             rx_notify,
         ));
@@ -626,6 +622,7 @@ impl JobStore for SimpleJobStore {
 
     fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
         println!("To be removed {:?}", to_be_removed);
+        // panic!("wee");
         send_to_tx_channel(
             self.tx_remove_job.as_ref(),
             *to_be_removed,
@@ -720,12 +717,14 @@ impl JobStore for SimpleJobStore {
         &mut self,
         job_id: &Uuid,
         js: JobState,
+        notification_ids: Vec<Uuid>,
     ) -> Result<(), JobSchedulerError> {
         send_to_tx_channel(
             self.tx_notify_on_job_state.as_ref(),
             NotifyOnJobState {
                 state: js,
                 job: *job_id,
+                notification_ids,
             },
             JobSchedulerError::NotifyOnStateError,
         )

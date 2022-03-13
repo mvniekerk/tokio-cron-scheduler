@@ -80,14 +80,18 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             }
 
             let mut js = self.job_store.clone();
-            let jd = {
+            let job_data = {
                 let mut w = jl.0.write().unwrap();
                 w.job_data_from_job()
             };
-            if jd.is_err() {
+            if job_data.is_err() {
                 eprintln!("Error")
             }
-            if let Ok(Some(jd)) = jd {
+            let mut on_started: Vec<Uuid> = vec![];
+            let mut on_done = vec![];
+            if let Ok(Some(jd)) = job_data {
+                on_started = jd.on_started.iter().map(|id| id.into()).collect::<Vec<_>>();
+                on_done = jd.on_done.iter().map(|id| id.into()).collect::<Vec<_>>();
                 tokio::spawn(async move {
                     if let Err(e) = js.update_job_data(jd) {
                         eprintln!("Error updating job data {:?}", e);
@@ -103,9 +107,11 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                     let job_id = w.job_id();
                     match jobs.get_job_store() {
                         Ok(mut job_store) => {
-                            if let Err(err) =
-                                job_store.notify_on_job_state(&job_id, JobState::Started)
-                            {
+                            if let Err(err) = job_store.notify_on_job_state(
+                                &job_id,
+                                JobState::Started,
+                                on_started,
+                            ) {
                                 eprintln!("Error notifying on job started {:?}", err);
                             }
                             let rx = w.run(jobs);
@@ -114,7 +120,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                                     eprintln!("Error waiting for task to finish {:?}", e);
                                 }
                                 if let Err(err) =
-                                    job_store.notify_on_job_state(&job_id, JobState::Done)
+                                    job_store.notify_on_job_state(&job_id, JobState::Done, on_done)
                                 {
                                     eprintln!("Error notifying on job started {:?}", err);
                                 }
