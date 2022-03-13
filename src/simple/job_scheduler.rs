@@ -34,19 +34,36 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
     fn tick(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError> {
         let guids = self.job_store.list_job_guids()?;
         for guid in guids {
-            let mut jl = {
+            let jl = {
                 let job = self.job_store.get_job(&guid);
                 match job {
-                    Ok(Some(job)) => job,
+                    Ok(Some(job)) => {
+                        let stopped = job.clone();
+                        let stopped = stopped.0.read();
+                        if let Err(e) = stopped {
+                            eprintln!("Could not read {:?} {:?}", guid, e);
+                            continue;
+                        }
+                        let stopped = stopped.unwrap();
+                        match stopped.stop() {
+                            true => None,
+                            false => Some(job),
+                        }
+                    }
                     _ => continue,
                 }
             };
+            if jl.is_none() {
+                continue;
+            }
+            let mut jl = jl.unwrap();
 
             let tick = jl.tick();
             if matches!(tick, Err(JobSchedulerError::NoNextTick)) {
                 let mut js = self.job_store.clone();
                 tokio::spawn(async move {
                     let guid = guid;
+                    println!("NoNextTick {:?}", guid);
                     if let Err(e) = js.remove(&guid) {
                         eprintln!("Error removing {:?} {:?}", guid, e);
                     }

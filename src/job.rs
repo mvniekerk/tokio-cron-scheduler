@@ -57,6 +57,14 @@ pub trait Job {
     fn set_ran(&mut self, ran: bool);
     fn stop(&self) -> bool;
     fn set_stopped(&mut self);
+    fn set_started(&mut self);
+    fn on_notification_add(
+        &mut self,
+        self_job_locked: JobLocked,
+        run: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+        states: Vec<JobState>,
+    ) -> Result<Uuid, JobSchedulerError>;
     fn on_start_notification_add(
         &mut self,
         on_start: Box<OnJobNotification>,
@@ -127,9 +135,11 @@ impl JobLocked {
                     .unwrap_or(0),
                 job_type: JobType::Cron.into(),
                 count: 0,
-                on_start: vec![],
                 on_stop: vec![],
-                on_remove: vec![],
+                on_started: vec![],
+                on_removed: vec![],
+                on_done: vec![],
+                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
@@ -178,9 +188,11 @@ impl JobLocked {
                     .unwrap_or(0),
                 job_type: JobType::Cron.into(),
                 count: 0,
-                on_start: vec![],
                 on_stop: vec![],
-                on_remove: vec![],
+                on_started: vec![],
+                on_removed: vec![],
+                on_done: vec![],
+                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
@@ -260,9 +272,11 @@ impl JobLocked {
                     + duration.as_secs(),
                 job_type: JobType::OneShot.into(),
                 count: 0,
-                on_start: vec![],
                 on_stop: vec![],
-                on_remove: vec![],
+                on_started: vec![],
+                on_removed: vec![],
+                on_done: vec![],
+                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
@@ -345,9 +359,11 @@ impl JobLocked {
                     .unwrap_or(0),
                 job_type: JobType::OneShot.into(),
                 count: 0,
-                on_start: vec![],
                 on_stop: vec![],
-                on_remove: vec![],
+                on_started: vec![],
+                on_removed: vec![],
+                on_done: vec![],
+                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
@@ -436,9 +452,11 @@ impl JobLocked {
                     .unwrap_or(0),
                 job_type: JobType::Repeated.into(),
                 count: 0,
-                on_start: vec![],
                 on_stop: vec![],
-                on_remove: vec![],
+                on_started: vec![],
+                on_removed: vec![],
+                on_done: vec![],
+                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
@@ -502,7 +520,7 @@ impl JobLocked {
     /// This method will also change the last tick on itself
     pub fn tick(&mut self) -> Result<bool, JobSchedulerError> {
         let now = Utc::now();
-        let (job_type, last_tick, next_tick, schedule, repeated_every, ran) = {
+        let (job_type, last_tick, next_tick, schedule, repeated_every, ran, count) = {
             let r = self.0.read().map_err(|_| JobSchedulerError::TickError)?;
             (
                 r.job_type(),
@@ -511,6 +529,7 @@ impl JobLocked {
                 r.schedule(),
                 r.repeated_every(),
                 r.ran(),
+                r.count(),
             )
         };
 
@@ -542,6 +561,7 @@ impl JobLocked {
             _ => false,
         };
 
+        println!("Next tick >> {:?}", next_tick);
         let next_tick = if must_run {
             match job_type {
                 JobType::Cron => schedule.and_then(|s| s.after(&now).next()),
@@ -554,14 +574,27 @@ impl JobLocked {
         } else {
             next_tick
         };
+        println!("\t<<< {:?}", next_tick);
         let last_tick = Some(now);
 
-        {
+        let job_data = {
             let mut w = self.0.write().map_err(|_| JobSchedulerError::JobTick)?;
             w.set_next_tick(next_tick);
             w.set_last_tick(last_tick);
             w.set_ran(ran || must_run);
-        }
+            let count = if must_run {
+                if count == u32::MAX {
+                    0
+                } else {
+                    count + 1
+                }
+            } else {
+                count
+            };
+            w.set_count(count);
+            w.job_data_from_job()?.unwrap()
+        };
+        println!("===== {:?} {:?}", self.guid(), job_data);
 
         Ok(must_run)
     }
@@ -582,8 +615,9 @@ impl JobLocked {
         job_store: JobStoreLocked,
         on_start: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
+        let jl = self.clone();
         let mut w = self.0.write().unwrap();
-        w.on_start_notification_add(on_start, job_store)
+        w.on_notification_add(jl, on_start, job_store, vec![JobState::Started])
     }
 
     ///
@@ -649,7 +683,23 @@ impl JobLocked {
     ///
     /// Override the job's data for use in data storage
     pub fn set_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError> {
-        let mut w = self.0.write().unwrap();
+        let mut w = self
+            .0
+            .write()
+            .map_err(|_| JobSchedulerError::UpdateJobData)?;
         w.set_job_data(job_data)
+    }
+
+    pub fn set_stop(&mut self, stop: bool) -> Result<(), JobSchedulerError> {
+        let mut w = self
+            .0
+            .write()
+            .map_err(|_| JobSchedulerError::UpdateJobData)?;
+        if stop {
+            w.set_stopped();
+        } else {
+            w.set_started();
+        }
+        Ok(())
     }
 }

@@ -67,6 +67,7 @@ pub trait JobStore {
     fn notify_on_job_state(&mut self, job_id: &Uuid, js: JobState)
         -> Result<(), JobSchedulerError>;
     fn update_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError>;
+    fn has_job(&mut self, job_id: &Uuid) -> Result<bool, JobSchedulerError>;
 }
 
 #[derive(Clone)]
@@ -92,7 +93,16 @@ impl JobStoreLocked {
         Ok(())
     }
 
-    pub fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
+    pub fn add(&mut self, mut job: JobLocked) -> Result<(), JobSchedulerError> {
+        {
+            let mut w = self.0.write().map_err(|_| JobSchedulerError::CantAdd)?;
+            job.set_stop(false)?;
+            w.add(job)?;
+        }
+        Ok(())
+    }
+
+    pub fn add_no_start(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
         {
             let mut w = self.0.write().map_err(|_| JobSchedulerError::CantAdd)?;
             w.add(job)?;
@@ -190,5 +200,10 @@ impl JobStoreLocked {
             .map_err(|_| JobSchedulerError::UpdateJobData)?;
         w.update_job_data(job_data)?;
         Ok(())
+    }
+
+    pub fn has_job(&mut self, job_id: &Uuid) -> Result<bool, JobSchedulerError> {
+        let mut w = self.0.write().map_err(|_| JobSchedulerError::FetchJob)?;
+        w.has_job(job_id)
     }
 }

@@ -22,6 +22,9 @@ async fn main() {
         );
     })
     .unwrap();
+
+    // Adding a job notification without it being added to the scheduler will automatically add it to
+    // the job store, but with stopped marking
     five_s_job.on_removed_notification_add(
         job_store.clone(),
         Box::new(|job_id, notification_id, type_of_notification| {

@@ -41,12 +41,16 @@ message JobStoredData {
     NonCronJob non_cron_job = 7;
   }
   uint32 count = 8;
-  repeated Uuid on_start = 9;
-  repeated Uuid on_stop = 10;
-  repeated Uuid on_remove = 11;
-  bytes extra = 12;
-  bool ran = 13;
-  bool stopped = 14;
+
+  repeated Uuid on_stop = 9;
+  repeated Uuid on_scheduled = 10;
+  repeated Uuid on_started = 11;
+  repeated Uuid on_done = 12;
+  repeated Uuid on_removed = 13;
+
+  bytes extra = 14;
+  bool ran = 15;
+  bool stopped = 16;
 }
 
 

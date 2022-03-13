@@ -31,8 +31,24 @@ impl From<Uuid> for JobUuid {
     }
 }
 
+impl From<&Uuid> for JobUuid {
+    fn from(uuid: &Uuid) -> Self {
+        let uuid = uuid.as_u128();
+        let id1 = (uuid >> 64) as u64;
+        let id2 = (uuid & 0xFFFF_FFFF_FFFF_FFFF) as u64;
+        JobUuid { id1, id2 }
+    }
+}
+
 impl From<JobUuid> for Uuid {
     fn from(uuid: JobUuid) -> Self {
+        let id = ((uuid.id1 as u128) << 64) + (uuid.id2 as u128);
+        Uuid::from_u128(id)
+    }
+}
+
+impl From<&JobUuid> for Uuid {
+    fn from(uuid: &JobUuid) -> Self {
         let id = ((uuid.id1 as u128) << 64) + (uuid.id2 as u128);
         Uuid::from_u128(id)
     }

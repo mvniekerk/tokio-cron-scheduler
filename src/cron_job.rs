@@ -1,4 +1,4 @@
-use crate::job::{Job, JobToRunAsync};
+use crate::job::{Job, JobLocked, JobToRunAsync};
 use crate::job_data::{JobState, JobStoredData, JobType};
 use crate::job_store::JobStoreLocked;
 use crate::{JobScheduler, JobSchedulerError, JobToRun, OnJobNotification};
@@ -124,7 +124,33 @@ impl Job for CronJob {
 
     fn set_stopped(&mut self) {
         self.data.stopped = true;
-        self.data.next_tick = 0;
+    }
+
+    fn set_started(&mut self) {
+        self.data.stopped = false;
+    }
+
+    fn on_notification_add(
+        &mut self,
+        self_job_locked: JobLocked,
+        run: Box<OnJobNotification>,
+        job_store: JobStoreLocked,
+        states: Vec<JobState>,
+    ) -> Result<Uuid, JobSchedulerError> {
+        let job_id = self.job_id();
+        let uuid = Uuid::new_v4();
+        let mut js = job_store;
+
+        let contains_job = js.has_job(&job_id)?;
+        if !contains_job {
+            self.set_stopped();
+            if let Err(e) = js.add_no_start(self_job_locked) {
+                eprintln!("Could not add job");
+                return Err(e);
+            }
+        }
+        js.add_notification(&job_id, &uuid, run, states)
+            .map(|_| uuid)
     }
 
     fn on_start_notification_add(
