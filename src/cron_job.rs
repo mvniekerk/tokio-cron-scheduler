@@ -1,7 +1,7 @@
-use crate::job::{Job, JobLocked, JobToRunAsync};
+use crate::job::{Job, JobToRunAsync};
 use crate::job_data::{JobState, JobStoredData, JobType};
 use crate::job_store::JobStoreLocked;
-use crate::{JobScheduler, JobSchedulerError, JobToRun, OnJobNotification};
+use crate::{JobScheduler, JobSchedulerError, JobToRun};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
 use std::ops::Add;
@@ -130,41 +130,6 @@ impl Job for CronJob {
         self.data.stopped = false;
     }
 
-    fn on_notification_add(
-        &mut self,
-        self_job_locked: JobLocked,
-        run: Box<OnJobNotification>,
-        job_store: JobStoreLocked,
-        states: Vec<JobState>,
-    ) -> Result<Uuid, JobSchedulerError> {
-        let job_id = self.job_id();
-        let uuid = Uuid::new_v4();
-        let mut js = job_store;
-
-        let contains_job = js.has_job(&job_id)?;
-        if !contains_job {
-            self.set_stopped();
-            if let Err(e) = js.add_no_start(self_job_locked) {
-                eprintln!("Could not add job");
-                return Err(e);
-            }
-        }
-        js.add_notification(&job_id, &uuid, run, states)
-            .map(|_| uuid)
-    }
-
-    fn on_start_notification_add(
-        &mut self,
-        on_start: Box<OnJobNotification>,
-        job_store: JobStoreLocked,
-    ) -> Result<Uuid, JobSchedulerError> {
-        let job_id = self.job_id();
-        let uuid = Uuid::new_v4();
-        let mut js = job_store;
-        js.add_notification(&job_id, &uuid, on_start, vec![JobState::Started])?;
-        Ok(uuid)
-    }
-
     fn on_start_notification_remove(
         &mut self,
         id: &Uuid,
@@ -174,18 +139,6 @@ impl Job for CronJob {
         js.remove_notification_for_job_state(id, JobState::Started)
     }
 
-    fn on_done_notification_add(
-        &mut self,
-        on_stop: Box<OnJobNotification>,
-        job_store: JobStoreLocked,
-    ) -> Result<Uuid, JobSchedulerError> {
-        let job_id = self.job_id();
-        let uuid = Uuid::new_v4();
-        let mut js = job_store;
-        js.add_notification(&job_id, &uuid, on_stop, vec![JobState::Done])?;
-        Ok(uuid)
-    }
-
     fn on_done_notification_remove(
         &mut self,
         id: &Uuid,
@@ -193,18 +146,6 @@ impl Job for CronJob {
     ) -> Result<bool, JobSchedulerError> {
         let mut js = job_store;
         js.remove_notification_for_job_state(id, JobState::Done)
-    }
-
-    fn on_removed_notification_add(
-        &mut self,
-        on_removed: Box<OnJobNotification>,
-        job_store: JobStoreLocked,
-    ) -> Result<Uuid, JobSchedulerError> {
-        let job_id = self.job_id();
-        let uuid = Uuid::new_v4();
-        let mut js = job_store;
-        js.add_notification(&job_id, &uuid, on_removed, vec![JobState::Removed])?;
-        Ok(uuid)
     }
 
     fn on_removed_notification_remove(

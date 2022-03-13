@@ -58,38 +58,16 @@ pub trait Job {
     fn stop(&self) -> bool;
     fn set_stopped(&mut self);
     fn set_started(&mut self);
-    fn on_notification_add(
-        &mut self,
-        self_job_locked: JobLocked,
-        run: Box<OnJobNotification>,
-        job_store: JobStoreLocked,
-        states: Vec<JobState>,
-    ) -> Result<Uuid, JobSchedulerError>;
-    fn on_start_notification_add(
-        &mut self,
-        on_start: Box<OnJobNotification>,
-        job_store: JobStoreLocked,
-    ) -> Result<Uuid, JobSchedulerError>;
     fn on_start_notification_remove(
         &mut self,
         notification_id: &Uuid,
         job_store: JobStoreLocked,
     ) -> Result<bool, JobSchedulerError>;
-    fn on_done_notification_add(
-        &mut self,
-        on_stop: Box<OnJobNotification>,
-        job_store: JobStoreLocked,
-    ) -> Result<Uuid, JobSchedulerError>;
     fn on_done_notification_remove(
         &mut self,
         notification_id: &Uuid,
         job_store: JobStoreLocked,
     ) -> Result<bool, JobSchedulerError>;
-    fn on_removed_notification_add(
-        &mut self,
-        on_removed: Box<OnJobNotification>,
-        job_store: JobStoreLocked,
-    ) -> Result<Uuid, JobSchedulerError>;
     fn on_removed_notification_remove(
         &mut self,
         notification_id: &Uuid,
@@ -608,6 +586,31 @@ impl JobLocked {
     }
 
     ///
+    /// Add a notification to run on a list of state notifications
+    pub fn on_notifications_add(
+        &mut self,
+        job_store: JobStoreLocked,
+        run: Box<OnJobNotification>,
+        states: Vec<JobState>,
+    ) -> Result<Uuid, JobSchedulerError> {
+        let self_job_locked = self.clone();
+        let job_id = self.guid();
+        let uuid = Uuid::new_v4();
+        let mut js = job_store;
+
+        let contains_job = js.has_job(&job_id)?;
+        if !contains_job {
+            self.set_stop(true)?;
+            if let Err(e) = js.add_no_start(self_job_locked) {
+                eprintln!("Could not add job");
+                return Err(e);
+            }
+        }
+        js.add_notification(&job_id, &uuid, run, states)
+            .map(|_| uuid)
+    }
+
+    ///
     /// Run something when the task is started. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_start_notification_remove`.
     pub fn on_start_notification_add(
@@ -615,9 +618,7 @@ impl JobLocked {
         job_store: JobStoreLocked,
         on_start: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
-        let jl = self.clone();
-        let mut w = self.0.write().unwrap();
-        w.on_notification_add(jl, on_start, job_store, vec![JobState::Started])
+        self.on_notifications_add(job_store, on_start, vec![JobState::Started])
     }
 
     ///
@@ -640,8 +641,7 @@ impl JobLocked {
         job_store: JobStoreLocked,
         on_stop: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
-        let mut w = self.0.write().unwrap();
-        w.on_done_notification_add(on_stop, job_store)
+        self.on_notifications_add(job_store, on_stop, vec![JobState::Stop])
     }
 
     ///
@@ -664,8 +664,7 @@ impl JobLocked {
         job_store: JobStoreLocked,
         on_removed: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
-        let mut w = self.0.write().unwrap();
-        w.on_removed_notification_add(on_removed, job_store)
+        self.on_notifications_add(job_store, on_removed, vec![JobState::Removed])
     }
 
     ///
