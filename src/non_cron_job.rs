@@ -1,5 +1,5 @@
 use crate::job::{Job, JobToRunAsync};
-use crate::job_data::{JobState, JobStoredData, JobType};
+use crate::job_data::{JobStoredData, JobType};
 use crate::job_store::JobStoreLocked;
 use crate::{JobScheduler, JobSchedulerError, JobToRun};
 use chrono::{DateTime, Utc};

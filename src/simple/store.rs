@@ -5,7 +5,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
 
-use crate::job_store::{JobStore, JobStoreLocked};
+use crate::job_store::JobStore;
 use crate::{JobSchedulerError, OnJobNotification};
 use uuid::Uuid;
 
@@ -36,6 +36,9 @@ impl Default for SimpleJobStore {
             tx_remove_notification: None,
             inited: false,
         };
+        if let Err(e) = ret.init() {
+            eprintln!("Error initing store {:?}", e);
+        }
         ret
     }
 }
@@ -214,7 +217,7 @@ async fn listen_for_notifications(
             notification_ids,
         } = data;
         for uuid in notification_ids {
-            let uuid: Uuid = uuid.into();
+            let uuid: Uuid = uuid;
             let job_notification_guids = job_notification_guids.write();
             if let Err(e) = job_notification_guids {
                 eprintln!("Error unlocking job notifications {:?}", e);
@@ -301,7 +304,7 @@ fn add_notification_to_job_data(
         eprintln!("Job is not found {:?}", job);
         return send_failure();
     }
-    let mut job_locked = job_locked.unwrap();
+    let job_locked = job_locked.unwrap();
     let job_data = job_locked.job_data();
     if let Err(e) = job_data {
         eprintln!("Could not get job data {:?}", e);
@@ -358,7 +361,6 @@ async fn listen_for_notification_additions(
     jobs: Arc<RwLock<HashMap<Uuid, JobLocked>>>,
     job_notification_guids: LockedJobNotificationGuids,
     rx_notify: Receiver<Message<AddJobNotification, ()>>,
-    job_store: JobStoreLocked,
 ) {
     'next_message: while let Ok(Message { data, resp }) = rx_notify.recv() {
         let AddJobNotification {
@@ -571,7 +573,7 @@ fn send_to_tx_channel<T, RET>(
 }
 
 impl JobStore for SimpleJobStore {
-    fn init(&mut self, self_locked: JobStoreLocked) -> Result<(), JobSchedulerError> {
+    fn init(&mut self) -> Result<(), JobSchedulerError> {
         let (tx_add, rx_add) = channel();
         self.tx_add_job = Some(tx_add);
 
@@ -603,7 +605,6 @@ impl JobStore for SimpleJobStore {
             self.jobs.clone(),
             self.job_notification_guids.clone(),
             rx_add_notify,
-            self_locked,
         ));
         tokio::task::spawn(listen_for_notification_removals(
             self.jobs.clone(),

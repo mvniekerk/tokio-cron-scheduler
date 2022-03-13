@@ -3,7 +3,7 @@ use crate::job_data::{JobState, JobStoredData, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::job_store::JobStoreLocked;
 use crate::non_cron_job::NonCronJob;
-use crate::{JobNotification, JobScheduler, JobSchedulerError};
+use crate::{JobScheduler, JobSchedulerError};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
 use std::future::Future;
@@ -645,7 +645,7 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
     pub fn on_removed_notification_add(
         &mut self,
-        mut job_store: JobStoreLocked,
+        job_store: JobStoreLocked,
         on_removed: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         self.on_notifications_add(job_store, on_removed, vec![JobState::Removed])

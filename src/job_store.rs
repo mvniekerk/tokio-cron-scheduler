@@ -1,7 +1,7 @@
 use crate::job::JobLocked;
 use crate::job_data::{JobState, JobStoredData};
 use crate::simple::SimpleJobStore;
-use crate::{job_store, JobSchedulerError, OnJobNotification};
+use crate::{JobSchedulerError, OnJobNotification};
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
@@ -45,7 +45,7 @@ pub trait OnJobRemove {
 }
 
 pub trait JobStore {
-    fn init(&mut self, self_locked: JobStoreLocked) -> Result<(), JobSchedulerError>;
+    fn init(&mut self) -> Result<(), JobSchedulerError>;
     fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError>;
     fn remove(&mut self, job: &Uuid) -> Result<(), JobSchedulerError>;
     fn list_job_guids(&mut self) -> Result<Vec<Uuid>, JobSchedulerError>;
@@ -91,10 +91,9 @@ impl Default for JobStoreLocked {
 
 impl JobStoreLocked {
     pub fn init(&mut self) -> Result<(), JobSchedulerError> {
-        let job_store_locked = self.clone();
         {
             let mut w = self.0.write().map_err(|_| JobSchedulerError::CantInit)?;
-            w.init(job_store_locked)?;
+            w.init()?;
         }
         Ok(())
     }

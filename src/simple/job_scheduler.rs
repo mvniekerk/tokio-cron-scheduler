@@ -93,7 +93,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                     }
                 });
             } else {
-                ep rintln!("Error getting job data!");
+                eprintln!("Error getting job data!");
             }
 
             let ref_for_later = jl.0.clone();
