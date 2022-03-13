@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package za.co.agriio.job;
+
+enum JobState {
+  Stop = 0;
+  Scheduled = 1;
+  Started = 2;
+  Done = 3;
+  Removed = 4;
+}
+
+enum JobType {
+  Cron = 0;
+  Repeated = 1;
+  OneShot = 2;
+}
+
+message CronJob {
+  string schedule = 1;
+}
+
+message NonCronJob {
+  bool repeating = 1;
+  uint64 repeated_every = 2;
+}
+
+message Uuid {
+  uint64 id1 = 1;
+  uint64 id2 = 2;
+}
+
+message JobStoredData {
+  Uuid id = 1;
+  optional uint64 last_updated = 2;
+  optional uint64 last_tick = 3;
+  uint64 next_tick = 4;
+  JobType job_type = 5;
+  oneof job {
+    CronJob cron_job = 6;
+    NonCronJob non_cron_job = 7;
+  }
+  uint32 count = 8;
+
+  repeated Uuid on_stop = 9;
+  repeated Uuid on_scheduled = 10;
+  repeated Uuid on_started = 11;
+  repeated Uuid on_done = 12;
+  repeated Uuid on_removed = 13;
+
+  bytes extra = 14;
+  bool ran = 15;
+  bool stopped = 16;
+}
+
+

@@ -1,6 +1,7 @@
 use crate::error::JobSchedulerError;
 use crate::job::JobLocked;
-use crate::simple_job_scheduler::SimpleJobScheduler;
+use crate::job_store::JobStoreLocked;
+use crate::simple::SimpleJobScheduler;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
@@ -14,22 +15,19 @@ pub type ShutdownNotification =
 
 pub trait JobSchedulerWithoutSync {
     /// Add a job to the `JobScheduler`
-    fn add(&mut self, job: JobLocked) -> Result<(), Box<dyn std::error::Error + '_>>;
+    fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError>;
 
     /// Remove a job from the `JobScheduler`
-    fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), Box<dyn std::error::Error + '_>>;
+    fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError>;
 
     /// The `tick` method increments time for the JobScheduler and executes
     /// any pending jobs.
-    fn tick(
-        &mut self,
-        scheduler: JobsSchedulerLocked,
-    ) -> Result<(), Box<dyn std::error::Error + '_>>;
+    fn tick(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError>;
 
     /// The `time_till_next_job` method returns the duration till the next job
     /// is supposed to run. This can be used to sleep until then without waking
     /// up at a fixed interval.
-    fn time_till_next_job(&self) -> Result<std::time::Duration, Box<dyn std::error::Error + '_>>;
+    fn time_till_next_job(&mut self) -> Result<std::time::Duration, JobSchedulerError>;
 
     ///
     /// Shuts the scheduler down
@@ -45,6 +43,21 @@ pub trait JobSchedulerWithoutSync {
     ///
     /// Remove the shutdown handler
     fn remove_shutdown_handler(&mut self) -> Result<(), JobSchedulerError>;
+
+    ///
+    /// Start the scheduler
+    fn start(
+        &mut self,
+        scheduler: JobsSchedulerLocked,
+    ) -> Result<JoinHandle<()>, JobSchedulerError>;
+
+    ///
+    /// Set the job store
+    fn set_job_store(&mut self, job_store: JobStoreLocked) -> Result<(), JobSchedulerError>;
+
+    ///
+    /// Get the job store
+    fn get_job_store(&self) -> Result<JobStoreLocked, JobSchedulerError>;
 }
 
 /// The scheduler type trait. Example implementation is `SimpleJobScheduler`
@@ -89,11 +102,14 @@ impl JobsSchedulerLocked {
     /// }));
     /// ```
     pub fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
+        let mut js = self.get_job_store()?;
+        let inited = js.inited()?;
+        if !inited {
+            js.init()?;
+        }
         {
             let mut self_w = self.0.write().map_err(|_e| JobSchedulerError::CantAdd)?;
-            if self_w.add(job).is_err() {
-                return Err(JobSchedulerError::CantAdd);
-            }
+            self_w.add(job)?;
         }
         Ok(())
     }
@@ -110,9 +126,16 @@ impl JobsSchedulerLocked {
     /// ```
     pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
         {
-            let mut ws = self.0.write().map_err(|_| JobSchedulerError::CantRemove)?;
-            ws.remove(to_be_removed)
-                .map_err(|_| JobSchedulerError::CantRemove)?;
+            let ws = self.0.write();
+            if let Err(e) = ws {
+                eprintln!(
+                    "Could not lock self for removal of {:?} {:?}",
+                    to_be_removed, e
+                );
+                return Err(JobSchedulerError::CantRemove);
+            }
+            let mut ws = ws.unwrap();
+            ws.remove(to_be_removed)?;
         }
 
         Ok(())
@@ -147,20 +170,14 @@ impl JobsSchedulerLocked {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
-    pub fn start(&self) -> JoinHandle<()> {
+    pub fn start(&mut self) -> Result<JoinHandle<()>, JobSchedulerError> {
         let jl: JobsSchedulerLocked = self.clone();
-        let jh: JoinHandle<()> = tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(core::time::Duration::from_millis(500)).await;
-                let mut jsl = jl.clone();
-                let tick = jsl.tick();
-                if let Err(e) = tick {
-                    eprintln!("Error on job scheduler tick {:?}", e);
-                    break;
-                }
-            }
-        });
-        jh
+        let mut r = self
+            .0
+            .write()
+            .map_err(|_| JobSchedulerError::StartScheduler)?;
+        let jh = r.start(jl)?;
+        Ok(jh)
     }
 
     /// The `time_till_next_job` method returns the duration till the next job
@@ -174,11 +191,11 @@ impl JobsSchedulerLocked {
     /// }
     /// ```
     pub fn time_till_next_job(&self) -> Result<std::time::Duration, JobSchedulerError> {
-        let r = self
+        let mut w = self
             .0
-            .read()
+            .write()
             .map_err(|_| JobSchedulerError::CantGetTimeUntil)?;
-        let l = r
+        let l = w
             .time_till_next_job()
             .map_err(|_| JobSchedulerError::CantGetTimeUntil)?;
         Ok(l)
@@ -247,5 +264,15 @@ impl JobsSchedulerLocked {
             .map_err(|_| JobSchedulerError::RemoveShutdownNotifier)?;
         w.remove_shutdown_handler()?;
         Ok(())
+    }
+
+    ///
+    /// Get the job store for this job scheduler
+    pub fn get_job_store(&self) -> Result<JobStoreLocked, JobSchedulerError> {
+        let js = {
+            let r = self.0.read().map_err(|_| JobSchedulerError::GetJobStore)?;
+            r.get_job_store()?
+        };
+        Ok(js)
     }
 }
