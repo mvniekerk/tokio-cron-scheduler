@@ -180,31 +180,21 @@ async fn listen_for_removals(
                 continue;
             }
             let mut w = w.unwrap();
-            w.retain(|_id, f| !{
-                let not_to_be_removed = if let Ok(f) = f.0.read() {
-                    f.job_id().eq(&to_be_removed)
-                } else {
-                    false
-                };
-                if !not_to_be_removed {
+            w.retain(|_id, f| {
+                let job_id = f.guid();
+                let the_same = job_id.eq(&to_be_removed);
+                if the_same {
                     let f = f.0.clone();
                     removed.push(JobLocked(f))
                 }
-                not_to_be_removed
+                !the_same
             });
         }
 
-        for job in removed {
-            let job_w = job.0.write();
-            if let Err(e) = job_w {
-                eprintln!("Error getting lock on job {:?}", e);
-                if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
-                    eprintln!("Could not send failed response {:?}", e);
-                }
-                continue 'next_message;
+        for mut job in removed {
+            if let Err(e) = job.set_stop(true) {
+                eprintln!("Error setting job to be stopped {:?}, continuing!!", e);
             }
-            let mut job_w = job_w.unwrap();
-            job_w.set_stopped();
         }
         if let Err(e) = resp.send(Ok(())) {
             eprintln!("Error sending success response {:?}", e);
@@ -621,8 +611,6 @@ impl JobStore for SimpleJobStore {
     }
 
     fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
-        println!("To be removed {:?}", to_be_removed);
-        // panic!("wee");
         send_to_tx_channel(
             self.tx_remove_job.as_ref(),
             *to_be_removed,

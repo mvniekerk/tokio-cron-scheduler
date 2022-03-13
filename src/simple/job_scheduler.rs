@@ -45,7 +45,8 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                             continue;
                         }
                         let stopped = stopped.unwrap();
-                        match stopped.stop() {
+                        let stopped = stopped.stop();
+                        match stopped {
                             true => None,
                             false => Some(job),
                         }
@@ -63,7 +64,6 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                 let mut js = self.job_store.clone();
                 tokio::spawn(async move {
                     let guid = guid;
-                    println!("NoNextTick {:?}", guid);
                     if let Err(e) = js.remove(&guid) {
                         eprintln!("Error removing {:?} {:?}", guid, e);
                     }
@@ -217,7 +217,6 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                 let tick = jsl.tick();
                 if let Err(e) = tick {
                     eprintln!("Error on job scheduler tick {:?}", e);
-                    break;
                 }
             }
         });

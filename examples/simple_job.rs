@@ -88,35 +88,35 @@ async fn main() {
         .unwrap(),
     );
 
-    // println!(
-    //     "{:?} Sched one shot for {:?}",
-    //     chrono::Utc::now(),
-    //     chrono::Utc::now()
-    //         .checked_add_signed(time::Duration::seconds(10))
-    //         .unwrap()
-    // );
-    // sched.add(
-    //     Job::new_one_shot(Duration::from_secs(10), |_uuid, _l| {
-    //         println!("{:?} I'm only run once", chrono::Utc::now());
-    //     })
-    //     .unwrap(),
-    // );
-    //
-    // println!(
-    //     "{:?} Sched one shot async for {:?}",
-    //     chrono::Utc::now(),
-    //     chrono::Utc::now()
-    //         .checked_add_signed(time::Duration::seconds(16))
-    //         .unwrap()
-    // );
-    // sched.add(
-    //     Job::new_one_shot_async(Duration::from_secs(16), |_uuid, _l| {
-    //         Box::pin(async move {
-    //             println!("{:?} I'm only run once async", chrono::Utc::now());
-    //         })
-    //     })
-    //     .unwrap(),
-    // );
+    println!(
+        "{:?} Sched one shot for {:?}",
+        chrono::Utc::now(),
+        chrono::Utc::now()
+            .checked_add_signed(time::Duration::seconds(10))
+            .unwrap()
+    );
+    sched.add(
+        Job::new_one_shot(Duration::from_secs(10), |_uuid, _l| {
+            println!("{:?} I'm only run once", chrono::Utc::now());
+        })
+        .unwrap(),
+    );
+
+    println!(
+        "{:?} Sched one shot async for {:?}",
+        chrono::Utc::now(),
+        chrono::Utc::now()
+            .checked_add_signed(time::Duration::seconds(16))
+            .unwrap()
+    );
+    sched.add(
+        Job::new_one_shot_async(Duration::from_secs(16), |_uuid, _l| {
+            Box::pin(async move {
+                println!("{:?} I'm only run once async", chrono::Utc::now());
+            })
+        })
+        .unwrap(),
+    );
 
     let jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
         println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
@@ -142,7 +142,7 @@ async fn main() {
         eprintln!("Error starting scheduler");
         return;
     }
-    tokio::time::sleep(Duration::from_secs(30)).await;
+    tokio::time::sleep(Duration::from_secs(20)).await;
 
     println!("{:?} Remove 4, 5, 7 and 8 sec jobs", chrono::Utc::now());
     sched.remove(&five_s_job_guid);

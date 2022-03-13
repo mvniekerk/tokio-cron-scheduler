@@ -539,7 +539,6 @@ impl JobLocked {
             _ => false,
         };
 
-        // println!("Next tick >> {:?}", next_tick);
         let next_tick = if must_run {
             match job_type {
                 JobType::Cron => schedule.and_then(|s| s.after(&now).next()),
@@ -552,10 +551,9 @@ impl JobLocked {
         } else {
             next_tick
         };
-        // println!("\t<<< {:?}", next_tick);
         let last_tick = Some(now);
 
-        let job_data = {
+        {
             let mut w = self.0.write().map_err(|_| JobSchedulerError::JobTick)?;
             w.set_next_tick(next_tick);
             w.set_last_tick(last_tick);
@@ -570,9 +568,7 @@ impl JobLocked {
                 count
             };
             w.set_count(count);
-            w.job_data_from_job()?.unwrap()
-        };
-        // println!("\t===== {:?} {:?}", self.guid(), job_data);
+        }
 
         Ok(must_run)
     }
