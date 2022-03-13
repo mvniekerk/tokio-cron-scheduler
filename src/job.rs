@@ -538,6 +538,12 @@ impl JobLocked {
         };
         let last_tick = Some(now);
 
+        let job_data = self.job_data();
+        if let Err(e) = job_data {
+            eprintln!("Could not get job data");
+            return Err(e);
+        }
+
         {
             let mut w = self.0.write().map_err(|_| JobSchedulerError::JobTick)?;
             w.set_next_tick(next_tick);
@@ -626,7 +632,7 @@ impl JobLocked {
         job_store: JobStoreLocked,
         on_stop: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
-        self.on_notifications_add(job_store, on_stop, vec![JobState::Stop])
+        self.on_notifications_add(job_store, on_stop, vec![JobState::Done])
     }
 
     ///
@@ -637,7 +643,7 @@ impl JobLocked {
         mut job_store: JobStoreLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
-        job_store.remove_notification_for_job_state(notification_id, JobState::Stop)
+        job_store.remove_notification_for_job_state(notification_id, JobState::Done)
     }
 
     ///
@@ -660,6 +666,28 @@ impl JobLocked {
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         job_store.remove_notification_for_job_state(notification_id, JobState::Removed)
+    }
+
+    ///
+    /// Run something when the task was removed. Returns a UUID as handle for this notification. This
+    /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
+    pub fn on_stop_notification_add(
+        &mut self,
+        job_store: JobStoreLocked,
+        on_removed: Box<OnJobNotification>,
+    ) -> Result<Uuid, JobSchedulerError> {
+        self.on_notifications_add(job_store, on_removed, vec![JobState::Stop])
+    }
+
+    ///
+    /// Remove the notification when the task was removed. Uses the same UUID that was returned by
+    /// `on_removed_notification_add`
+    pub fn on_stop_notification_remove(
+        &mut self,
+        mut job_store: JobStoreLocked,
+        notification_id: &Uuid,
+    ) -> Result<bool, JobSchedulerError> {
+        job_store.remove_notification_for_job_state(notification_id, JobState::Stop)
     }
 
     ///

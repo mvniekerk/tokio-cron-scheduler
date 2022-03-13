@@ -5,7 +5,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
 
-use crate::job_store::JobStore;
+use crate::job_store::{JobStore, JobStoreLocked};
 use crate::{JobSchedulerError, OnJobNotification};
 use uuid::Uuid;
 
@@ -18,7 +18,7 @@ pub struct SimpleJobStore {
     pub tx_add_job: Option<Sender<Message<JobLocked, ()>>>,
     pub tx_remove_job: Option<Sender<Message<Uuid, ()>>>,
     pub tx_notify_on_job_state: Option<Sender<Message<NotifyOnJobState, ()>>>,
-    pub tx_add_notification: Option<Sender<Message<AddJobNotification, ()>>>,
+    pub tx_add_notification: Option<Sender<Message<AddJobNotification, JobStoredData>>>,
     pub tx_remove_notification: Option<Sender<Message<RemoveJobNotification, bool>>>,
     pub inited: bool,
 }
@@ -55,10 +55,10 @@ pub struct NotifyOnJobState {
 }
 
 pub struct AddJobNotification {
-    job: Uuid,
     notification_guid: Uuid,
     on_notification: Box<OnJobNotification>,
     notifications: Vec<JobState>,
+    job_data: JobStoredData,
 }
 
 pub struct RemoveJobNotification {
@@ -281,37 +281,10 @@ fn get_job_data(
 }
 
 fn add_notification_to_job_data(
-    jobs: Arc<RwLock<HashMap<Uuid, JobLocked>>>,
-    job: &Uuid,
-    resp: Sender<Result<(), JobSchedulerError>>,
+    mut job_data: JobStoredData,
     notification_id: &Uuid,
     jobs_states: Vec<JobState>,
-) -> Result<(), JobSchedulerError> {
-    let jobs = jobs.write();
-    let send_failure = || {
-        if let Err(e) = resp.send(Err(JobSchedulerError::FetchJob)) {
-            eprintln!("Could not return error on lock {:?}", e);
-        }
-        Err(JobSchedulerError::FetchJob)
-    };
-    if let Err(e) = jobs {
-        eprintln!("Could not get lock on jobs hash {:?}", e);
-        return send_failure();
-    }
-    let mut jobs = jobs.unwrap();
-    let job_locked = jobs.get_mut(job);
-    if job_locked.is_none() {
-        eprintln!("Job is not found {:?}", job);
-        return send_failure();
-    }
-    let job_locked = job_locked.unwrap();
-    let job_data = job_locked.job_data();
-    if let Err(e) = job_data {
-        eprintln!("Could not get job data {:?}", e);
-        return send_failure();
-    }
-    let mut job_data = job_data.unwrap();
-
+) -> Result<JobStoredData, JobSchedulerError> {
     let notification_uuid: crate::job_data::Uuid = notification_id.into();
     for js in jobs_states {
         let mut list = match js {
@@ -321,7 +294,6 @@ fn add_notification_to_job_data(
             JobState::Done => job_data.on_done.clone(),
             JobState::Removed => job_data.on_removed.clone(),
         };
-        println!("Need to add {:?} to {:?}", js, list);
 
         if list.contains(&notification_uuid) {
             eprintln!(
@@ -331,7 +303,6 @@ fn add_notification_to_job_data(
         } else {
             list.push(notification_uuid.clone());
         }
-        println!("Done with addition?");
         match js {
             JobState::Stop => {
                 job_data.on_stop = list;
@@ -348,26 +319,19 @@ fn add_notification_to_job_data(
             JobState::Removed => job_data.on_removed = list,
         }
     }
-    if let Err(e) = job_locked.set_job_data(job_data) {
-        eprintln!("Error with setting job data {:?}", e);
-        return send_failure();
-    }
-    Ok(())
-
-    //Ok(job_data)
+    Ok(job_data)
 }
 
 async fn listen_for_notification_additions(
-    jobs: Arc<RwLock<HashMap<Uuid, JobLocked>>>,
     job_notification_guids: LockedJobNotificationGuids,
-    rx_notify: Receiver<Message<AddJobNotification, ()>>,
+    rx_notify: Receiver<Message<AddJobNotification, JobStoredData>>,
 ) {
     'next_message: while let Ok(Message { data, resp }) = rx_notify.recv() {
         let AddJobNotification {
-            job,
             notification_guid,
             on_notification,
             notifications,
+            job_data,
         } = data;
 
         let send_failure = || {
@@ -387,15 +351,9 @@ async fn listen_for_notification_additions(
             w.insert(notification_guid, on_notification);
         }
 
-        match add_notification_to_job_data(
-            jobs.clone(),
-            &job,
-            resp.clone(),
-            &notification_guid,
-            notifications,
-        ) {
-            Ok(_) => {
-                if let Err(e) = resp.send(Ok(())) {
+        match add_notification_to_job_data(job_data, &notification_guid, notifications) {
+            Ok(job_data) => {
+                if let Err(e) = resp.send(Ok(job_data)) {
                     eprintln!("Could not send success of notification addition {:?}", e);
                 }
             }
@@ -602,7 +560,6 @@ impl JobStore for SimpleJobStore {
             rx_notify,
         ));
         tokio::task::spawn(listen_for_notification_additions(
-            self.jobs.clone(),
             self.job_notification_guids.clone(),
             rx_add_notify,
         ));
@@ -673,16 +630,21 @@ impl JobStore for SimpleJobStore {
         on_notification: Box<OnJobNotification>,
         notifications: Vec<JobState>,
     ) -> Result<(), JobSchedulerError> {
-        send_to_tx_channel(
-            self.tx_add_notification.as_ref(),
-            AddJobNotification {
-                job: *job,
-                notification_guid: *notification_guid,
-                on_notification,
-                notifications,
-            },
-            JobSchedulerError::CantAdd,
-        )
+        self.get_job_data(job)
+            .and_then(|j| j.ok_or(JobSchedulerError::FetchJob))
+            .and_then(|job_data| {
+                send_to_tx_channel(
+                    self.tx_add_notification.as_ref(),
+                    AddJobNotification {
+                        notification_guid: *notification_guid,
+                        on_notification,
+                        notifications,
+                        job_data,
+                    },
+                    JobSchedulerError::CantAdd,
+                )
+            })
+            .and_then(|job_data| self.update_job_data(job_data))
     }
 
     fn remove_notification(&mut self, notification_guid: &Uuid) -> Result<(), JobSchedulerError> {

@@ -34,11 +34,10 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
     fn tick(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError> {
         let guids = self.job_store.list_job_guids()?;
         for guid in guids {
-            let (jl, job_data) = {
+            let jl = {
                 let job = self.job_store.get_job(&guid);
                 match job {
                     Ok(Some(mut job)) => {
-                        let job_data = job.job_data().ok();
                         let stopped = job.clone();
                         let stopped = stopped.0.read();
                         if let Err(e) = stopped {
@@ -49,8 +48,8 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                         let stopped = stopped.stop();
 
                         match stopped {
-                            true => (None, None),
-                            false => (Some(job), job_data),
+                            true => None,
+                            false => Some(job),
                         }
                     }
                     _ => continue,
@@ -77,6 +76,13 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                 eprintln!("Error running tick on {:?}", guid);
                 continue;
             }
+
+            let mut js = self.job_store.clone();
+            let job_data = jl
+                .job_data()
+                .and_then(|jd| js.update_job_data(jd))
+                .and_then(|()| jl.job_data());
+
             if matches!(tick, Ok(false)) {
                 continue;
             }
@@ -84,7 +90,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             let mut js = self.job_store.clone();
             let mut on_started: Vec<Uuid> = vec![];
             let mut on_done = vec![];
-            if let Some(jd) = job_data {
+            if let Ok(jd) = job_data {
                 on_started = jd.on_started.iter().map(|id| id.into()).collect::<Vec<_>>();
                 on_done = jd.on_done.iter().map(|id| id.into()).collect::<Vec<_>>();
                 tokio::spawn(async move {
