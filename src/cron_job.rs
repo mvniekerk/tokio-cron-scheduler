@@ -130,33 +130,6 @@ impl Job for CronJob {
         self.data.stopped = false;
     }
 
-    fn on_start_notification_remove(
-        &mut self,
-        id: &Uuid,
-        job_store: JobStoreLocked,
-    ) -> Result<bool, JobSchedulerError> {
-        let mut js = job_store;
-        js.remove_notification_for_job_state(id, JobState::Started)
-    }
-
-    fn on_done_notification_remove(
-        &mut self,
-        id: &Uuid,
-        job_store: JobStoreLocked,
-    ) -> Result<bool, JobSchedulerError> {
-        let mut js = job_store;
-        js.remove_notification_for_job_state(id, JobState::Done)
-    }
-
-    fn on_removed_notification_remove(
-        &mut self,
-        id: &Uuid,
-        job_store: JobStoreLocked,
-    ) -> Result<bool, JobSchedulerError> {
-        let mut js = job_store;
-        js.remove_notification_for_job_state(id, JobState::Removed)
-    }
-
     fn job_data_from_job_store(
         &mut self,
         job_store: JobStoreLocked,

@@ -1,7 +1,7 @@
 use crate::job::JobLocked;
 use crate::job_data::{JobState, JobStoredData};
 use crate::simple::SimpleJobStore;
-use crate::{JobSchedulerError, OnJobNotification};
+use crate::{job_store, JobSchedulerError, OnJobNotification};
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
@@ -45,7 +45,7 @@ pub trait OnJobRemove {
 }
 
 pub trait JobStore {
-    fn init(&mut self) -> Result<(), JobSchedulerError>;
+    fn init(&mut self, self_locked: JobStoreLocked) -> Result<(), JobSchedulerError>;
     fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError>;
     fn remove(&mut self, job: &Uuid) -> Result<(), JobSchedulerError>;
     fn list_job_guids(&mut self) -> Result<Vec<Uuid>, JobSchedulerError>;
@@ -72,6 +72,7 @@ pub trait JobStore {
     ) -> Result<(), JobSchedulerError>;
     fn update_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError>;
     fn has_job(&mut self, job_id: &Uuid) -> Result<bool, JobSchedulerError>;
+    fn inited(&mut self) -> Result<bool, JobSchedulerError>;
 }
 
 #[derive(Clone)]
@@ -90,11 +91,17 @@ impl Default for JobStoreLocked {
 
 impl JobStoreLocked {
     pub fn init(&mut self) -> Result<(), JobSchedulerError> {
+        let job_store_locked = self.clone();
         {
             let mut w = self.0.write().map_err(|_| JobSchedulerError::CantInit)?;
-            w.init()?;
+            w.init(job_store_locked)?;
         }
         Ok(())
+    }
+
+    pub fn inited(&mut self) -> Result<bool, JobSchedulerError> {
+        let mut w = self.0.write().map_err(|_| JobSchedulerError::CantInit)?;
+        w.inited()
     }
 
     pub fn add(&mut self, mut job: JobLocked) -> Result<(), JobSchedulerError> {
@@ -168,8 +175,10 @@ impl JobStoreLocked {
         notifications: Vec<JobState>,
     ) -> Result<(), JobSchedulerError> {
         {
+            println!("ANOT 01");
             let mut w = self.0.write().map_err(|_| JobSchedulerError::CantAdd)?;
             w.add_notification(job, notification_guid, on_notification, notifications)?;
+            println!("ANOT 02");
         }
         Ok(())
     }

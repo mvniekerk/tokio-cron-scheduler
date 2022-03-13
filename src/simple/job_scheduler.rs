@@ -34,10 +34,11 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
     fn tick(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError> {
         let guids = self.job_store.list_job_guids()?;
         for guid in guids {
-            let jl = {
+            let (jl, job_data) = {
                 let job = self.job_store.get_job(&guid);
                 match job {
-                    Ok(Some(job)) => {
+                    Ok(Some(mut job)) => {
+                        let job_data = job.job_data().ok();
                         let stopped = job.clone();
                         let stopped = stopped.0.read();
                         if let Err(e) = stopped {
@@ -46,9 +47,10 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                         }
                         let stopped = stopped.unwrap();
                         let stopped = stopped.stop();
+
                         match stopped {
-                            true => None,
-                            false => Some(job),
+                            true => (None, None),
+                            false => (Some(job), job_data),
                         }
                     }
                     _ => continue,
@@ -80,16 +82,10 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             }
 
             let mut js = self.job_store.clone();
-            let job_data = {
-                let mut w = jl.0.write().unwrap();
-                w.job_data_from_job()
-            };
-            if job_data.is_err() {
-                eprintln!("Error")
-            }
             let mut on_started: Vec<Uuid> = vec![];
             let mut on_done = vec![];
-            if let Ok(Some(jd)) = job_data {
+            if let Some(jd) = job_data {
+                println!("Got job data {:?}", jd);
                 on_started = jd.on_started.iter().map(|id| id.into()).collect::<Vec<_>>();
                 on_done = jd.on_done.iter().map(|id| id.into()).collect::<Vec<_>>();
                 tokio::spawn(async move {
@@ -97,6 +93,8 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                         eprintln!("Error updating job data {:?}", e);
                     }
                 });
+            } else {
+                eprintln!("Error getting job data!");
             }
 
             let ref_for_later = jl.0.clone();

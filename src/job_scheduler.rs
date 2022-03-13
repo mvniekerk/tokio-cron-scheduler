@@ -102,6 +102,11 @@ impl JobsSchedulerLocked {
     /// }));
     /// ```
     pub fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
+        let mut js = self.get_job_store()?;
+        let inited = js.inited()?;
+        if !inited {
+            js.init()?;
+        }
         {
             let mut self_w = self.0.write().map_err(|_e| JobSchedulerError::CantAdd)?;
             self_w.add(job)?;
