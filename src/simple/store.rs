@@ -5,7 +5,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
 
-use crate::job_store::{JobStore, JobStoreLocked};
+use crate::job_store::JobStore;
 use crate::{JobSchedulerError, OnJobNotification};
 use uuid::Uuid;
 

@@ -37,7 +37,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             let jl = {
                 let job = self.job_store.get_job(&guid);
                 match job {
-                    Ok(Some(mut job)) => {
+                    Ok(Some(job)) => {
                         let stopped = job.clone();
                         let stopped = stopped.0.read();
                         if let Err(e) = stopped {

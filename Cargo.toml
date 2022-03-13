@@ -1,6 +1,6 @@
 [package]
 name = "tokio-cron-scheduler"
-version = "0.6.0"
+version = "0.6.0-beta.1"
 authors = ["Michael van Niekerk <mike@agri-io.co.za>"]
 edition = "2018"
 
@@ -25,9 +25,7 @@ uuid = { version = "0.8", features = ["v4"] }
 prost = "0.9"
 
 [dependencies.nats]
-git = "ssh://git@github.com/nats-io/nats.rs.git"
-rev = "9e556c059f29752165eaa029885fb8836ca34dcf"
-#branch = "main"
+version = "0.18.1"
 features = ["unstable"]
 optional = true
 
@@ -40,6 +38,6 @@ prost-build = { version = "0.9" }
 [features]
 signal = ["tokio/signal"]
 nats_scheduler = ["nats"]
-default = ["nats_scheduler"]
+default = []
 
 
