@@ -85,7 +85,6 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
             let mut on_started: Vec<Uuid> = vec![];
             let mut on_done = vec![];
             if let Some(jd) = job_data {
-                println!("Got job data {:?}", jd);
                 on_started = jd.on_started.iter().map(|id| id.into()).collect::<Vec<_>>();
                 on_done = jd.on_done.iter().map(|id| id.into()).collect::<Vec<_>>();
                 tokio::spawn(async move {
@@ -94,7 +93,7 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
                     }
                 });
             } else {
-                eprintln!("Error getting job data!");
+                ep rintln!("Error getting job data!");
             }
 
             let ref_for_later = jl.0.clone();

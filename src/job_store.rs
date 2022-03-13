@@ -175,10 +175,8 @@ impl JobStoreLocked {
         notifications: Vec<JobState>,
     ) -> Result<(), JobSchedulerError> {
         {
-            println!("ANOT 01");
             let mut w = self.0.write().map_err(|_| JobSchedulerError::CantAdd)?;
             w.add_notification(job, notification_guid, on_notification, notifications)?;
-            println!("ANOT 02");
         }
         Ok(())
     }

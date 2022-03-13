@@ -213,10 +213,6 @@ async fn listen_for_notifications(
             state: js,
             notification_ids,
         } = data;
-        println!(
-            "Need to notify {:?} of {:?} {:?}",
-            job_id, js, notification_ids
-        );
         for uuid in notification_ids {
             let uuid: Uuid = uuid.into();
             let job_notification_guids = job_notification_guids.write();
@@ -236,7 +232,6 @@ async fn listen_for_notifications(
                 });
             }
         }
-        println!("Done notifying");
         if let Err(e) = resp.send(Ok(())) {
             eprintln!("Error sending result of response {:?}", e);
         }
@@ -420,7 +415,6 @@ async fn listen_for_notification_removals(
             states,
         } = data;
         let mut ret = false;
-        println!("Notification removal, {:?} {:?}", notification_guid, states);
         let send_failure = || {
             if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
                 eprintln!("Could not send notification on removal error {:?}", e);
@@ -431,7 +425,6 @@ async fn listen_for_notification_removals(
 
         // Need to remove all
         if states.is_empty() {
-            println!("Need to remove all");
             {
                 let job_notifications = job_notification_guids.write();
                 if let Err(e) = job_notifications {
@@ -499,24 +492,19 @@ async fn listen_for_notification_removals(
             let job_notification_guids = job_notification_guids.write();
             let mut found_once = false;
             {
-                println!("RNOT 01");
                 let jobs = jobs.write();
                 if let Err(e) = jobs {
                     eprintln!("Could not lock jobs {:?}", e);
                     send_failure();
                     continue;
                 }
-                println!("RNOT 02");
                 let mut jobs = jobs.unwrap();
-                println!("RNOT 03");
                 'next_job: for (job_id, job_locked) in jobs.iter_mut() {
-                    println!("RNOT 04 {:?}", job_id);
                     let job_data = job_locked.job_data();
                     if let Err(e) = job_data {
                         eprintln!("Could not get job data {:?}", e);
                         continue 'next_job;
                     }
-                    println!("RNOT 05");
                     let mut job_data = job_data.unwrap();
 
                     let mut lists = vec![
@@ -527,7 +515,6 @@ async fn listen_for_notification_removals(
                         (JobState::Scheduled, &mut job_data.on_scheduled),
                     ];
 
-                    println!("RNOT 06");
                     for (js, list) in lists.iter_mut() {
                         if states.contains(js) {
                             list.retain(|u| {
@@ -535,27 +522,15 @@ async fn listen_for_notification_removals(
                                 ret |= !must_retain;
                                 must_retain
                             });
-                            // match js {
-                            //     JobState::Stop => {
-                            //         job_data.on_stop = list;
-                            //     }
-                            //     JobState::Scheduled => {}
-                            //     JobState::Started => {}
-                            //     JobState::Done => {}
-                            //     JobState::Removed => {}
-                            // }
                         } else {
                             found_once |= list.contains(&notification_id);
                         }
                     }
-                    println!("RNOT 07");
                     if let Err(e) = job_locked.set_job_data(job_data) {
                         eprintln!("Could not set job data for {:?} {:?}", job_id, e)
                     }
-                    println!("RNOT 08");
                 }
             }
-            println!("Found once ?{:?}", found_once);
             if !found_once {
                 if let Err(e) = job_notification_guids {
                     eprintln!("Could not get lock on job notification guids {:?}", e);
@@ -565,7 +540,6 @@ async fn listen_for_notification_removals(
                 job_notification_guids.remove(&notification_guid);
             }
         }
-        println!("Done with removal?");
         if let Err(e) = resp.send(Ok(ret)) {
             eprintln!("Error sending success of removal {:?}", e);
         }
@@ -698,7 +672,6 @@ impl JobStore for SimpleJobStore {
         on_notification: Box<OnJobNotification>,
         notifications: Vec<JobState>,
     ) -> Result<(), JobSchedulerError> {
-        println!("SSADDNOT 01 {:?} {:?}", job, notification_guid);
         send_to_tx_channel(
             self.tx_add_notification.as_ref(),
             AddJobNotification {
