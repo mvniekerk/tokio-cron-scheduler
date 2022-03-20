@@ -1,64 +1,82 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CronJob {
-    #[prost(string, tag = "1")]
+    #[prost(string, tag="1")]
     pub schedule: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NonCronJob {
-    #[prost(bool, tag = "1")]
+    #[prost(bool, tag="1")]
     pub repeating: bool,
-    #[prost(uint64, tag = "2")]
+    #[prost(uint64, tag="2")]
     pub repeated_every: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Uuid {
-    #[prost(uint64, tag = "1")]
+    #[prost(uint64, tag="1")]
     pub id1: u64,
-    #[prost(uint64, tag = "2")]
+    #[prost(uint64, tag="2")]
     pub id2: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct JobStoredData {
-    #[prost(message, optional, tag = "1")]
+    #[prost(message, optional, tag="1")]
     pub id: ::core::option::Option<Uuid>,
-    #[prost(uint64, optional, tag = "2")]
+    #[prost(uint64, optional, tag="2")]
     pub last_updated: ::core::option::Option<u64>,
-    #[prost(uint64, optional, tag = "3")]
+    #[prost(uint64, optional, tag="3")]
     pub last_tick: ::core::option::Option<u64>,
-    #[prost(uint64, tag = "4")]
+    #[prost(uint64, tag="4")]
     pub next_tick: u64,
-    #[prost(enumeration = "JobType", tag = "5")]
+    #[prost(enumeration="JobType", tag="5")]
     pub job_type: i32,
-    #[prost(uint32, tag = "8")]
+    #[prost(uint32, tag="8")]
     pub count: u32,
-    #[prost(message, repeated, tag = "9")]
-    pub on_stop: ::prost::alloc::vec::Vec<Uuid>,
-    #[prost(message, repeated, tag = "10")]
-    pub on_scheduled: ::prost::alloc::vec::Vec<Uuid>,
-    #[prost(message, repeated, tag = "11")]
-    pub on_started: ::prost::alloc::vec::Vec<Uuid>,
-    #[prost(message, repeated, tag = "12")]
-    pub on_done: ::prost::alloc::vec::Vec<Uuid>,
-    #[prost(message, repeated, tag = "13")]
-    pub on_removed: ::prost::alloc::vec::Vec<Uuid>,
-    #[prost(bytes = "vec", tag = "14")]
+    #[prost(bytes="vec", tag="9")]
     pub extra: ::prost::alloc::vec::Vec<u8>,
-    #[prost(bool, tag = "15")]
+    #[prost(bool, tag="10")]
     pub ran: bool,
-    #[prost(bool, tag = "16")]
+    #[prost(bool, tag="11")]
     pub stopped: bool,
-    #[prost(oneof = "job_stored_data::Job", tags = "6, 7")]
+    #[prost(oneof="job_stored_data::Job", tags="6, 7")]
     pub job: ::core::option::Option<job_stored_data::Job>,
 }
 /// Nested message and enum types in `JobStoredData`.
 pub mod job_stored_data {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Job {
-        #[prost(message, tag = "6")]
+        #[prost(message, tag="6")]
         CronJob(super::CronJob),
-        #[prost(message, tag = "7")]
+        #[prost(message, tag="7")]
         NonCronJob(super::NonCronJob),
     }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct JobIdAndNotification {
+    #[prost(message, optional, tag="1")]
+    pub job_id: ::core::option::Option<Uuid>,
+    #[prost(message, optional, tag="2")]
+    pub notification_id: ::core::option::Option<Uuid>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NotificationData {
+    #[prost(message, optional, tag="1")]
+    pub job_id: ::core::option::Option<JobIdAndNotification>,
+    #[prost(enumeration="JobState", repeated, tag="2")]
+    pub job_states: ::prost::alloc::vec::Vec<i32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NotificationIdAndState {
+    #[prost(message, optional, tag="1")]
+    pub notification_id: ::core::option::Option<Uuid>,
+    #[prost(enumeration="JobState", tag="2")]
+    pub job_state: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct JobAndNextTick {
+    #[prost(message, optional, tag="1")]
+    pub id: ::core::option::Option<Uuid>,
+    #[prost(uint64, tag="2")]
+    pub next_tick: u64,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]

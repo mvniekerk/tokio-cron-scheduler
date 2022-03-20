@@ -54,6 +54,16 @@ message JobIdAndNotification {
 
 message NotificationData {
   JobIdAndNotification job_id = 1;
-  repeated JobState job_states = 3;
+  repeated JobState job_states = 2;
+}
+
+message NotificationIdAndState {
+  Uuid notification_id = 1;
+  JobState job_state = 2;
+}
+
+message JobAndNextTick {
+  Uuid id = 1;
+  uint64  next_tick = 2;
 }
 

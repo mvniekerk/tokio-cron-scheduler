@@ -38,6 +38,7 @@ and the job state it needs to be
 notified of
 end note
 
+
 / note over runner
 Runs the job code
 end note
@@ -88,8 +89,8 @@ notify -> notifyRunner          : GUID + <JOB STATE>
 activate notifyRunner
 notifyRunner -> notifyStorage   : Get notify GUIDs for\njob GUID + job state
 notifyStorage -> notifyRunner
-notifyRunner -> notifyRunner    : Get notify code to run\nusing Notify GUID
-notifyStorage -> notifyRunner
+notifyRunner -> notifyCode    : Get notify code to run\nusing Notify GUID
+notifyCode -> notifyRunner
 notifyRunner -> notifyRunner    : Run notification code
 deactivate notifyRunner
 
