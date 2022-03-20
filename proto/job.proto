@@ -42,15 +42,18 @@ message JobStoredData {
   }
   uint32 count = 8;
 
-  repeated Uuid on_stop = 9;
-  repeated Uuid on_scheduled = 10;
-  repeated Uuid on_started = 11;
-  repeated Uuid on_done = 12;
-  repeated Uuid on_removed = 13;
-
-  bytes extra = 14;
-  bool ran = 15;
-  bool stopped = 16;
+  bytes extra = 9;
+  bool ran = 10;
+  bool stopped = 11;
 }
 
+message JobIdAndNotification {
+  Uuid job_id = 1;
+  Uuid notification_id = 2;
+}
+
+message NotificationData {
+  JobIdAndNotification job_id = 1;
+  repeated JobState job_states = 3;
+}
 
