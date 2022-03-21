@@ -16,6 +16,10 @@ pub struct Runner {
 }
 
 impl Runner {
+    pub fn new(job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>) -> Self {
+        Self { job_code }
+    }
+
     async fn listen_for_activations(
         job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
         mut rx: Receiver<Uuid>,
@@ -58,13 +62,6 @@ impl Runner {
                 }
             }
         }
-    }
-}
-
-impl Runner {
-    pub fn new(job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>) -> Self
-where {
-        Self { job_code }
     }
 
     pub fn init(

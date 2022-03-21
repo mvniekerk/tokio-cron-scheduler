@@ -2,6 +2,7 @@ use crate::job::job_data::{JobState, NotificationData};
 use crate::store::{CodeGet, DataStore, InitStore};
 use crate::{JobSchedulerError, OnJobNotification};
 use std::future::Future;
+use std::pin::Pin;
 use uuid::Uuid;
 
 pub trait NotificationStore: DataStore<NotificationData> + InitStore {
@@ -9,7 +10,7 @@ pub trait NotificationStore: DataStore<NotificationData> + InitStore {
         &mut self,
         job: Uuid,
         state: JobState,
-    ) -> Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>> + Send>>;
     fn delete_notification_for_state(
         &mut self,
         notification_id: Uuid,

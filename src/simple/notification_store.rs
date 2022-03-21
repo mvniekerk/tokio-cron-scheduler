@@ -131,10 +131,10 @@ impl NotificationStore for SimpleNotificationStore {
         &mut self,
         job_id: Uuid,
         state: JobState,
-    ) -> Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>> + Send>> {
         let state: i32 = state.into();
         let notifications = self.data.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let notifications = notifications.read().await;
             let job = notifications.get(&job_id);
             match job {

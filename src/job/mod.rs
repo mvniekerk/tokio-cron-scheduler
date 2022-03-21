@@ -19,12 +19,15 @@ pub mod job_data;
 mod non_cron_job;
 pub mod to_code;
 
-pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
-pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+pub type JobId = Uuid;
+pub type NotificationId = Uuid;
+
+pub type JobToRun = dyn FnMut(JobId, JobsSchedulerLocked) + Send + Sync;
+pub type JobToRunAsync = dyn FnMut(JobId, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
     + Send
     + Sync;
 
-pub type OnJobNotification = dyn FnMut(Uuid, Uuid, JobState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+pub type OnJobNotification = dyn FnMut(JobId, NotificationId, JobState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
     + Send
     + Sync;
 
