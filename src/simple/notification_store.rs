@@ -175,12 +175,12 @@ impl NotificationStore for SimpleNotificationStore {
         &mut self,
         notification_id: Uuid,
         state: JobState,
-    ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let state: i32 = state.into();
 
         let jobs = self.notification_vs_job.clone();
         let notifications = self.data.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let job_id = {
                 let r = jobs.read().await;
                 r.get(&notification_id).cloned()
