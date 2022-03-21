@@ -29,7 +29,10 @@ where
         data: DATA,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>>;
 
-    fn delete(&mut self, guid: Uuid) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>>;
+    fn delete(
+        &mut self,
+        guid: Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>>;
 }
 
 pub trait CodeGet<CODE>

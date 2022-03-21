@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 mod creator;
 mod cron_job;
+mod deleter;
 pub mod job_data;
 mod non_cron_job;
 mod runner;

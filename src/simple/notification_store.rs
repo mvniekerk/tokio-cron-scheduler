@@ -95,10 +95,13 @@ impl DataStore<NotificationData> for SimpleNotificationStore {
         })
     }
 
-    fn delete(&mut self, guid: Uuid) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
+    fn delete(
+        &mut self,
+        guid: Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let jobs = self.notification_vs_job.clone();
         let notifications = self.data.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let job_id = {
                 let r = jobs.read().await;
                 r.get(&guid).cloned()
