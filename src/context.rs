@@ -1,6 +1,6 @@
 use crate::job::job_data::{JobState, NotificationData};
 use crate::job::{JobLocked, JobToRunAsync};
-use crate::OnJobNotification;
+use crate::{JobStoredData, OnJobNotification};
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
@@ -13,8 +13,8 @@ pub struct Context {
     pub notify_tx: Sender<(Uuid, JobState)>,
     pub notify_rx: Receiver<(Uuid, JobState)>,
 
-    pub job_create_tx: Sender<(Uuid, Arc<RwLock<Box<JobToRunAsync>>>)>,
-    pub job_create_rx: Receiver<(Uuid, Arc<RwLock<Box<JobToRunAsync>>>)>,
+    pub job_create_tx: Sender<(JobStoredData, Arc<RwLock<Box<JobToRunAsync>>>)>,
+    pub job_create_rx: Receiver<(JobStoredData, Arc<RwLock<Box<JobToRunAsync>>>)>,
 
     pub job_created_tx: Sender<Uuid>,
     pub job_created_rx: Receiver<Uuid>,

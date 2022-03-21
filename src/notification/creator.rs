@@ -5,7 +5,7 @@ use crate::{JobSchedulerError, OnJobNotification};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -16,6 +16,7 @@ impl NotificationCreator {
     async fn listen_for_additions(
         storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         mut rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
+        mut tx_created: Sender<Uuid>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -56,6 +57,10 @@ impl NotificationCreator {
             if let Err(e) = val {
                 eprintln!("Error adding or updating {:?}", e);
             }
+
+            if let Err(e) = tx_created.send(notification_id) {
+                eprintln!("Error sending {:?}", e);
+            }
         }
     }
 
@@ -65,8 +70,11 @@ impl NotificationCreator {
         context: &Context,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
         let rx = context.notify_create_tx.subscribe();
+        let tx_created = context.notify_created_tx.clone();
         Box::pin(async move {
-            tokio::spawn(NotificationCreator::listen_for_additions(storage, rx));
+            tokio::spawn(NotificationCreator::listen_for_additions(
+                storage, rx, tx_created,
+            ));
             Ok(())
         })
     }

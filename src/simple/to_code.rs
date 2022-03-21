@@ -2,7 +2,7 @@ use crate::context::Context;
 use crate::job::job_data::{JobIdAndNotification, JobState, NotificationData};
 use crate::job::to_code::{JobCode, NotificationCode, ToCode};
 use crate::job::{JobLocked, JobToRunAsync};
-use crate::{JobSchedulerError, OnJobNotification};
+use crate::{JobSchedulerError, JobStoredData, OnJobNotification};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -26,7 +26,7 @@ impl Default for SimpleJobCode {
 impl SimpleJobCode {
     async fn listen_for_additions(
         data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<JobToRunAsync>>>>>>,
-        mut rx: Receiver<(Uuid, Arc<RwLock<Box<JobToRunAsync>>>)>,
+        mut rx: Receiver<(JobStoredData, Arc<RwLock<Box<JobToRunAsync>>>)>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -34,7 +34,8 @@ impl SimpleJobCode {
                 eprintln!("Error receiving {:?}", e);
                 break;
             }
-            let (uuid, val) = val.unwrap();
+            let (JobStoredData { id: job_id, .. }, val) = val.unwrap();
+            let uuid: Uuid = job_id.as_ref().unwrap().into();
             let mut w = data.write().await;
             w.insert(uuid, val);
         }
