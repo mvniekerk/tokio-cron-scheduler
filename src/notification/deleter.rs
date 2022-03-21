@@ -94,11 +94,11 @@ impl NotificationDeleter {
     pub fn init(
         &mut self,
         context: &Context,
-        storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
         let rx_job_delete = context.job_delete_tx.subscribe();
         let rx_notification_delete = context.notify_delete_tx.subscribe();
         let tx_notification_deleted = context.notify_deleted_tx.clone();
+        let storage = context.notification_storage.clone();
 
         Box::pin(async move {
             tokio::spawn(NotificationDeleter::listen_to_job_removals(

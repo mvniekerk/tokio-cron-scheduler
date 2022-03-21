@@ -66,11 +66,11 @@ impl NotificationCreator {
 
     pub fn init(
         &mut self,
-        storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         context: &Context,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
         let rx = context.notify_create_tx.subscribe();
         let tx_created = context.notify_created_tx.clone();
+        let storage = context.notification_storage.clone();
         Box::pin(async move {
             tokio::spawn(NotificationCreator::listen_for_additions(
                 storage, rx, tx_created,

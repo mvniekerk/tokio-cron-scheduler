@@ -44,11 +44,11 @@ impl JobCreator {
 
     pub fn init(
         &mut self,
-        storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
         context: &Context,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
         let rx = context.job_create_tx.subscribe();
         let tx_created = context.job_created_tx.clone();
+        let storage = context.metadata_storage.clone();
 
         Box::pin(async move {
             tokio::spawn(JobCreator::listen_to_additions(storage, rx, tx_created));

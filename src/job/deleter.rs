@@ -41,10 +41,11 @@ impl JobDeleter {
     pub fn init(
         &mut self,
         context: &Context,
-        storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send + Sync>> {
         let rx = context.job_delete_tx.subscribe();
         let tx_deleted = context.job_deleted_tx.clone();
+        let storage = context.metadata_storage.clone();
+
         Box::pin(async move {
             tokio::spawn(JobDeleter::listen_to_removals(storage, rx, tx_deleted));
             Ok(())

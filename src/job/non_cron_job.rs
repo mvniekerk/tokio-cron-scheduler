@@ -33,31 +33,19 @@ impl Job for NonCronJob {
     }
 
     fn last_tick(&self) -> Option<DateTime<Utc>> {
-        self.data
-            .last_tick
-            .map(|lt| SystemTime::UNIX_EPOCH.add(Duration::from_secs(lt)))
-            .map(DateTime::from)
+        self.data.last_tick_utc()
     }
 
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>) {
-        self.data.last_tick = tick.map(|t| t.timestamp() as u64);
+        self.data.set_last_tick(tick);
     }
 
     fn next_tick(&self) -> Option<DateTime<Utc>> {
-        if self.data.next_tick == 0 {
-            None
-        } else {
-            Some(self.data.next_tick)
-                .map(|lt| SystemTime::UNIX_EPOCH.add(Duration::from_secs(lt)))
-                .map(DateTime::from)
-        }
+        self.data.next_tick_utc()
     }
 
     fn set_next_tick(&mut self, tick: Option<DateTime<Utc>>) {
-        self.data.next_tick = match tick {
-            Some(t) => t.timestamp() as u64,
-            None => 0,
-        }
+        self.data.set_next_tick(tick)
     }
 
     fn set_count(&mut self, count: u32) {

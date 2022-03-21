@@ -35,7 +35,7 @@ impl Job for CronJob {
     }
 
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>) {
-        self.data.last_tick = tick.map(|t| t.timestamp() as u64);
+        self.data.set_last_tick(tick);
     }
 
     fn next_tick(&self) -> Option<DateTime<Utc>> {
@@ -43,10 +43,7 @@ impl Job for CronJob {
     }
 
     fn set_next_tick(&mut self, tick: Option<DateTime<Utc>>) {
-        self.data.next_tick = match tick {
-            Some(t) => t.timestamp() as u64,
-            None => 0,
-        }
+        self.data.set_next_tick(tick);
     }
 
     fn set_count(&mut self, count: u32) {
