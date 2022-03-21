@@ -11,11 +11,11 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-pub struct Runner {
+pub struct JobRunner {
     pub job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
 }
 
-impl Runner {
+impl JobRunner {
     pub fn new(job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>) -> Self {
         Self { job_code }
     }
@@ -74,7 +74,7 @@ impl Runner {
         let job_activation_rx = context.job_activation_tx.subscribe();
 
         Box::pin(async move {
-            tokio::spawn(Runner::listen_for_activations(
+            tokio::spawn(JobRunner::listen_for_activations(
                 job_code,
                 job_activation_rx,
                 notify_tx,

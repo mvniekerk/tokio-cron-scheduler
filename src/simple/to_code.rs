@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -111,6 +111,7 @@ impl SimpleNotificationCode {
     async fn listen_for_additions(
         data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>,
         mut rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
+        mut tx: Sender<Uuid>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -132,8 +133,13 @@ impl SimpleNotificationCode {
                     _ => continue,
                 }
             };
-            let mut w = data.write().await;
-            w.insert(uuid, val);
+            {
+                let mut w = data.write().await;
+                w.insert(uuid.clone(), val);
+            }
+            if let Err(e) = tx.send(uuid.clone()) {
+                eprintln!("Error sending notification created {:?} {:?}", e, uuid);
+            }
         }
     }
 
@@ -141,6 +147,7 @@ impl SimpleNotificationCode {
     async fn listen_for_removals(
         data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>,
         mut rx: Receiver<(Uuid, Option<Vec<JobState>>)>,
+        mut tx: Sender<(Uuid, Option<Vec<JobState>>)>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -148,9 +155,18 @@ impl SimpleNotificationCode {
                 eprintln!("Error receiving job removal {:?}", e);
                 break;
             }
-            let (uuid, _) = val.unwrap();
-            let mut w = data.write().await;
-            w.remove(&uuid);
+            let (uuid, states) = val.unwrap();
+            eprintln!(
+                "Removing notification uuid {:?} and not caring about states!",
+                uuid
+            );
+            {
+                let mut w = data.write().await;
+                w.remove(&uuid);
+            }
+            if let Err(e) = tx.send((uuid.clone(), states)) {
+                eprintln!("Error sending notification removed {:?} {:?}", e, uuid)
+            }
         }
     }
 }
@@ -162,14 +178,19 @@ impl ToCode<Box<OnJobNotification>> for SimpleNotificationCode {
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let data = self.data.clone();
         let rx_create = context.notify_create_tx.subscribe();
-        let rx_delete = context.notify_deleted_tx.subscribe();
+        let tx_created = context.notify_created_tx.clone();
+        let rx_delete = context.notify_delete_tx.subscribe();
+        let tx_deleted = context.notify_deleted_tx.clone();
 
         Box::pin(async move {
             tokio::spawn(SimpleNotificationCode::listen_for_additions(
                 data.clone(),
                 rx_create,
+                tx_created,
             ));
-            tokio::spawn(SimpleNotificationCode::listen_for_removals(data, rx_delete));
+            tokio::spawn(SimpleNotificationCode::listen_for_removals(
+                data, rx_delete, tx_deleted,
+            ));
             Ok(())
         })
     }
