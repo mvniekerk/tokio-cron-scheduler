@@ -63,6 +63,8 @@ pub struct NotificationData {
     pub job_id: ::core::option::Option<JobIdAndNotification>,
     #[prost(enumeration="JobState", repeated, tag="2")]
     pub job_states: ::prost::alloc::vec::Vec<i32>,
+    #[prost(bytes="vec", tag="3")]
+    pub extra: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct NotificationIdAndState {

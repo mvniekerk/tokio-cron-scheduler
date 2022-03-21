@@ -55,6 +55,7 @@ message JobIdAndNotification {
 message NotificationData {
   JobIdAndNotification job_id = 1;
   repeated JobState job_states = 2;
+  bytes extra = 3;
 }
 
 message NotificationIdAndState {

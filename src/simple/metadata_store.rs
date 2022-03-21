@@ -4,7 +4,8 @@ use crate::JobSchedulerError;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 pub struct SimpleMetadataStore {
@@ -19,14 +20,9 @@ impl DataStore<JobStoredData> for SimpleMetadataStore {
     ) -> Box<dyn Future<Output = Result<Option<JobStoredData>, JobSchedulerError>>> {
         let data = self.data.clone();
         Box::new(async move {
-            let r = data.write();
-            if let Err(e) = r {
-                Err(JobSchedulerError::GetJobData)
-            } else {
-                let r = r.unwrap();
-                let val = r.get(&id).cloned();
-                Ok(val)
-            }
+            let r = data.write().await;
+            let val = r.get(&id).cloned();
+            Ok(val)
         })
     }
 
@@ -37,35 +33,26 @@ impl DataStore<JobStoredData> for SimpleMetadataStore {
         let id: Uuid = data.id.as_ref().unwrap().into();
         let job_data = self.data.clone();
         Box::new(async move {
-            let w = job_data.write();
-            if let Err(e) = w {
-                Err(JobSchedulerError::CantAdd)
-            } else {
-                let mut w = w.unwrap();
-                w.insert(id, data);
-                Ok(())
-            }
+            let mut w = job_data.write().await;
+            w.insert(id, data);
+            Ok(())
         })
     }
 
     fn delete(&mut self, guid: Uuid) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
         let job_data = self.data.clone();
         Box::new(async move {
-            let w = job_data.write();
-            if let Err(e) = w {
-                Err(JobSchedulerError::CantRemove)
-            } else {
-                let mut w = w.unwrap();
-                w.remove(&guid);
-                Ok(())
-            }
+            let mut w = job_data.write().await;
+            w.remove(&guid);
+            Ok(())
         })
     }
 }
 
 impl InitStore for SimpleMetadataStore {
     fn init(&mut self) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
-        Box::new(async move { Err(JobSchedulerError::CantInit) })
+        self.inited = true;
+        Box::new(std::future::ready(Ok(())))
     }
 
     fn inited(&mut self) -> Box<dyn Future<Output = Result<bool, JobSchedulerError>>> {
@@ -80,14 +67,13 @@ impl MetaDataStorage for SimpleMetadataStore {
     ) -> Box<dyn Future<Output = Result<Vec<JobAndNextTick>, JobSchedulerError>>> {
         let data = self.data.clone();
         Box::new(async move {
-            let r = data.read();
-            r.map(|r| {
-                r.iter()
-                    .map(|(_, v)| (v.id.clone(), v.next_tick))
-                    .map(|(id, next_tick)| JobAndNextTick { id, next_tick })
-                    .collect::<Vec<_>>()
-            })
-            .map_err(|e| JobSchedulerError::TickError)
+            let r = data.read().await;
+            let ret = r
+                .iter()
+                .map(|(_, v)| (v.id.clone(), v.next_tick))
+                .map(|(id, next_tick)| JobAndNextTick { id, next_tick })
+                .collect::<Vec<_>>();
+            Ok(ret)
         })
     }
 
@@ -98,19 +84,14 @@ impl MetaDataStorage for SimpleMetadataStore {
     ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
         let data = self.data.clone();
         Box::new(async move {
-            let w = data.write();
-            if let Err(e) = w {
-                Err(JobSchedulerError::UpdateJobData)
-            } else {
-                let mut w = w.unwrap();
-                let val = w.get_mut(&guid);
-                match val {
-                    Some(mut val) => {
-                        val.next_tick = next_tick.timestamp() as u64;
-                        Ok(())
-                    }
-                    None => Err(JobSchedulerError::UpdateJobData),
+            let mut w = data.write().await;
+            let val = w.get_mut(&guid);
+            match val {
+                Some(mut val) => {
+                    val.next_tick = next_tick.timestamp() as u64;
+                    Ok(())
                 }
+                None => Err(JobSchedulerError::UpdateJobData),
             }
         })
     }
