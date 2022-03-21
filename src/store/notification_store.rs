@@ -11,11 +11,18 @@ pub trait NotificationStore: DataStore<NotificationData> + InitStore {
         job: Uuid,
         state: JobState,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>> + Send>>;
+
+    fn list_notification_guids_for_job_id(
+        &mut self,
+        job_id: Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>> + Send>>;
+
     fn delete_notification_for_state(
         &mut self,
         notification_id: Uuid,
         state: JobState,
     ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>>;
+
     fn delete_for_job(
         &mut self,
         job_id: Uuid,

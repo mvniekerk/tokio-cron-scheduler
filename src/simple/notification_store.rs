@@ -156,6 +156,21 @@ impl NotificationStore for SimpleNotificationStore {
         })
     }
 
+    fn list_notification_guids_for_job_id(
+        &mut self,
+        job_id: Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>> + Send>> {
+        let notifications = self.data.clone();
+        Box::pin(async move {
+            let notifications = notifications.read().await;
+            let job = notifications.get(&job_id);
+            match job {
+                Some(job) => Ok(job.iter().map(|(k, _v)| k.clone()).collect::<Vec<_>>()),
+                None => Ok(vec![]),
+            }
+        })
+    }
+
     fn delete_notification_for_state(
         &mut self,
         notification_id: Uuid,
