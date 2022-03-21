@@ -25,8 +25,8 @@ pub struct Context {
     pub job_deleted_tx: Sender<Uuid>,
     pub job_deleted_rx: Receiver<Uuid>,
 
-    pub notify_create_tx: Sender<(NotificationData, Box<Arc<RwLock<OnJobNotification>>>)>,
-    pub notify_create_rx: Receiver<(NotificationData, Box<Arc<RwLock<OnJobNotification>>>)>,
+    pub notify_create_tx: Sender<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
+    pub notify_create_rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
 
     pub notify_created_tx: Sender<Uuid>,
     pub notify_created_rx: Receiver<Uuid>,
@@ -36,6 +36,7 @@ pub struct Context {
 
     pub notify_deleted_tx: Sender<(Uuid, Option<Vec<JobState>>)>,
     pub notify_deleted_rx: Receiver<(Uuid, Option<Vec<JobState>>)>,
+    // TODO need to add when notification was deleted and there's no more references to it
 }
 
 impl Default for Context {
