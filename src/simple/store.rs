@@ -107,103 +107,103 @@ async fn listen_for_removals(
     tx_notify: Sender<Message<NotifyOnJobState, ()>>,
     tx_remove_notify: Sender<Message<RemoveJobNotification, bool>>,
 ) {
-    'next_message: while let Ok(Message {
-        data: to_be_removed,
-        resp,
-    }) = rx_remove.recv()
-    {
-        let job_data = get_job_data(jobs.clone(), &to_be_removed, resp.clone());
-        let job_data = match job_data {
-            Ok(job_data) => job_data,
-            _ => {
-                eprintln!("Could not fetch job data for {:?}", to_be_removed);
-                continue 'next_message;
-            }
-        };
-
-        let mut removed: Vec<JobLocked> = vec![];
-
-        // Notify on removal before notifications are removed
-        let response_from_notification = send_to_tx_channel(
-            Some(tx_notify.clone()).as_ref(),
-            NotifyOnJobState {
-                state: JobState::Removed,
-                job: to_be_removed,
-                notification_ids: job_data
-                    .on_removed
-                    .iter()
-                    .map(|i| i.into())
-                    .collect::<Vec<_>>(),
-            },
-            JobSchedulerError::NotifyOnStateError,
-        );
-
-        if let Err(e) = response_from_notification {
-            eprintln!("Error notifying job state {:?}", e);
-        }
-
-        // Remove notifications
-        let js_and_state = vec![
-            (JobState::Removed, job_data.on_removed),
-            (JobState::Done, job_data.on_done),
-            (JobState::Scheduled, job_data.on_scheduled),
-            (JobState::Started, job_data.on_started),
-            (JobState::Stop, job_data.on_stop),
-        ];
-        let js_and_state = js_and_state
-            .iter()
-            .flat_map(|(js, l)| l.iter().map(move |u| (js, u)));
-
-        'notification_removal: for (js, notification_guid) in js_and_state {
-            let notification_guid: Uuid = notification_guid.into();
-            let ret = send_to_tx_channel(
-                Some(tx_remove_notify.clone()).as_ref(),
-                RemoveJobNotification {
-                    states: vec![*js],
-                    notification_guid,
-                },
-                JobSchedulerError::CantRemove,
-            );
-            if let Err(e) = ret {
-                eprintln!(
-                    "Could not remove notification {:?} for {:?}, continuing {:?}",
-                    notification_guid, to_be_removed, e
-                );
-                continue 'notification_removal;
-            }
-        }
-
-        // Remove job from storage
-        {
-            let w = jobs.write();
-            if let Err(e) = w {
-                eprintln!("Could not remove job {:?}", e);
-                if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
-                    eprintln!("Could not send error {:?}", e);
-                }
-                continue;
-            }
-            let mut w = w.unwrap();
-            w.retain(|_id, f| {
-                let job_id = f.guid();
-                let the_same = job_id.eq(&to_be_removed);
-                if the_same {
-                    let f = f.0.clone();
-                    removed.push(JobLocked(f))
-                }
-                !the_same
-            });
-        }
-
-        for mut job in removed {
-            if let Err(e) = job.set_stop(true) {
-                eprintln!("Error setting job to be stopped {:?}, continuing!!", e);
-            }
-        }
-        if let Err(e) = resp.send(Ok(())) {
-            eprintln!("Error sending success response {:?}", e);
-        }
-    }
+    // 'next_message: while let Ok(Message {
+    //     data: to_be_removed,
+    //     resp,
+    // }) = rx_remove.recv()
+    // {
+    //     let job_data = get_job_data(jobs.clone(), &to_be_removed, resp.clone());
+    //     let job_data = match job_data {
+    //         Ok(job_data) => job_data,
+    //         _ => {
+    //             eprintln!("Could not fetch job data for {:?}", to_be_removed);
+    //             continue 'next_message;
+    //         }
+    //     };
+    //
+    //     let mut removed: Vec<JobLocked> = vec![];
+    //
+    //     // Notify on removal before notifications are removed
+    //     let response_from_notification = send_to_tx_channel(
+    //         Some(tx_notify.clone()).as_ref(),
+    //         NotifyOnJobState {
+    //             state: JobState::Removed,
+    //             job: to_be_removed,
+    //             notification_ids: job_data
+    //                 .on_removed
+    //                 .iter()
+    //                 .map(|i| i.into())
+    //                 .collect::<Vec<_>>(),
+    //         },
+    //         JobSchedulerError::NotifyOnStateError,
+    //     );
+    //
+    //     if let Err(e) = response_from_notification {
+    //         eprintln!("Error notifying job state {:?}", e);
+    //     }
+    //
+    //     // Remove notifications
+    //     let js_and_state = vec![
+    //         (JobState::Removed, job_data.on_removed),
+    //         (JobState::Done, job_data.on_done),
+    //         (JobState::Scheduled, job_data.on_scheduled),
+    //         (JobState::Started, job_data.on_started),
+    //         (JobState::Stop, job_data.on_stop),
+    //     ];
+    //     let js_and_state = js_and_state
+    //         .iter()
+    //         .flat_map(|(js, l)| l.iter().map(move |u| (js, u)));
+    //
+    //     'notification_removal: for (js, notification_guid) in js_and_state {
+    //         let notification_guid: Uuid = notification_guid.into();
+    //         let ret = send_to_tx_channel(
+    //             Some(tx_remove_notify.clone()).as_ref(),
+    //             RemoveJobNotification {
+    //                 states: vec![*js],
+    //                 notification_guid,
+    //             },
+    //             JobSchedulerError::CantRemove,
+    //         );
+    //         if let Err(e) = ret {
+    //             eprintln!(
+    //                 "Could not remove notification {:?} for {:?}, continuing {:?}",
+    //                 notification_guid, to_be_removed, e
+    //             );
+    //             continue 'notification_removal;
+    //         }
+    //     }
+    //
+    //     // Remove job from storage
+    //     {
+    //         let w = jobs.write();
+    //         if let Err(e) = w {
+    //             eprintln!("Could not remove job {:?}", e);
+    //             if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
+    //                 eprintln!("Could not send error {:?}", e);
+    //             }
+    //             continue;
+    //         }
+    //         let mut w = w.unwrap();
+    //         w.retain(|_id, f| {
+    //             let job_id = f.guid();
+    //             let the_same = job_id.eq(&to_be_removed);
+    //             if the_same {
+    //                 let f = f.0.clone();
+    //                 removed.push(JobLocked(f))
+    //             }
+    //             !the_same
+    //         });
+    //     }
+    //
+    //     for mut job in removed {
+    //         if let Err(e) = job.set_stop(true) {
+    //             eprintln!("Error setting job to be stopped {:?}, continuing!!", e);
+    //         }
+    //     }
+    //     if let Err(e) = resp.send(Ok(())) {
+    //         eprintln!("Error sending success response {:?}", e);
+    //     }
+    // }
 }
 
 async fn listen_for_notifications(
@@ -285,41 +285,42 @@ fn add_notification_to_job_data(
     notification_id: &Uuid,
     jobs_states: Vec<JobState>,
 ) -> Result<JobStoredData, JobSchedulerError> {
-    let notification_uuid: crate::job_data::Uuid = notification_id.into();
-    for js in jobs_states {
-        let mut list = match js {
-            JobState::Stop => job_data.on_stop.clone(),
-            JobState::Scheduled => job_data.on_scheduled.clone(),
-            JobState::Started => job_data.on_started.clone(),
-            JobState::Done => job_data.on_done.clone(),
-            JobState::Removed => job_data.on_removed.clone(),
-        };
-
-        if list.contains(&notification_uuid) {
-            eprintln!(
-                "Already has {:?} notification for {:?}",
-                js, notification_id
-            );
-        } else {
-            list.push(notification_uuid.clone());
-        }
-        match js {
-            JobState::Stop => {
-                job_data.on_stop = list;
-            }
-            JobState::Scheduled => {
-                job_data.on_scheduled = list;
-            }
-            JobState::Started => {
-                job_data.on_started = list;
-            }
-            JobState::Done => {
-                job_data.on_done = list;
-            }
-            JobState::Removed => job_data.on_removed = list,
-        }
-    }
-    Ok(job_data)
+    // let notification_uuid: crate::job_data::Uuid = notification_id.into();
+    // for js in jobs_states {
+    //     let mut list = match js {
+    //         JobState::Stop => job_data.on_stop.clone(),
+    //         JobState::Scheduled => job_data.on_scheduled.clone(),
+    //         JobState::Started => job_data.on_started.clone(),
+    //         JobState::Done => job_data.on_done.clone(),
+    //         JobState::Removed => job_data.on_removed.clone(),
+    //     };
+    //
+    //     if list.contains(&notification_uuid) {
+    //         eprintln!(
+    //             "Already has {:?} notification for {:?}",
+    //             js, notification_id
+    //         );
+    //     } else {
+    //         list.push(notification_uuid.clone());
+    //     }
+    //     match js {
+    //         JobState::Stop => {
+    //             job_data.on_stop = list;
+    //         }
+    //         JobState::Scheduled => {
+    //             job_data.on_scheduled = list;
+    //         }
+    //         JobState::Started => {
+    //             job_data.on_started = list;
+    //         }
+    //         JobState::Done => {
+    //             job_data.on_done = list;
+    //         }
+    //         JobState::Removed => job_data.on_removed = list,
+    //     }
+    // }
+    // Ok(job_data)
+    Err(JobSchedulerError::FetchJob)
 }
 
 async fn listen_for_notification_additions(
@@ -369,141 +370,141 @@ async fn listen_for_notification_removals(
     job_notification_guids: LockedJobNotificationGuids,
     rx_notify: Receiver<Message<RemoveJobNotification, bool>>,
 ) {
-    while let Ok(Message { data, resp }) = rx_notify.recv() {
-        let RemoveJobNotification {
-            notification_guid,
-            states,
-        } = data;
-        let mut ret = false;
-        let send_failure = || {
-            if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
-                eprintln!("Could not send notification on removal error {:?}", e);
-            }
-        };
-
-        let notification_id: crate::job_data::Uuid = notification_guid.into();
-
-        // Need to remove all
-        if states.is_empty() {
-            {
-                let job_notifications = job_notification_guids.write();
-                if let Err(e) = job_notifications {
-                    eprintln!("Could not unlock job notification guids {:?}", e);
-                    send_failure();
-                    continue;
-                }
-                let mut job_notifications = job_notifications.unwrap();
-                job_notifications.remove(&notification_guid);
-            }
-            {
-                let jobs = jobs.write();
-                if let Err(e) = jobs {
-                    eprintln!("Error unlocking jobs {:?}", e);
-                    send_failure();
-                    continue;
-                }
-                let mut jobs = jobs.unwrap();
-                'next_job_to_search: for (job_id, job) in jobs.iter_mut() {
-                    let job_w = job.0.write();
-                    if let Err(e) = job_w {
-                        eprintln!("Error unlocking job {:?} {:?}, continuing... !!", job_id, e);
-                        continue 'next_job_to_search;
-                    }
-                    let mut job_w = job_w.unwrap();
-                    let mut job_data = match job_w.job_data_from_job() {
-                        Ok(Some(job_data)) => job_data,
-                        _ => {
-                            eprintln!("Could not get job data from job {:?}", job_id);
-                            continue 'next_job_to_search;
-                        }
-                    };
-
-                    job_data.on_done.retain(|u| {
-                        let must_retain = !u.eq(&notification_id);
-                        ret |= !must_retain;
-                        must_retain
-                    });
-                    job_data.on_removed.retain(|u| {
-                        let must_retain = !u.eq(&notification_id);
-                        ret |= !must_retain;
-                        must_retain
-                    });
-                    job_data.on_started.retain(|u| {
-                        let must_retain = !u.eq(&notification_id);
-                        ret |= !must_retain;
-                        must_retain
-                    });
-                    job_data.on_scheduled.retain(|u| {
-                        let must_retain = !u.eq(&notification_id);
-                        ret |= !must_retain;
-                        must_retain
-                    });
-                    job_data.on_stop.retain(|u| {
-                        let must_retain = !u.eq(&notification_id);
-                        ret |= !must_retain;
-                        must_retain
-                    });
-                    if let Err(e) = job_w.set_job_data(job_data) {
-                        eprintln!("Could not set job data of {:?} {:?}", job_id, e);
-                    }
-                }
-            }
-        } else {
-            let job_notification_guids = job_notification_guids.write();
-            let mut found_once = false;
-            {
-                let jobs = jobs.write();
-                if let Err(e) = jobs {
-                    eprintln!("Could not lock jobs {:?}", e);
-                    send_failure();
-                    continue;
-                }
-                let mut jobs = jobs.unwrap();
-                'next_job: for (job_id, job_locked) in jobs.iter_mut() {
-                    let job_data = job_locked.job_data();
-                    if let Err(e) = job_data {
-                        eprintln!("Could not get job data {:?}", e);
-                        continue 'next_job;
-                    }
-                    let mut job_data = job_data.unwrap();
-
-                    let mut lists = vec![
-                        (JobState::Removed, &mut job_data.on_removed),
-                        (JobState::Stop, &mut job_data.on_stop),
-                        (JobState::Started, &mut job_data.on_started),
-                        (JobState::Done, &mut job_data.on_done),
-                        (JobState::Scheduled, &mut job_data.on_scheduled),
-                    ];
-
-                    for (js, list) in lists.iter_mut() {
-                        if states.contains(js) {
-                            list.retain(|u| {
-                                let must_retain = !u.eq(&notification_id);
-                                ret |= !must_retain;
-                                must_retain
-                            });
-                        } else {
-                            found_once |= list.contains(&notification_id);
-                        }
-                    }
-                    if let Err(e) = job_locked.set_job_data(job_data) {
-                        eprintln!("Could not set job data for {:?} {:?}", job_id, e)
-                    }
-                }
-            }
-            if !found_once {
-                if let Err(e) = job_notification_guids {
-                    eprintln!("Could not get lock on job notification guids {:?}", e);
-                    continue;
-                }
-                let mut job_notification_guids = job_notification_guids.unwrap();
-                job_notification_guids.remove(&notification_guid);
-            }
-        }
-        if let Err(e) = resp.send(Ok(ret)) {
-            eprintln!("Error sending success of removal {:?}", e);
-        }
-    }
+    // while let Ok(Message { data, resp }) = rx_notify.recv() {
+    //     let RemoveJobNotification {
+    //         notification_guid,
+    //         states,
+    //     } = data;
+    //     let mut ret = false;
+    //     let send_failure = || {
+    //         if let Err(e) = resp.send(Err(JobSchedulerError::CantRemove)) {
+    //             eprintln!("Could not send notification on removal error {:?}", e);
+    //         }
+    //     };
+    //
+    //     let notification_id: crate::job_data::Uuid = notification_guid.into();
+    //
+    //     // Need to remove all
+    //     if states.is_empty() {
+    //         {
+    //             let job_notifications = job_notification_guids.write();
+    //             if let Err(e) = job_notifications {
+    //                 eprintln!("Could not unlock job notification guids {:?}", e);
+    //                 send_failure();
+    //                 continue;
+    //             }
+    //             let mut job_notifications = job_notifications.unwrap();
+    //             job_notifications.remove(&notification_guid);
+    //         }
+    //         {
+    //             let jobs = jobs.write();
+    //             if let Err(e) = jobs {
+    //                 eprintln!("Error unlocking jobs {:?}", e);
+    //                 send_failure();
+    //                 continue;
+    //             }
+    //             let mut jobs = jobs.unwrap();
+    //             'next_job_to_search: for (job_id, job) in jobs.iter_mut() {
+    //                 let job_w = job.0.write();
+    //                 if let Err(e) = job_w {
+    //                     eprintln!("Error unlocking job {:?} {:?}, continuing... !!", job_id, e);
+    //                     continue 'next_job_to_search;
+    //                 }
+    //                 let mut job_w = job_w.unwrap();
+    //                 let mut job_data = match job_w.job_data_from_job() {
+    //                     Ok(Some(job_data)) => job_data,
+    //                     _ => {
+    //                         eprintln!("Could not get job data from job {:?}", job_id);
+    //                         continue 'next_job_to_search;
+    //                     }
+    //                 };
+    //
+    //                 job_data.on_done.retain(|u| {
+    //                     let must_retain = !u.eq(&notification_id);
+    //                     ret |= !must_retain;
+    //                     must_retain
+    //                 });
+    //                 job_data.on_removed.retain(|u| {
+    //                     let must_retain = !u.eq(&notification_id);
+    //                     ret |= !must_retain;
+    //                     must_retain
+    //                 });
+    //                 job_data.on_started.retain(|u| {
+    //                     let must_retain = !u.eq(&notification_id);
+    //                     ret |= !must_retain;
+    //                     must_retain
+    //                 });
+    //                 job_data.on_scheduled.retain(|u| {
+    //                     let must_retain = !u.eq(&notification_id);
+    //                     ret |= !must_retain;
+    //                     must_retain
+    //                 });
+    //                 job_data.on_stop.retain(|u| {
+    //                     let must_retain = !u.eq(&notification_id);
+    //                     ret |= !must_retain;
+    //                     must_retain
+    //                 });
+    //                 if let Err(e) = job_w.set_job_data(job_data) {
+    //                     eprintln!("Could not set job data of {:?} {:?}", job_id, e);
+    //                 }
+    //             }
+    //         }
+    //     } else {
+    //         let job_notification_guids = job_notification_guids.write();
+    //         let mut found_once = false;
+    //         {
+    //             let jobs = jobs.write();
+    //             if let Err(e) = jobs {
+    //                 eprintln!("Could not lock jobs {:?}", e);
+    //                 send_failure();
+    //                 continue;
+    //             }
+    //             let mut jobs = jobs.unwrap();
+    //             'next_job: for (job_id, job_locked) in jobs.iter_mut() {
+    //                 let job_data = job_locked.job_data();
+    //                 if let Err(e) = job_data {
+    //                     eprintln!("Could not get job data {:?}", e);
+    //                     continue 'next_job;
+    //                 }
+    //                 let mut job_data = job_data.unwrap();
+    //
+    //                 let mut lists = vec![
+    //                     (JobState::Removed, &mut job_data.on_removed),
+    //                     (JobState::Stop, &mut job_data.on_stop),
+    //                     (JobState::Started, &mut job_data.on_started),
+    //                     (JobState::Done, &mut job_data.on_done),
+    //                     (JobState::Scheduled, &mut job_data.on_scheduled),
+    //                 ];
+    //
+    //                 for (js, list) in lists.iter_mut() {
+    //                     if states.contains(js) {
+    //                         list.retain(|u| {
+    //                             let must_retain = !u.eq(&notification_id);
+    //                             ret |= !must_retain;
+    //                             must_retain
+    //                         });
+    //                     } else {
+    //                         found_once |= list.contains(&notification_id);
+    //                     }
+    //                 }
+    //                 if let Err(e) = job_locked.set_job_data(job_data) {
+    //                     eprintln!("Could not set job data for {:?} {:?}", job_id, e)
+    //                 }
+    //             }
+    //         }
+    //         if !found_once {
+    //             if let Err(e) = job_notification_guids {
+    //                 eprintln!("Could not get lock on job notification guids {:?}", e);
+    //                 continue;
+    //             }
+    //             let mut job_notification_guids = job_notification_guids.unwrap();
+    //             job_notification_guids.remove(&notification_guid);
+    //         }
+    //     }
+    //     if let Err(e) = resp.send(Ok(ret)) {
+    //         eprintln!("Error sending success of removal {:?}", e);
+    //     }
+    // }
 }
 
 fn send_to_tx_channel<T, RET>(
@@ -511,63 +512,64 @@ fn send_to_tx_channel<T, RET>(
     data: T,
     error: JobSchedulerError,
 ) -> Result<RET, JobSchedulerError> {
-    if tx.is_none() {
-        eprintln!("Sender is not set {:?}", error);
-        return Err(error);
-    }
-    let tx = tx.unwrap();
-    let (resp, rx_result) = channel();
-    let msg = Message { data, resp };
-    tx.send(msg).map_err(|e| {
-        eprintln!("Error sending to channel {:?}", e);
-        error
-    })?;
-    let msg = rx_result.recv();
-    match msg {
-        Ok(Ok(ret)) => Ok(ret),
-        Ok(Err(e)) => Err(e),
-        Err(_) => Err(error),
-    }
+    // if tx.is_none() {
+    //     eprintln!("Sender is not set {:?}", error);
+    //     return Err(error);
+    // }
+    // let tx = tx.unwrap();
+    // let (resp, rx_result) = channel();
+    // let msg = Message { data, resp };
+    // tx.send(msg).map_err(|e| {
+    //     eprintln!("Error sending to channel {:?}", e);
+    //     error
+    // })?;
+    // let msg = rx_result.recv();
+    // match msg {
+    //     Ok(Ok(ret)) => Ok(ret),
+    //     Ok(Err(e)) => Err(e),
+    //     Err(_) => Err(error),
+    // }
+    Err(JobSchedulerError::NotifyOnStateError)
 }
 
 impl JobStore for SimpleJobStore {
     fn init(&mut self) -> Result<(), JobSchedulerError> {
-        let (tx_add, rx_add) = channel();
-        self.tx_add_job = Some(tx_add);
-
-        let (tx_remove, rx_remove) = channel();
-        self.tx_remove_job = Some(tx_remove);
-
-        let (tx_notify, rx_notify) = channel();
-        self.tx_notify_on_job_state = Some(tx_notify.clone());
-
-        let (tx_add_notify, rx_add_notify) = channel();
-        self.tx_add_notification = Some(tx_add_notify);
-
-        let (tx_remove_notify, rx_remove_notify) = channel();
-        self.tx_remove_notification = Some(tx_remove_notify.clone());
-
-        let jobs = self.jobs.clone();
-        tokio::task::spawn(listen_for_additions(jobs.clone(), rx_add));
-        tokio::task::spawn(listen_for_removals(
-            jobs,
-            rx_remove,
-            tx_notify,
-            tx_remove_notify,
-        ));
-        tokio::task::spawn(listen_for_notifications(
-            self.job_notification_guids.clone(),
-            rx_notify,
-        ));
-        tokio::task::spawn(listen_for_notification_additions(
-            self.job_notification_guids.clone(),
-            rx_add_notify,
-        ));
-        tokio::task::spawn(listen_for_notification_removals(
-            self.jobs.clone(),
-            self.job_notification_guids.clone(),
-            rx_remove_notify,
-        ));
+        // let (tx_add, rx_add) = channel();
+        // self.tx_add_job = Some(tx_add);
+        //
+        // let (tx_remove, rx_remove) = channel();
+        // self.tx_remove_job = Some(tx_remove);
+        //
+        // let (tx_notify, rx_notify) = channel();
+        // self.tx_notify_on_job_state = Some(tx_notify.clone());
+        //
+        // let (tx_add_notify, rx_add_notify) = channel();
+        // self.tx_add_notification = Some(tx_add_notify);
+        //
+        // let (tx_remove_notify, rx_remove_notify) = channel();
+        // self.tx_remove_notification = Some(tx_remove_notify.clone());
+        //
+        // let jobs = self.jobs.clone();
+        // tokio::task::spawn(listen_for_additions(jobs.clone(), rx_add));
+        // tokio::task::spawn(listen_for_removals(
+        //     jobs,
+        //     rx_remove,
+        //     tx_notify,
+        //     tx_remove_notify,
+        // ));
+        // tokio::task::spawn(listen_for_notifications(
+        //     self.job_notification_guids.clone(),
+        //     rx_notify,
+        // ));
+        // tokio::task::spawn(listen_for_notification_additions(
+        //     self.job_notification_guids.clone(),
+        //     rx_add_notify,
+        // ));
+        // tokio::task::spawn(listen_for_notification_removals(
+        //     self.jobs.clone(),
+        //     self.job_notification_guids.clone(),
+        //     rx_remove_notify,
+        // ));
 
         self.inited = true;
 
