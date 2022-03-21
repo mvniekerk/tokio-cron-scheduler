@@ -1,5 +1,5 @@
+use crate::job::job_data::{JobState, JobStoredData};
 use crate::job::JobLocked;
-use crate::job_data::{JobState, JobStoredData};
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};

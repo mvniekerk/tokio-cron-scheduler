@@ -1,5 +1,5 @@
+use crate::job::job_data::{JobStoredData, JobType};
 use crate::job::{Job, JobToRunAsync};
-use crate::job_data::{JobStoredData, JobType};
 use crate::job_store::JobStoreLocked;
 use crate::{JobScheduler, JobSchedulerError, JobToRun};
 use chrono::{DateTime, Utc};
@@ -27,8 +27,8 @@ impl Job for NonCronJob {
 
     fn repeated_every(&self) -> Option<u64> {
         self.data.job.as_ref().and_then(|jt| match jt {
-            crate::job_data::job_stored_data::Job::CronJob(_) => None,
-            crate::job_data::job_stored_data::Job::NonCronJob(ncj) => Some(ncj.repeated_every),
+            crate::job::job_data::job_stored_data::Job::CronJob(_) => None,
+            crate::job::job_data::job_stored_data::Job::NonCronJob(ncj) => Some(ncj.repeated_every),
         })
     }
 

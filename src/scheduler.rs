@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::job_data::{JobState, JobType};
+use crate::job::job_data::{JobState, JobType};
 use crate::store::MetaDataStorage;
 use chrono::{DateTime, Utc};
 use std::ops::Add;

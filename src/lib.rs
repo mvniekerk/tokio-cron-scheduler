@@ -1,7 +1,6 @@
 mod context;
 mod error;
 mod job;
-mod job_data;
 mod job_scheduler;
 mod job_store;
 #[cfg(feature = "nats_scheduler")]
@@ -15,17 +14,17 @@ pub use crate::nats::NatsJobScheduler;
 use chrono::{DateTime, Utc};
 use cron::Schedule;
 pub use error::JobSchedulerError;
+pub use job::job_data::JobState as JobNotification;
 pub use job::JobLocked as Job;
 pub use job::JobToRun;
 pub use job::OnJobNotification;
-pub use job_data::JobState as JobNotification;
 pub use job_scheduler::JobSchedulerType;
 pub use job_scheduler::JobsSchedulerLocked as JobScheduler;
 use std::ops::Add;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
-use crate::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
+use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
 use uuid::Uuid;
 
 impl From<Uuid> for JobUuid {
@@ -84,7 +83,7 @@ impl JobStoredData {
         self.job
             .as_ref()
             .and_then(|j| match j {
-                crate::job_data::job_stored_data::Job::CronJob(cj) => Some(&*cj.schedule),
+                job::job_data::job_stored_data::Job::CronJob(cj) => Some(&*cj.schedule),
                 _ => None,
             })
             .and_then(|s| Schedule::from_str(s).ok())
@@ -103,8 +102,8 @@ impl JobStoredData {
 
     pub fn repeated_every(&self) -> Option<u64> {
         self.job.as_ref().and_then(|jt| match jt {
-            crate::job_data::job_stored_data::Job::CronJob(_) => None,
-            crate::job_data::job_stored_data::Job::NonCronJob(ncj) => Some(ncj.repeated_every),
+            job::job_data::job_stored_data::Job::CronJob(_) => None,
+            job::job_data::job_stored_data::Job::NonCronJob(ncj) => Some(ncj.repeated_every),
         })
     }
 

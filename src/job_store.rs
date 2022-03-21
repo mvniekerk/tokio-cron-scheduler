@@ -1,5 +1,5 @@
+use crate::job::job_data::{JobState, JobStoredData};
 use crate::job::JobLocked;
-use crate::job_data::{JobState, JobStoredData};
 use crate::simple::SimpleJobStore;
 use crate::{JobSchedulerError, OnJobNotification};
 use std::sync::{Arc, RwLock};

@@ -1,5 +1,5 @@
+use crate::job::job_data::JobState;
 use crate::job::JobLocked;
-use crate::job_data::JobState;
 use crate::job_scheduler::{
     JobSchedulerType, JobSchedulerWithoutSync, JobsSchedulerLocked, ShutdownNotification,
 };

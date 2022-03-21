@@ -1,4 +1,4 @@
-use crate::job_data::{JobState, NotificationData};
+use crate::job::job_data::{JobState, NotificationData};
 use crate::store::{CodeGet, DataStore, InitStore};
 use crate::{JobSchedulerError, OnJobNotification};
 use std::future::Future;

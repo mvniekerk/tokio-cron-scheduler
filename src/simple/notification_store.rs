@@ -1,4 +1,4 @@
-use crate::job_data::{JobIdAndNotification, JobState, NotificationData};
+use crate::job::job_data::{JobIdAndNotification, JobState, NotificationData};
 use crate::store::{DataStore, InitStore, NotificationStore};
 use crate::JobSchedulerError;
 use std::collections::HashMap;

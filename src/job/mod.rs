@@ -1,7 +1,7 @@
-use crate::job_data::{JobState, JobStoredData, JobType};
+use crate::job::job_data::{JobState, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::job_store::JobStoreLocked;
-use crate::{JobScheduler, JobSchedulerError};
+use crate::{JobScheduler, JobSchedulerError, JobStoredData};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
 use cron_job::CronJob;
@@ -15,6 +15,7 @@ use tokio::sync::oneshot::Receiver;
 use uuid::Uuid;
 
 mod cron_job;
+pub mod job_data;
 mod non_cron_job;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
@@ -104,11 +105,9 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::CronJob(
-                    crate::job_data::CronJob {
-                        schedule: schedule.to_string(),
-                    },
-                )),
+                job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
+                    schedule: schedule.to_string(),
+                })),
             },
             run: Box::new(run),
             run_async: Box::new(nop_async),
@@ -152,11 +151,9 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::CronJob(
-                    crate::job_data::CronJob {
-                        schedule: schedule.to_string(),
-                    },
-                )),
+                job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
+                    schedule: schedule.to_string(),
+                })),
             },
             run: Box::new(nop),
             run_async: Box::new(run),
@@ -231,8 +228,8 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::NonCronJob(
-                    crate::job_data::NonCronJob {
+                job: Some(job_data::job_stored_data::Job::NonCronJob(
+                    job_data::NonCronJob {
                         repeating: false,
                         repeated_every: duration.as_secs(),
                     },
@@ -313,8 +310,8 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::NonCronJob(
-                    crate::job_data::NonCronJob {
+                job: Some(job_data::job_stored_data::Job::NonCronJob(
+                    job_data::NonCronJob {
                         repeating: false,
                         repeated_every: instant.duration_since(Instant::now()).as_secs(),
                     },
@@ -401,8 +398,8 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::NonCronJob(
-                    crate::job_data::NonCronJob {
+                job: Some(job_data::job_stored_data::Job::NonCronJob(
+                    job_data::NonCronJob {
                         repeating: true,
                         repeated_every: duration.as_secs(),
                     },

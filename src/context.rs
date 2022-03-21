@@ -1,5 +1,5 @@
+use crate::job::job_data::{JobState, NotificationData};
 use crate::job::JobLocked;
-use crate::job_data::{JobState, NotificationData};
 use crate::OnJobNotification;
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast::{Receiver, Sender};
