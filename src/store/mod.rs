@@ -27,7 +27,7 @@ where
     fn add_or_update(
         &mut self,
         data: DATA,
-    ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>>;
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>>;
 
     fn delete(&mut self, guid: Uuid) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>>;
 }

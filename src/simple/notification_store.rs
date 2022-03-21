@@ -57,10 +57,10 @@ impl DataStore<NotificationData> for SimpleNotificationStore {
     fn add_or_update(
         &mut self,
         data: NotificationData,
-    ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let jobs = self.notification_vs_job.clone();
         let notifications = self.data.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let id = data.job_id.as_ref();
             match id {
                 Some(val) => {

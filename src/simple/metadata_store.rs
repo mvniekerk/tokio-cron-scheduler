@@ -31,10 +31,10 @@ impl DataStore<JobStoredData> for SimpleMetadataStore {
     fn add_or_update(
         &mut self,
         data: JobStoredData,
-    ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let id: Uuid = data.id.as_ref().unwrap().into();
         let job_data = self.data.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let mut w = job_data.write().await;
             w.insert(id, data);
             Ok(())
