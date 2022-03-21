@@ -32,110 +32,110 @@ impl JobSchedulerWithoutSync for SimpleJobScheduler {
     }
 
     fn tick(&mut self, scheduler: JobsSchedulerLocked) -> Result<(), JobSchedulerError> {
-        // let guids = self.job_store.list_job_guids()?;
-        // for guid in guids {
-        //     let jl = {
-        //         let job = self.job_store.get_job(&guid);
-        //         match job {
-        //             Ok(Some(job)) => {
-        //                 let stopped = job.clone();
-        //                 let stopped = stopped.0.read();
-        //                 if let Err(e) = stopped {
-        //                     eprintln!("Could not read {:?} {:?}", guid, e);
-        //                     continue;
-        //                 }
-        //                 let stopped = stopped.unwrap();
-        //                 let stopped = stopped.stop();
-        //
-        //                 match stopped {
-        //                     true => None,
-        //                     false => Some(job),
-        //                 }
-        //             }
-        //             _ => continue,
-        //         }
-        //     };
-        //     if jl.is_none() {
-        //         continue;
-        //     }
-        //     let mut jl = jl.unwrap();
-        //
-        //     let tick = jl.tick();
-        //     if matches!(tick, Err(JobSchedulerError::NoNextTick)) {
-        //         let mut js = self.job_store.clone();
-        //         tokio::spawn(async move {
-        //             let guid = guid;
-        //             if let Err(e) = js.remove(&guid) {
-        //                 eprintln!("Error removing {:?} {:?}", guid, e);
-        //             }
-        //         });
-        //         continue;
-        //     }
-        //
-        //     if tick.is_err() {
-        //         eprintln!("Error running tick on {:?}", guid);
-        //         continue;
-        //     }
-        //
-        //     let mut js = self.job_store.clone();
-        //     let job_data = jl
-        //         .job_data()
-        //         .and_then(|jd| js.update_job_data(jd))
-        //         .and_then(|()| jl.job_data());
-        //
-        //     if matches!(tick, Ok(false)) {
-        //         continue;
-        //     }
-        //
-        //     let mut js = self.job_store.clone();
-        //     let mut on_started: Vec<Uuid> = vec![];
-        //     let mut on_done = vec![];
-        //     if let Ok(jd) = job_data {
-        //         on_started = jd.on_started.iter().map(|id| id.into()).collect::<Vec<_>>();
-        //         on_done = jd.on_done.iter().map(|id| id.into()).collect::<Vec<_>>();
-        //         tokio::spawn(async move {
-        //             if let Err(e) = js.update_job_data(jd) {
-        //                 eprintln!("Error updating job data {:?}", e);
-        //             }
-        //         });
-        //     } else {
-        //         eprintln!("Error getting job data!");
-        //     }
-        //
-        //     let ref_for_later = jl.0.clone();
-        //     let jobs = scheduler.clone();
-        //     tokio::spawn(async move {
-        //         let e = ref_for_later.write();
-        //         if let Ok(mut w) = e {
-        //             let job_id = w.job_id();
-        //             match jobs.get_job_store() {
-        //                 Ok(mut job_store) => {
-        //                     if let Err(err) = job_store.notify_on_job_state(
-        //                         &job_id,
-        //                         JobState::Started,
-        //                         on_started,
-        //                     ) {
-        //                         eprintln!("Error notifying on job started {:?}", err);
-        //                     }
-        //                     let rx = w.run(jobs);
-        //                     tokio::spawn(async move {
-        //                         if let Err(e) = rx.await {
-        //                             eprintln!("Error waiting for task to finish {:?}", e);
-        //                         }
-        //                         if let Err(err) =
-        //                             job_store.notify_on_job_state(&job_id, JobState::Done, on_done)
-        //                         {
-        //                             eprintln!("Error notifying on job started {:?}", err);
-        //                         }
-        //                     });
-        //                 }
-        //                 Err(e) => {
-        //                     eprintln!("Error getting job store {:?}", e);
-        //                 }
-        //             };
-        //         }
-        //     });
-        // }
+        let guids = self.job_store.list_job_guids()?;
+        for guid in guids {
+            let jl = {
+                let job = self.job_store.get_job(&guid);
+                match job {
+                    Ok(Some(job)) => {
+                        let stopped = job.clone();
+                        let stopped = stopped.0.read();
+                        if let Err(e) = stopped {
+                            eprintln!("Could not read {:?} {:?}", guid, e);
+                            continue;
+                        }
+                        let stopped = stopped.unwrap();
+                        let stopped = stopped.stop();
+
+                        match stopped {
+                            true => None,
+                            false => Some(job),
+                        }
+                    }
+                    _ => continue,
+                }
+            };
+            if jl.is_none() {
+                continue;
+            }
+            let mut jl = jl.unwrap();
+
+            let tick = jl.tick();
+            if matches!(tick, Err(JobSchedulerError::NoNextTick)) {
+                let mut js = self.job_store.clone();
+                tokio::spawn(async move {
+                    let guid = guid;
+                    if let Err(e) = js.remove(&guid) {
+                        eprintln!("Error removing {:?} {:?}", guid, e);
+                    }
+                });
+                continue;
+            }
+
+            if tick.is_err() {
+                eprintln!("Error running tick on {:?}", guid);
+                continue;
+            }
+
+            let mut js = self.job_store.clone();
+            let job_data = jl
+                .job_data()
+                .and_then(|jd| js.update_job_data(jd))
+                .and_then(|()| jl.job_data());
+
+            if matches!(tick, Ok(false)) {
+                continue;
+            }
+
+            let mut js = self.job_store.clone();
+            let mut on_started: Vec<Uuid> = vec![];
+            let mut on_done = vec![];
+            if let Ok(jd) = job_data {
+                // on_started = jd.on_started.iter().map(|id| id.into()).collect::<Vec<_>>();
+                // on_done = jd.on_done.iter().map(|id| id.into()).collect::<Vec<_>>();
+                // tokio::spawn(async move {
+                //     if let Err(e) = js.update_job_data(jd) {
+                //         eprintln!("Error updating job data {:?}", e);
+                //     }
+                // });
+            } else {
+                eprintln!("Error getting job data!");
+            }
+
+            let ref_for_later = jl.0.clone();
+            let jobs = scheduler.clone();
+            tokio::spawn(async move {
+                let e = ref_for_later.write();
+                if let Ok(mut w) = e {
+                    let job_id = w.job_id();
+                    match jobs.get_job_store() {
+                        Ok(mut job_store) => {
+                            if let Err(err) = job_store.notify_on_job_state(
+                                &job_id,
+                                JobState::Started,
+                                on_started,
+                            ) {
+                                eprintln!("Error notifying on job started {:?}", err);
+                            }
+                            let rx = w.run(jobs);
+                            tokio::spawn(async move {
+                                if let Err(e) = rx.await {
+                                    eprintln!("Error waiting for task to finish {:?}", e);
+                                }
+                                if let Err(err) =
+                                    job_store.notify_on_job_state(&job_id, JobState::Done, on_done)
+                                {
+                                    eprintln!("Error notifying on job started {:?}", err);
+                                }
+                            });
+                        }
+                        Err(e) => {
+                            eprintln!("Error getting job store {:?}", e);
+                        }
+                    };
+                }
+            });
+        }
 
         Ok(())
     }

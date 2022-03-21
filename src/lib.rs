@@ -8,6 +8,7 @@ mod job_store;
 #[cfg(feature = "nats_scheduler")]
 mod nats;
 mod non_cron_job;
+mod scheduler;
 mod simple;
 mod store;
 

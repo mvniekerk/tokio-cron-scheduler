@@ -4,6 +4,7 @@ use crate::JobSchedulerError;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -64,14 +65,18 @@ impl InitStore for SimpleMetadataStore {
 impl MetaDataStorage for SimpleMetadataStore {
     fn list_next_ticks(
         &mut self,
-    ) -> Box<dyn Future<Output = Result<Vec<JobAndNextTick>, JobSchedulerError>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<JobAndNextTick>, JobSchedulerError>> + Send>> {
         let data = self.data.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let r = data.read().await;
             let ret = r
                 .iter()
-                .map(|(_, v)| (v.id.clone(), v.next_tick))
-                .map(|(id, next_tick)| JobAndNextTick { id, next_tick })
+                .map(|(_, v)| (v.id.clone(), v.next_tick, v.last_tick))
+                .map(|(id, next_tick, last_tick)| JobAndNextTick {
+                    id,
+                    next_tick,
+                    last_tick,
+                })
                 .collect::<Vec<_>>();
             Ok(ret)
         })

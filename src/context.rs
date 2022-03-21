@@ -1,6 +1,7 @@
 use crate::job::JobLocked;
 use crate::job_data::{JobState, NotificationData};
 use crate::OnJobNotification;
+use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast::{Receiver, Sender};
 use uuid::Uuid;
 
@@ -23,8 +24,8 @@ pub struct Context {
     pub job_deleted_tx: Sender<Uuid>,
     pub job_deleted_rx: Receiver<Uuid>,
 
-    pub notify_create_tx: Sender<(NotificationData, OnJobNotification)>,
-    pub notify_create_rx: Receiver<(NotificationData, OnJobNotification)>,
+    pub notify_create_tx: Sender<(NotificationData, Box<Arc<RwLock<OnJobNotification>>>)>,
+    pub notify_create_rx: Receiver<(NotificationData, Box<Arc<RwLock<OnJobNotification>>>)>,
 
     pub notify_created_tx: Sender<Uuid>,
     pub notify_created_rx: Receiver<Uuid>,

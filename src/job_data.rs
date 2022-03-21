@@ -79,6 +79,8 @@ pub struct JobAndNextTick {
     pub id: ::core::option::Option<Uuid>,
     #[prost(uint64, tag="2")]
     pub next_tick: u64,
+    #[prost(uint64, optional, tag="3")]
+    pub last_tick: ::core::option::Option<u64>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]

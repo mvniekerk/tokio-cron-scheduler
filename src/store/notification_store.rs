@@ -2,7 +2,6 @@ use crate::job_data::{JobState, NotificationData};
 use crate::store::{CodeGet, DataStore, InitStore};
 use crate::{JobSchedulerError, OnJobNotification};
 use std::future::Future;
-use std::pin::Pin;
 use uuid::Uuid;
 
 pub trait NotificationStore: DataStore<NotificationData> + InitStore {
