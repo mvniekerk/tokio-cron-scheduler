@@ -1,5 +1,4 @@
 mod context;
-mod cron_job;
 mod error;
 mod job;
 mod job_data;
@@ -7,7 +6,6 @@ mod job_scheduler;
 mod job_store;
 #[cfg(feature = "nats_scheduler")]
 mod nats;
-mod non_cron_job;
 mod scheduler;
 mod simple;
 mod store;

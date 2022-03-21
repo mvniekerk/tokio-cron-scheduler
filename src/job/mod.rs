@@ -1,11 +1,11 @@
-use crate::cron_job::CronJob;
 use crate::job_data::{JobState, JobStoredData, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::job_store::JobStoreLocked;
-use crate::non_cron_job::NonCronJob;
 use crate::{JobScheduler, JobSchedulerError};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+use cron_job::CronJob;
+use non_cron_job::NonCronJob;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -13,6 +13,9 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::oneshot::Receiver;
 use uuid::Uuid;
+
+mod cron_job;
+mod non_cron_job;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
 pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
