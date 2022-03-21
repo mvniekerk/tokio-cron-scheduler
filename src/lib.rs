@@ -5,7 +5,7 @@ mod job_scheduler;
 mod job_store;
 #[cfg(feature = "nats_scheduler")]
 mod nats;
-mod notification_runner;
+mod notification;
 mod scheduler;
 mod simple;
 mod store;
