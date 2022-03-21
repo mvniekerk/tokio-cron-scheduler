@@ -22,6 +22,6 @@ where
     ) -> Pin<Box<dyn Future<Output = Result<Option<Arc<RwLock<T>>>, JobSchedulerError>> + Send>>;
 }
 
-pub trait JobCode: ToCode<Box<JobToRunAsync>> {}
+pub trait JobCode: ToCode<Box<JobToRunAsync>> + Send {}
 
 pub trait NotificationCode: ToCode<Box<OnJobNotification>> {}
