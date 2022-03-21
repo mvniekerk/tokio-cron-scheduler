@@ -65,7 +65,8 @@ message NotificationIdAndState {
 
 message JobAndNextTick {
   Uuid id = 1;
-  uint64 next_tick = 2;
-  optional uint64 last_tick = 3;
+  JobType job_type = 2;
+  uint64 next_tick = 3;
+  optional uint64 last_tick = 4;
 }
 

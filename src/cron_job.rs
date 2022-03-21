@@ -23,14 +23,7 @@ impl Job for CronJob {
     }
 
     fn schedule(&self) -> Option<Schedule> {
-        self.data
-            .job
-            .as_ref()
-            .and_then(|j| match j {
-                crate::job_data::job_stored_data::Job::CronJob(cj) => Some(&*cj.schedule),
-                _ => None,
-            })
-            .and_then(|s| Schedule::from_str(s).ok())
+        self.data.schedule()
     }
 
     fn repeated_every(&self) -> Option<u64> {
@@ -38,10 +31,7 @@ impl Job for CronJob {
     }
 
     fn last_tick(&self) -> Option<DateTime<Utc>> {
-        self.data
-            .last_tick
-            .map(|lt| SystemTime::UNIX_EPOCH.add(Duration::from_secs(lt)))
-            .map(DateTime::from)
+        self.data.last_tick_utc()
     }
 
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>) {
@@ -49,13 +39,7 @@ impl Job for CronJob {
     }
 
     fn next_tick(&self) -> Option<DateTime<Utc>> {
-        if self.data.next_tick == 0 {
-            None
-        } else {
-            Some(self.data.next_tick)
-                .map(|lt| SystemTime::UNIX_EPOCH.add(Duration::from_secs(lt)))
-                .map(DateTime::from)
-        }
+        self.data.next_tick_utc()
     }
 
     fn set_next_tick(&mut self, tick: Option<DateTime<Utc>>) {

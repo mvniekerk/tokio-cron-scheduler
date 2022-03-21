@@ -22,7 +22,7 @@ where
     fn get(
         &mut self,
         id: Uuid,
-    ) -> Box<dyn Future<Output = Result<Option<DATA>, JobSchedulerError>>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Option<DATA>, JobSchedulerError>> + Send>>;
 
     fn add_or_update(
         &mut self,

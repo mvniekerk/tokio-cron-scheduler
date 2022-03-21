@@ -9,8 +9,8 @@ pub struct Context {
     pub job_activation_tx: Sender<Uuid>,
     pub job_activation_rx: Receiver<Uuid>,
 
-    pub notify_tx: Sender<Uuid>,
-    pub notify_rx: Receiver<Uuid>,
+    pub notify_tx: Sender<(Uuid, JobState)>,
+    pub notify_rx: Receiver<(Uuid, JobState)>,
 
     pub job_create_tx: Sender<JobLocked>,
     pub job_create_rx: Receiver<JobLocked>,

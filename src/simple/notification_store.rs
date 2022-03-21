@@ -3,6 +3,7 @@ use crate::store::{DataStore, InitStore, NotificationStore};
 use crate::JobSchedulerError;
 use std::collections::HashMap;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::{RwLock, RwLockReadGuard};
 use uuid::Uuid;
@@ -29,10 +30,11 @@ impl DataStore<NotificationData> for SimpleNotificationStore {
     fn get(
         &mut self,
         id: Uuid,
-    ) -> Box<dyn Future<Output = Result<Option<NotificationData>, JobSchedulerError>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Option<NotificationData>, JobSchedulerError>> + Send>>
+    {
         let data = self.data.clone();
         let job = self.notification_vs_job.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let job = job.read().await;
             let job = job.get(&id);
             match job {

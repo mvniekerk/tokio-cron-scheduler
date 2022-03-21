@@ -77,9 +77,11 @@ pub struct NotificationIdAndState {
 pub struct JobAndNextTick {
     #[prost(message, optional, tag="1")]
     pub id: ::core::option::Option<Uuid>,
-    #[prost(uint64, tag="2")]
+    #[prost(enumeration="JobType", tag="2")]
+    pub job_type: i32,
+    #[prost(uint64, tag="3")]
     pub next_tick: u64,
-    #[prost(uint64, optional, tag="3")]
+    #[prost(uint64, optional, tag="4")]
     pub last_tick: ::core::option::Option<u64>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

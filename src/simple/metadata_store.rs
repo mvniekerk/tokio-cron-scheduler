@@ -18,9 +18,10 @@ impl DataStore<JobStoredData> for SimpleMetadataStore {
     fn get(
         &mut self,
         id: Uuid,
-    ) -> Box<dyn Future<Output = Result<Option<JobStoredData>, JobSchedulerError>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Option<JobStoredData>, JobSchedulerError>> + Send>>
+    {
         let data = self.data.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let r = data.write().await;
             let val = r.get(&id).cloned();
             Ok(val)
@@ -71,29 +72,32 @@ impl MetaDataStorage for SimpleMetadataStore {
             let r = data.read().await;
             let ret = r
                 .iter()
-                .map(|(_, v)| (v.id.clone(), v.next_tick, v.last_tick))
-                .map(|(id, next_tick, last_tick)| JobAndNextTick {
+                .map(|(_, v)| (v.id.clone(), v.next_tick, v.last_tick, v.job_type))
+                .map(|(id, next_tick, last_tick, job_type)| JobAndNextTick {
                     id,
                     next_tick,
                     last_tick,
+                    job_type: job_type.into(),
                 })
                 .collect::<Vec<_>>();
             Ok(ret)
         })
     }
 
-    fn set_next_tick(
+    fn set_next_and_last_tick(
         &mut self,
         guid: Uuid,
-        next_tick: DateTime<Utc>,
-    ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
+        next_tick: Option<DateTime<Utc>>,
+        last_tick: Option<DateTime<Utc>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let data = self.data.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let mut w = data.write().await;
             let val = w.get_mut(&guid);
             match val {
                 Some(mut val) => {
-                    val.next_tick = next_tick.timestamp() as u64;
+                    val.set_next_tick(next_tick);
+                    val.set_last_tick(last_tick);
                     Ok(())
                 }
                 None => Err(JobSchedulerError::UpdateJobData),

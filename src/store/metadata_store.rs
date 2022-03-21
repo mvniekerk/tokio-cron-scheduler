@@ -11,11 +11,12 @@ pub trait MetaDataStorage: DataStore<JobStoredData> + InitStore {
     fn list_next_ticks(
         &mut self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<JobAndNextTick>, JobSchedulerError>> + Send>>;
-    fn set_next_tick(
+    fn set_next_and_last_tick(
         &mut self,
         guid: Uuid,
-        next_tick: DateTime<Utc>,
-    ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>>;
+        next_tick: Option<DateTime<Utc>>,
+        last_tick: Option<DateTime<Utc>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>>;
 }
 
 pub trait JobCodeGet: CodeGet<Box<JobToRunAsync>> {}
