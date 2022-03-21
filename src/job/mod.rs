@@ -17,6 +17,7 @@ use uuid::Uuid;
 mod cron_job;
 pub mod job_data;
 mod non_cron_job;
+pub mod to_code;
 
 pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
 pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
