@@ -2,7 +2,7 @@ use crate::job::job_data::{JobState, NotificationData};
 use crate::job::to_code::{JobCode, NotificationCode};
 use crate::job::{JobLocked, JobToRunAsync};
 use crate::store::{MetaDataStorage, NotificationStore};
-use crate::{JobStoredData, OnJobNotification};
+use crate::{JobSchedulerError, JobStoredData, OnJobNotification};
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
@@ -18,8 +18,8 @@ pub struct Context {
     pub job_create_tx: Sender<(JobStoredData, Arc<RwLock<Box<JobToRunAsync>>>)>,
     pub job_create_rx: Receiver<(JobStoredData, Arc<RwLock<Box<JobToRunAsync>>>)>,
 
-    pub job_created_tx: Sender<Uuid>,
-    pub job_created_rx: Receiver<Uuid>,
+    pub job_created_tx: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
+    pub job_created_rx: Receiver<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
 
     pub job_delete_tx: Sender<Uuid>,
     pub job_delete_rx: Receiver<Uuid>,
@@ -42,8 +42,7 @@ pub struct Context {
     pub metadata_storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
     pub notification_storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
     pub job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
-    pub notification_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>
-    pub job_scheduler: JobSch
+    pub notification_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>,
 }
 
 impl Context {

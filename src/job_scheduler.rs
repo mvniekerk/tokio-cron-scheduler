@@ -24,7 +24,7 @@ pub type ShutdownNotification =
 
 /// The JobScheduler contains and executes the scheduled jobs.
 pub struct JobsSchedulerLocked {
-    pub context: Arc<RwLock<Context>>,
+    pub context: Arc<Context>,
     pub inited: bool,
     pub job_creator: Arc<RwLock<JobCreator>>,
     pub job_deleter: Arc<RwLock<JobDeleter>>,
@@ -61,7 +61,7 @@ impl JobsSchedulerLocked {
         notification_storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
         notify_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>,
-    ) -> Result<Arc<RwLock<Context>>, JobSchedulerError> {
+    ) -> Result<Arc<Context>, JobSchedulerError> {
         {
             let mut metadata_storage = metadata_storage.write().await;
             metadata_storage.init().await?;
@@ -84,7 +84,7 @@ impl JobsSchedulerLocked {
             let mut notification_code = notify_code.write().await;
             notification_code.init(&context).await?;
         }
-        Ok(Arc::new(RwLock::new(context)))
+        Ok(Arc::new(context))
     }
 
     async fn init_actors(mut self) -> Result<(), JobSchedulerError> {
@@ -99,7 +99,6 @@ impl JobsSchedulerLocked {
             notification_runner,
             ..
         } = self;
-        let context = context.read().await;
 
         {
             let mut job_creator = job_creator.write().await;
@@ -259,15 +258,9 @@ impl JobsSchedulerLocked {
             self.init()?;
         }
 
-        let mut js = self.get_job_store()?;
-        let inited = js.inited()?;
-        if !inited {
-            js.init()?;
-        }
-        {
-            let mut self_w = self.0.write().map_err(|_e| JobSchedulerError::CantAdd)?;
-            self_w.add(job)?;
-        }
+        let context = self.context.clone();
+        JobCreator::add(&context, job)?;
+
         Ok(())
     }
 
