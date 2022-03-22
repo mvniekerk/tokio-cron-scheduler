@@ -11,15 +11,10 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-pub struct JobRunner {
-    pub job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
-}
+#[derive(Default)]
+pub struct JobRunner {}
 
 impl JobRunner {
-    pub fn new(job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>) -> Self {
-        Self { job_code }
-    }
-
     async fn listen_for_activations(
         job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
         mut rx: Receiver<Uuid>,
@@ -69,7 +64,7 @@ impl JobRunner {
         context: &Context,
         job_scheduler: JobsSchedulerLocked,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
-        let job_code = self.job_code.clone();
+        let job_code = context.job_code.clone();
         let notify_tx = context.notify_tx.clone();
         let job_activation_rx = context.job_activation_tx.subscribe();
 

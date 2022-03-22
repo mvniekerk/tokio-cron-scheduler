@@ -14,6 +14,16 @@ pub struct SimpleNotificationStore {
     pub inited: bool,
 }
 
+impl Default for SimpleNotificationStore {
+    fn default() -> Self {
+        Self {
+            data: Arc::new(RwLock::new(HashMap::new())),
+            notification_vs_job: Arc::new(RwLock::new(HashMap::new())),
+            inited: false,
+        }
+    }
+}
+
 impl InitStore for SimpleNotificationStore {
     fn init(&mut self) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
         self.inited = true;

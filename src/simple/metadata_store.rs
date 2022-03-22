@@ -14,6 +14,15 @@ pub struct SimpleMetadataStore {
     pub inited: bool,
 }
 
+impl Default for SimpleMetadataStore {
+    fn default() -> Self {
+        Self {
+            data: Arc::new(RwLock::new(HashMap::new())),
+            inited: false,
+        }
+    }
+}
+
 impl DataStore<JobStoredData> for SimpleMetadataStore {
     fn get(
         &mut self,

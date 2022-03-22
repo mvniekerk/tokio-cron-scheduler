@@ -9,6 +9,7 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+#[derive(Default)]
 pub struct JobCreator {}
 
 impl JobCreator {

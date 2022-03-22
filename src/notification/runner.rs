@@ -10,22 +10,10 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-pub struct NotificationRunner {
-    pub notify_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>,
-    pub storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
-}
+#[derive(Default)]
+pub struct NotificationRunner {}
 
 impl NotificationRunner {
-    pub fn new(
-        notify_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>,
-        storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
-    ) -> Self {
-        Self {
-            notify_code,
-            storage,
-        }
-    }
-
     async fn listen_for_activations(
         code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>,
         mut rx: Receiver<(Uuid, JobState)>,
@@ -76,9 +64,9 @@ impl NotificationRunner {
         &mut self,
         context: &Context,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
-        let code = self.notify_code.clone();
+        let code = context.notification_code.clone();
         let rx = context.notify_tx.subscribe();
-        let storage = self.storage.clone();
+        let storage = context.notification_storage.clone();
 
         Box::pin(async move {
             tokio::spawn(NotificationRunner::listen_for_activations(

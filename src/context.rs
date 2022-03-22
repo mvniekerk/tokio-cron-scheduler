@@ -1,4 +1,5 @@
 use crate::job::job_data::{JobState, NotificationData};
+use crate::job::to_code::{JobCode, NotificationCode};
 use crate::job::{JobLocked, JobToRunAsync};
 use crate::store::{MetaDataStorage, NotificationStore};
 use crate::{JobStoredData, OnJobNotification};
@@ -40,12 +41,17 @@ pub struct Context {
     // TODO need to add when notification was deleted and there's no more references to it
     pub metadata_storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
     pub notification_storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
+    pub job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
+    pub notification_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>
+    pub job_scheduler: JobSch
 }
 
 impl Context {
     pub fn new(
         metadata_storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
         notification_storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
+        job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
+        notification_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>,
     ) -> Self {
         let (job_activation_tx, job_activation_rx) = tokio::sync::broadcast::channel(200);
         let (notify_tx, notify_rx) = tokio::sync::broadcast::channel(200);
@@ -81,6 +87,8 @@ impl Context {
             notify_deleted_rx,
             metadata_storage,
             notification_storage,
+            job_code,
+            notification_code,
         }
     }
 }

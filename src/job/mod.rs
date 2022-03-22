@@ -21,6 +21,9 @@ pub mod job_data;
 mod non_cron_job;
 mod runner;
 pub mod to_code;
+pub use creator::JobCreator;
+pub use deleter::JobDeleter;
+pub use runner::JobRunner;
 
 pub type JobId = Uuid;
 pub type NotificationId = Uuid;
