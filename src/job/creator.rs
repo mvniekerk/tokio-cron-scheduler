@@ -83,15 +83,18 @@ impl JobCreator {
                 return;
             }
             let data = data.unwrap();
-            let job = move |job_id, job_scheduler| {
+            let job: Box<JobToRunAsync> = Box::new(move |job_id, job_scheduler| {
                 let job = job.clone();
                 Box::pin(async move {
-                    let w = job.0.write();
-                    if let Err(e) = w {
-                        eprintln!("Error getting job {:?}", e);
-                    }
-                    let mut w = w.unwrap();
-                    let job_done = w.run(job_scheduler);
+                    let job_done = {
+                        let w = job.0.write();
+                        if let Err(e) = w {
+                            eprintln!("Error getting job {:?}", e);
+                            return;
+                        }
+                        let mut w = w.unwrap();
+                        w.run(job_scheduler)
+                    };
                     let job_done = job_done.await;
                     match job_done {
                         Err(e) => {
@@ -104,8 +107,8 @@ impl JobCreator {
                         }
                     }
                 })
-            };
-            let job = Arc::new(RwLock::new(Box::new(job)));
+            });
+            let job = Arc::new(RwLock::new(job));
 
             if let Err(e) = tx.send((data, job)) {
                 eprintln!("Error sending new job");

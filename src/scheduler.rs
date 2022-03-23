@@ -10,37 +10,32 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 pub struct Scheduler {
-    pub job_activation_tx: Sender<Uuid>,
-    pub job_delete_tx: Sender<Uuid>,
-    pub notify_tx: Sender<(Uuid, JobState)>,
     pub shutdown: Arc<RwLock<bool>>,
-    pub metadata_store: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
+    pub inited: bool,
+}
+
+impl Default for Scheduler {
+    fn default() -> Self {
+        Self {
+            shutdown: Arc::new(RwLock::new(false)),
+            inited: false,
+        }
+    }
 }
 
 impl Scheduler {
-    fn new(
-        context: &Context,
-        metadata_store: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
-    ) -> Self {
+    pub fn init(&mut self, context: &Context) {
+        if self.inited {
+            return;
+        }
+
         let job_activation_tx = context.job_activation_tx.clone();
         let notify_tx = context.notify_tx.clone();
         let job_delete_tx = context.job_delete_tx.clone();
-
-        Self {
-            job_activation_tx,
-            notify_tx,
-            shutdown: Arc::new(RwLock::new(false)),
-            metadata_store,
-            job_delete_tx,
-        }
-    }
-
-    fn start(&self) {
-        let job_activation_tx = self.job_activation_tx.clone();
-        let job_delete_tx = self.job_delete_tx.clone();
-        let notify_tx = self.notify_tx.clone();
         let shutdown = self.shutdown.clone();
-        let store = self.metadata_store.clone();
+        let metadata_storage = context.metadata_storage.clone();
+
+        self.inited = true;
 
         tokio::spawn(async move {
             'next_tick: loop {
@@ -54,7 +49,7 @@ impl Scheduler {
                 tokio::time::sleep(Duration::from_millis(500)).await;
                 let now = Utc::now();
                 let next_ticks = {
-                    let mut w = store.write().await;
+                    let mut w = metadata_storage.write().await;
                     w.list_next_ticks().await
                 };
                 if let Err(e) = next_ticks {
@@ -132,7 +127,7 @@ impl Scheduler {
                         tokio::spawn(async move { if let Err(e) = tx.send(uuid) {} });
                     }
 
-                    let storage = store.clone();
+                    let storage = metadata_storage.clone();
                     tokio::spawn(async move {
                         let mut w = storage.write().await;
                         let job = w.get(uuid.clone()).await;
@@ -174,7 +169,7 @@ impl Scheduler {
         });
     }
 
-    async fn shutdown(&mut self) {
+    pub async fn shutdown(&mut self) {
         let mut w = self.shutdown.write().await;
         *w = true;
     }

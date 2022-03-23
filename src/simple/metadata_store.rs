@@ -64,14 +64,14 @@ impl DataStore<JobStoredData> for SimpleMetadataStore {
 }
 
 impl InitStore for SimpleMetadataStore {
-    fn init(&mut self) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
+    fn init(&mut self) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
         self.inited = true;
-        Box::new(std::future::ready(Ok(())))
+        Box::pin(std::future::ready(Ok(())))
     }
 
-    fn inited(&mut self) -> Box<dyn Future<Output = Result<bool, JobSchedulerError>>> {
+    fn inited(&mut self) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>>>> {
         let val = self.inited;
-        Box::new(std::future::ready(Ok(val)))
+        Box::pin(std::future::ready(Ok(val)))
     }
 }
 

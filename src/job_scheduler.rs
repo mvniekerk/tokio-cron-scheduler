@@ -5,6 +5,7 @@ use crate::job::to_code::{JobCode, NotificationCode};
 use crate::job::{JobCreator, JobDeleter, JobLocked, JobRunner};
 use crate::job_store::{JobStore, JobStoreLocked};
 use crate::notification::{NotificationCreator, NotificationDeleter, NotificationRunner};
+use crate::scheduler::Scheduler;
 use crate::simple::{
     SimpleJobCode, SimpleJobScheduler, SimpleMetadataStore, SimpleNotificationCode,
     SimpleNotificationStore,
@@ -32,6 +33,7 @@ pub struct JobsSchedulerLocked {
     pub notification_creator: Arc<RwLock<NotificationCreator>>,
     pub notification_deleter: Arc<RwLock<NotificationDeleter>>,
     pub notification_runner: Arc<RwLock<NotificationRunner>>,
+    pub scheduler: Arc<RwLock<Scheduler>>,
 }
 
 impl Clone for JobsSchedulerLocked {
@@ -45,6 +47,7 @@ impl Clone for JobsSchedulerLocked {
             notification_creator: self.notification_creator.clone(),
             notification_deleter: self.notification_deleter.clone(),
             notification_runner: self.notification_runner.clone(),
+            scheduler: self.scheduler.clone(),
         }
     }
 }
@@ -106,7 +109,7 @@ impl JobsSchedulerLocked {
         }
 
         {
-            let mut job_deleter = job_deleter.write().await?;
+            let mut job_deleter = job_deleter.write().await;
             job_deleter.init(&context).await?;
         }
 
@@ -206,15 +209,15 @@ impl JobsSchedulerLocked {
     /// Create a new `JobsSchedulerLocked` using custom metadata and notification runners, job and notification
     /// code providers
     pub fn new_with_storage_and_code(
-        metadata_storage: Box<dyn JobStore + Send + Sync>,
+        metadata_storage: Box<dyn MetaDataStorage + Send + Sync>,
         notification_storage: Box<dyn NotificationStore + Send + Sync>,
         job_code: Box<dyn JobCode + Send + Sync>,
         notification_code: Box<dyn NotificationCode + Send + Sync>,
     ) -> Result<Self, JobSchedulerError> {
-        let metadata_storage = Arc::new(RwLock::new(Box::new(metadata_storage)));
-        let notification_storage = Arc::new(RwLock::new(Box::new(notification_storage)));
-        let job_code = Arc::new(RwLock::new(Box::new(job_code)));
-        let notification_code = Arc::new(RwLock::new(Box::new(notification_code)));
+        let metadata_storage = Arc::new(RwLock::new(metadata_storage));
+        let notification_storage = Arc::new(RwLock::new(notification_storage));
+        let job_code = Arc::new(RwLock::new(job_code));
+        let notification_code = Arc::new(RwLock::new(notification_code));
 
         let (storage_init_tx, storage_init_rx) = std::sync::mpsc::channel();
 
@@ -332,13 +335,13 @@ impl JobsSchedulerLocked {
         if !self.inited {
             self.init()?;
         }
+        let scheduler = self.scheduler.clone();
+        let context = self.context.clone();
+        tokio::spawn(async move {
+            let mut scheduler = scheduler.write().await;
+            scheduler.init(&context);
+        });
 
-        let jl: JobsSchedulerLocked = self.clone();
-        let mut r = self
-            .0
-            .write()
-            .map_err(|_| JobSchedulerError::StartScheduler)?;
-        let jh = r.start(jl)?;
         Ok(jh)
     }
 
