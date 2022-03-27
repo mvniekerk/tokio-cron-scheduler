@@ -58,7 +58,6 @@ impl NotificationDeleter {
                 break;
             }
             let (uuid, states) = val.unwrap();
-
             {
                 let mut storage = storage.write().await;
                 if let Some(states) = states {
@@ -149,7 +148,6 @@ impl NotificationDeleter {
                 }
             }
         });
-
         let ret = rx.recv();
         match ret {
             Ok(ret) => ret,

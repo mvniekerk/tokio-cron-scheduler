@@ -152,5 +152,6 @@ async fn main() {
 
     tokio::time::sleep(Duration::from_secs(40)).await;
 
-    println!("{:?} Goodbye.", chrono::Utc::now())
+    println!("{:?} Goodbye.", chrono::Utc::now());
+    sched.shutdown();
 }

@@ -427,11 +427,23 @@ impl JobsSchedulerLocked {
             let mut scheduler = scheduler.write().await;
             scheduler.shutdown().await;
         });
+        let (tx, rx) = std::sync::mpsc::channel();
         if let Some(mut notify) = notify {
             tokio::spawn(async move {
                 let val = notify();
                 val.await;
+                if let Err(e) = tx.send(true) {
+                    eprintln!("Could not send shutdown sequence run {:?}", e);
+                }
             });
+        } else {
+            if let Err(e) = tx.send(false) {
+                eprintln!("Could not send shutdown sequence not run {:?}", e);
+            }
+        }
+        let r = rx.recv();
+        if let Err(e) = r {
+            eprintln!("Could not get shutdown sequence run state {:?}", e);
         }
         Ok(())
     }
