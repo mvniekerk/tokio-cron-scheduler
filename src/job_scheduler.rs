@@ -284,9 +284,10 @@ impl JobsSchedulerLocked {
     ///     println!("I get executed every 10 seconds!");
     /// }));
     /// ```
-    pub fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
+    pub fn add(&self, job: JobLocked) -> Result<(), JobSchedulerError> {
         if !self.inited() {
-            self.init()?;
+            let mut s = self.clone();
+            s.init()?;
         }
 
         let context = self.context.clone();
@@ -305,12 +306,13 @@ impl JobsSchedulerLocked {
     /// }));
     /// sched.remove(job_id);
     /// ```
-    pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
+    pub fn remove(&self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
         if !self.inited() {
-            self.init()?;
+            let mut s = self.clone();
+            s.init()?;
         }
 
-        let context = self.context.clone();
+        let context = self.context();
         JobDeleter::remove(&context, to_be_removed)
     }
 
@@ -326,9 +328,10 @@ impl JobsSchedulerLocked {
     ///     std::thread::sleep(Duration::from_millis(500));
     /// }
     /// ```
-    pub fn tick(&mut self) -> Result<(), JobSchedulerError> {
+    pub fn tick(&self) -> Result<(), JobSchedulerError> {
         if !self.inited() {
-            self.init()?;
+            let mut s = self.clone();
+            s.init()?;
         }
 
         let scheduler = self.scheduler.clone();
@@ -359,9 +362,10 @@ impl JobsSchedulerLocked {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
-    pub fn start(&mut self) -> Result<(), JobSchedulerError> {
+    pub fn start(&self) -> Result<(), JobSchedulerError> {
         if !self.inited() {
-            self.init()?;
+            let mut s = self.clone();
+            s.init()?;
         }
         let scheduler = self.scheduler.clone();
         let (tx, rx) = std::sync::mpsc::channel();
@@ -395,7 +399,8 @@ impl JobsSchedulerLocked {
     /// ```
     pub fn time_till_next_job(&mut self) -> Result<Option<std::time::Duration>, JobSchedulerError> {
         if !self.inited() {
-            self.init()?;
+            let mut s = self.clone();
+            s.init()?;
         }
         let metadata = self.context.metadata_storage.clone();
         let (tx, rx) = std::sync::mpsc::channel();
