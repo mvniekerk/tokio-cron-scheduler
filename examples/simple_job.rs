@@ -3,8 +3,8 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 
 #[tokio::main]
 async fn main() {
-    let mut sched = JobScheduler::new();
-    let job_store = sched.get_job_store().unwrap();
+    let sched = JobScheduler::new();
+    let mut sched = sched.unwrap();
     #[cfg(feature = "signal")]
     sched.shutdown_on_ctrl_c();
 
@@ -26,7 +26,7 @@ async fn main() {
     // Adding a job notification without it being added to the scheduler will automatically add it to
     // the job store, but with stopped marking
     five_s_job.on_removed_notification_add(
-        job_store.clone(),
+        sched.clone(),
         Box::new(|job_id, notification_id, type_of_notification| {
             Box::pin(async move {
                 println!(
@@ -49,10 +49,11 @@ async fn main() {
         })
     })
     .unwrap();
+    println!("6");
     let four_s_job_async_clone = four_s_job_async.clone();
-    let js = job_store.clone();
+    let js = sched.clone();
     println!("4s job id {:?}", four_s_job_async.guid());
-    four_s_job_async.on_start_notification_add(job_store.clone(), Box::new(move |job_id, notification_id, type_of_notification| {
+    four_s_job_async.on_start_notification_add(sched.clone(), Box::new(move |job_id, notification_id, type_of_notification| {
         let mut four_s_job_async_clone = four_s_job_async_clone.clone();
         let js = js.clone();
         Box::pin(async move {
@@ -63,7 +64,7 @@ async fn main() {
     }));
 
     four_s_job_async.on_done_notification_add(
-        job_store.clone(),
+        sched.clone(),
         Box::new(|job_id, notification_id, type_of_notification| {
             Box::pin(async move {
                 println!(

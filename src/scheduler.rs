@@ -100,6 +100,11 @@ impl Scheduler {
                             matches!(now_to_next, std::cmp::Ordering::Greater)
                                 || matches!(now_to_next, std::cmp::Ordering::Equal)
                         }
+                        (None, Some(next_tick), JobType::Cron) => {
+                            let now_to_next = now.cmp(next_tick);
+                            matches!(now_to_next, std::cmp::Ordering::Greater)
+                                || matches!(now_to_next, std::cmp::Ordering::Equal)
+                        }
                         (Some(last_tick), Some(next_tick), _) => {
                             let now_to_next = now.cmp(next_tick);
                             let last_to_next = last_tick.cmp(next_tick);

@@ -22,7 +22,7 @@ pub type ShutdownNotification =
 /// The JobScheduler contains and executes the scheduled jobs.
 pub struct JobsSchedulerLocked {
     pub context: Arc<Context>,
-    pub inited: bool,
+    pub inited: Arc<std::sync::RwLock<bool>>,
     pub job_creator: Arc<RwLock<JobCreator>>,
     pub job_deleter: Arc<RwLock<JobDeleter>>,
     pub job_runner: Arc<RwLock<JobRunner>>,
@@ -37,7 +37,7 @@ impl Clone for JobsSchedulerLocked {
     fn clone(&self) -> Self {
         JobsSchedulerLocked {
             context: self.context.clone(),
-            inited: self.inited,
+            inited: self.inited.clone(),
             job_creator: self.job_creator.clone(),
             job_deleter: self.job_deleter.clone(),
             job_runner: self.job_runner.clone(),
@@ -47,12 +47,6 @@ impl Clone for JobsSchedulerLocked {
             scheduler: self.scheduler.clone(),
             shutdown_notifier: None,
         }
-    }
-}
-
-impl Default for JobsSchedulerLocked {
-    fn default() -> Self {
-        Self::new().unwrap()
     }
 }
 
@@ -141,8 +135,25 @@ impl JobsSchedulerLocked {
     }
 
     ///
+    /// Get whether the scheduler is initialized
+    pub fn inited(&self) -> bool {
+        let r = self.inited.read().unwrap();
+        *r
+    }
+
+    ///
     /// Initialize the actors
     pub fn init(&mut self) -> Result<(), JobSchedulerError> {
+        if self.inited() {
+            return Ok(());
+        }
+        {
+            let mut w = self.inited.write().map_err(|e| {
+                eprintln!("Could not get write lock on inited {:?}", e);
+                JobSchedulerError::CantInit
+            })?;
+            *w = true;
+        }
         let init = self.clone();
 
         let (scheduler_init_tx, scheduler_init_rx) = std::sync::mpsc::channel();
@@ -157,7 +168,6 @@ impl JobsSchedulerLocked {
         scheduler_init_rx
             .recv()
             .map_err(|_| JobSchedulerError::CantInit)??;
-        self.inited = true;
         Ok(())
     }
 
@@ -202,8 +212,15 @@ impl JobsSchedulerLocked {
 
         let val = JobsSchedulerLocked {
             context,
-            inited: false,
-            ..Default::default()
+            inited: Arc::new(std::sync::RwLock::new(false)),
+            job_creator: Arc::new(Default::default()),
+            job_deleter: Arc::new(Default::default()),
+            job_runner: Arc::new(Default::default()),
+            notification_creator: Arc::new(Default::default()),
+            notification_deleter: Arc::new(Default::default()),
+            notification_runner: Arc::new(Default::default()),
+            scheduler: Arc::new(Default::default()),
+            shutdown_notifier: None,
         };
 
         Ok(val)
@@ -244,8 +261,15 @@ impl JobsSchedulerLocked {
 
         let val = JobsSchedulerLocked {
             context,
-            inited: false,
-            ..Default::default()
+            inited: Arc::new(std::sync::RwLock::new(false)),
+            job_creator: Arc::new(Default::default()),
+            job_deleter: Arc::new(Default::default()),
+            job_runner: Arc::new(Default::default()),
+            notification_creator: Arc::new(Default::default()),
+            notification_deleter: Arc::new(Default::default()),
+            notification_runner: Arc::new(Default::default()),
+            scheduler: Arc::new(Default::default()),
+            shutdown_notifier: None,
         };
 
         Ok(val)
@@ -261,7 +285,7 @@ impl JobsSchedulerLocked {
     /// }));
     /// ```
     pub fn add(&mut self, job: JobLocked) -> Result<(), JobSchedulerError> {
-        if !self.inited {
+        if !self.inited() {
             self.init()?;
         }
 
@@ -282,7 +306,7 @@ impl JobsSchedulerLocked {
     /// sched.remove(job_id);
     /// ```
     pub fn remove(&mut self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
-        if !self.inited {
+        if !self.inited() {
             self.init()?;
         }
 
@@ -303,7 +327,7 @@ impl JobsSchedulerLocked {
     /// }
     /// ```
     pub fn tick(&mut self) -> Result<(), JobSchedulerError> {
-        if !self.inited {
+        if !self.inited() {
             self.init()?;
         }
 
@@ -336,7 +360,7 @@ impl JobsSchedulerLocked {
     ///     }
     /// ```
     pub fn start(&mut self) -> Result<(), JobSchedulerError> {
-        if !self.inited {
+        if !self.inited() {
             self.init()?;
         }
         let scheduler = self.scheduler.clone();
@@ -370,7 +394,7 @@ impl JobsSchedulerLocked {
     /// }
     /// ```
     pub fn time_till_next_job(&mut self) -> Result<Option<std::time::Duration>, JobSchedulerError> {
-        if !self.inited {
+        if !self.inited() {
             self.init()?;
         }
         let metadata = self.context.metadata_storage.clone();

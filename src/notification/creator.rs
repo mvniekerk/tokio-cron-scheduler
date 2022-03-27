@@ -75,6 +75,7 @@ impl NotificationCreator {
         let rx = context.notify_create_tx.subscribe();
         let tx_created = context.notify_created_tx.clone();
         let storage = context.notification_storage.clone();
+
         Box::pin(async move {
             tokio::spawn(NotificationCreator::listen_for_additions(
                 storage, rx, tx_created,
@@ -110,23 +111,37 @@ impl NotificationCreator {
                 }
             });
 
-            while let Ok(e) = created_rx.recv().await {
-                match e {
-                    Ok(uuid) => {
-                        if uuid == notification_id {
-                            if let Err(e) = tx.send(Ok(uuid)) {
-                                eprintln!("Error sending notification addition success {:?}", e);
+            'receiving_additions: loop {
+                let created = created_rx.recv().await;
+                match created {
+                    Ok(e) => match e {
+                        Ok(uuid) => {
+                            if uuid == notification_id {
+                                if let Err(e) = tx.send(Ok(uuid)) {
+                                    eprintln!(
+                                        "Error sending notification addition success {:?}",
+                                        e
+                                    );
+                                }
+                                break 'receiving_additions;
                             }
                         }
-                    }
-                    Err((e, Some(uuid))) => {
-                        if uuid == notification_id {
-                            if let Err(e) = tx.send(Err(e)) {
-                                eprintln!("Error sending notification addition failure {:?}", e);
+                        Err((e, Some(uuid))) => {
+                            if uuid == notification_id {
+                                if let Err(e) = tx.send(Err(e)) {
+                                    eprintln!(
+                                        "Error sending notification addition failure {:?}",
+                                        e
+                                    );
+                                }
+                                break 'receiving_additions;
                             }
                         }
+                        _ => {}
+                    },
+                    Err(e) => {
+                        eprintln!("Error receiving from created {:?}", e);
                     }
-                    _ => {}
                 }
             }
         });
