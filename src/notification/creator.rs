@@ -40,7 +40,7 @@ impl NotificationCreator {
             let notification_id: Uuid = notification_id.unwrap().into();
 
             let mut storage = storage.write().await;
-            let val = storage.get(notification_id.clone()).await;
+            let val = storage.get(notification_id).await;
             let val = match val {
                 Ok(Some(mut val)) => {
                     for state in data.job_states {

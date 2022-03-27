@@ -1,4 +1,4 @@
-use crate::context::Context;
+use crate::context::{Context, NotificationDeletedResult};
 use crate::job::job_data::JobState;
 use crate::job::{JobId, NotificationId};
 use crate::store::NotificationStore;
@@ -16,12 +16,7 @@ impl NotificationDeleter {
     async fn listen_to_job_removals(
         storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         mut rx_job_delete: Receiver<JobId>,
-        tx_notification_deleted: Sender<
-            Result<
-                (NotificationId, bool, Option<Vec<JobState>>),
-                (JobSchedulerError, Option<NotificationId>),
-            >,
-        >,
+        tx_notification_deleted: Sender<NotificationDeletedResult>,
     ) {
         loop {
             let val = rx_job_delete.recv().await;
@@ -31,9 +26,7 @@ impl NotificationDeleter {
             }
             let job_id = val.unwrap();
             let mut storage = storage.write().await;
-            let guids = storage
-                .list_notification_guids_for_job_id(job_id.clone())
-                .await;
+            let guids = storage.list_notification_guids_for_job_id(job_id).await;
             if let Err(e) = guids {
                 eprintln!("Error with getting guids for job id {:?}", e);
                 continue;
@@ -41,7 +34,7 @@ impl NotificationDeleter {
             let guids = guids.unwrap();
             // TODO first check for removal callback
             for notification_id in guids {
-                if let Err(e) = storage.delete(notification_id.clone()).await {
+                if let Err(e) = storage.delete(notification_id).await {
                     eprintln!("Error deleting notification {:?}", e);
                     continue;
                 }
@@ -56,12 +49,7 @@ impl NotificationDeleter {
     async fn listen_for_notification_removals(
         storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         mut rx: Receiver<(NotificationId, Option<Vec<JobState>>)>,
-        tx_deleted: Sender<
-            Result<
-                (NotificationId, bool, Option<Vec<JobState>>),
-                (JobSchedulerError, Option<NotificationId>),
-            >,
-        >,
+        tx_deleted: Sender<NotificationDeletedResult>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -75,9 +63,7 @@ impl NotificationDeleter {
                 let mut storage = storage.write().await;
                 if let Some(states) = states {
                     for state in states {
-                        let delete = storage
-                            .delete_notification_for_state(uuid.clone(), state)
-                            .await;
+                        let delete = storage.delete_notification_for_state(uuid, state).await;
                         if let Err(e) = delete {
                             eprintln!("Error deleting notification for state {:?}", e);
                             continue;
@@ -130,14 +116,14 @@ impl NotificationDeleter {
         notification_id: &NotificationId,
         states: Option<Vec<JobState>>,
     ) -> Result<(NotificationId, bool), JobSchedulerError> {
-        let notification_id = notification_id.clone();
+        let notification_id = *notification_id;
         let delete_tx = context.notify_delete_tx.clone();
         let mut deleted_rx = context.notify_deleted_tx.subscribe();
         let (tx, rx) = std::sync::mpsc::channel();
 
         tokio::spawn(async move {
             tokio::spawn(async move {
-                if let Err(e) = delete_tx.send((notification_id.clone(), states)) {
+                if let Err(e) = delete_tx.send((notification_id, states)) {
                     eprintln!("Error sending notification removal {:?}", e);
                 }
             });

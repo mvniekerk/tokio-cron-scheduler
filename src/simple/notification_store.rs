@@ -84,12 +84,10 @@ impl DataStore<NotificationData> for SimpleNotificationStore {
                             let notification_id: Uuid = notification_id.into();
 
                             let mut jobs = jobs.write().await;
-                            jobs.insert(notification_id.clone(), job_id.clone());
+                            jobs.insert(notification_id, job_id);
 
                             let mut notifications = notifications.write().await;
-                            if !notifications.contains_key(&job_id) {
-                                notifications.insert(job_id.clone(), HashMap::new());
-                            }
+                            notifications.entry(job_id).or_insert_with(HashMap::new);
                             let job = notifications.get_mut(&job_id);
                             if let Some(job) = job {
                                 job.insert(notification_id, data);
@@ -155,7 +153,7 @@ impl NotificationStore for SimpleNotificationStore {
                     .iter()
                     .filter_map(|(k, v)| {
                         if v.job_states.contains(&state) {
-                            Some(k.clone())
+                            Some(*k)
                         } else {
                             None
                         }
@@ -175,7 +173,7 @@ impl NotificationStore for SimpleNotificationStore {
             let notifications = notifications.read().await;
             let job = notifications.get(&job_id);
             match job {
-                Some(job) => Ok(job.iter().map(|(k, _v)| k.clone()).collect::<Vec<_>>()),
+                Some(job) => Ok(job.iter().map(|(k, _v)| *k).collect::<Vec<_>>()),
                 None => Ok(vec![]),
             }
         })

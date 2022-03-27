@@ -1,7 +1,7 @@
-use crate::context::Context;
+use crate::context::{Context, NotificationDeletedResult};
 use crate::job::job_data::{JobIdAndNotification, JobState, NotificationData};
 use crate::job::to_code::{JobCode, NotificationCode, ToCode};
-use crate::job::{JobToRunAsync, NotificationId};
+use crate::job::JobToRunAsync;
 use crate::{JobSchedulerError, JobStoredData, OnJobNotification};
 use std::collections::HashMap;
 use std::future::Future;
@@ -11,8 +11,12 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+pub type LockedJobToRunMap = Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<JobToRunAsync>>>>>>;
+pub type LockedNotificationToRunMap =
+    Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>;
+
 pub struct SimpleJobCode {
-    pub job_code: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<JobToRunAsync>>>>>>,
+    pub job_code: LockedJobToRunMap,
 }
 
 impl Default for SimpleJobCode {
@@ -25,7 +29,7 @@ impl Default for SimpleJobCode {
 
 impl SimpleJobCode {
     async fn listen_for_additions(
-        data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<JobToRunAsync>>>>>>,
+        data: LockedJobToRunMap,
         mut rx: Receiver<(JobStoredData, Arc<RwLock<Box<JobToRunAsync>>>)>,
     ) {
         loop {
@@ -42,7 +46,7 @@ impl SimpleJobCode {
     }
 
     async fn listen_for_removals(
-        data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<JobToRunAsync>>>>>>,
+        data: LockedJobToRunMap,
         mut rx: Receiver<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
         loop {
@@ -99,7 +103,7 @@ impl ToCode<Box<JobToRunAsync>> for SimpleJobCode {
 impl JobCode for SimpleJobCode {}
 
 pub struct SimpleNotificationCode {
-    pub data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>,
+    pub data: LockedNotificationToRunMap,
 }
 
 impl Default for SimpleNotificationCode {
@@ -112,7 +116,7 @@ impl Default for SimpleNotificationCode {
 
 impl SimpleNotificationCode {
     async fn listen_for_additions(
-        data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>,
+        data: LockedNotificationToRunMap,
         mut rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
         tx: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
@@ -138,9 +142,9 @@ impl SimpleNotificationCode {
             };
             {
                 let mut w = data.write().await;
-                w.insert(uuid.clone(), val);
+                w.insert(uuid, val);
             }
-            if let Err(e) = tx.send(Ok(uuid.clone())) {
+            if let Err(e) = tx.send(Ok(uuid)) {
                 eprintln!("Error sending notification created {:?} {:?}", e, uuid);
             }
         }
@@ -148,14 +152,9 @@ impl SimpleNotificationCode {
 
     // TODO check for elsewhere
     async fn listen_for_removals(
-        data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>,
+        data: LockedNotificationToRunMap,
         mut rx: Receiver<(Uuid, Option<Vec<JobState>>)>,
-        tx: Sender<
-            Result<
-                (Uuid, bool, Option<Vec<JobState>>),
-                (JobSchedulerError, Option<NotificationId>),
-            >,
-        >,
+        tx: Sender<NotificationDeletedResult>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -172,7 +171,7 @@ impl SimpleNotificationCode {
                 let mut w = data.write().await;
                 w.remove(&uuid);
             }
-            if let Err(e) = tx.send(Ok((uuid.clone(), true, states))) {
+            if let Err(e) = tx.send(Ok((uuid, true, states))) {
                 eprintln!("Error sending notification removed {:?} {:?}", e, uuid)
             }
         }

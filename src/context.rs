@@ -8,6 +8,9 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+pub type NotificationDeletedResult =
+    Result<(Uuid, bool, Option<Vec<JobState>>), (JobSchedulerError, Option<NotificationId>)>;
+
 pub struct Context {
     pub job_activation_tx: Sender<Uuid>,
     pub job_activation_rx: Receiver<Uuid>,
@@ -36,18 +39,8 @@ pub struct Context {
     pub notify_delete_tx: Sender<(Uuid, Option<Vec<JobState>>)>,
     pub notify_delete_rx: Receiver<(Uuid, Option<Vec<JobState>>)>,
 
-    pub notify_deleted_tx: Sender<
-        Result<
-            (NotificationId, bool, Option<Vec<JobState>>),
-            (JobSchedulerError, Option<NotificationId>),
-        >,
-    >,
-    pub notify_deleted_rx: Receiver<
-        Result<
-            (NotificationId, bool, Option<Vec<JobState>>),
-            (JobSchedulerError, Option<NotificationId>),
-        >,
-    >,
+    pub notify_deleted_tx: Sender<NotificationDeletedResult>,
+    pub notify_deleted_rx: Receiver<NotificationDeletedResult>,
     // TODO need to add when notification was deleted and there's no more references to it
     pub metadata_storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
     pub notification_storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,

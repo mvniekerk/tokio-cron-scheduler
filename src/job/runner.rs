@@ -28,7 +28,6 @@ impl JobRunner {
             }
             let uuid = val.unwrap();
             {
-                let uuid = uuid.clone();
                 let tx = tx_notify.clone();
                 tokio::spawn(async move {
                     if let Err(e) = tx.send((uuid, JobState::Started)) {
@@ -37,11 +36,11 @@ impl JobRunner {
                 });
             }
             let mut w = job_code.write().await;
-            let code = w.get(uuid.clone()).await;
+            let code = w.get(uuid).await;
             match code {
                 Ok(Some(job)) => {
                     let mut job = job.write().await;
-                    let v = (job)(uuid.clone(), job_scheduler.clone());
+                    let v = (job)(uuid, job_scheduler.clone());
                     let tx = tx_notify.clone();
                     tokio::spawn(async move {
                         v.await;

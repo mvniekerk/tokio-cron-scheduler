@@ -26,7 +26,7 @@ impl JobDeleter {
             let uuid = val.unwrap();
             {
                 let mut storage = storage.write().await;
-                let delete = storage.delete(uuid.clone()).await;
+                let delete = storage.delete(uuid).await;
                 if let Err(e) = delete {
                     eprintln!("Error deleting {:?}", e);
                     if let Err(e) = tx_deleted.send(Err((e, Some(uuid)))) {
@@ -60,11 +60,10 @@ impl JobDeleter {
         let mut deleted = context.job_deleted_tx.subscribe();
         let (tx, rx) = std::sync::mpsc::channel();
 
-        let job_id = job_id.clone();
+        let job_id = *job_id;
         tokio::spawn(async move {
-            let job_id_for_send = job_id.clone();
             tokio::spawn(async move {
-                if let Err(e) = delete.send(job_id_for_send) {
+                if let Err(e) = delete.send(job_id) {
                     eprintln!("Error sending delete id {:?}", e);
                 }
             });

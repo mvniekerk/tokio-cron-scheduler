@@ -89,7 +89,7 @@ impl MetaDataStorage for SimpleMetadataStore {
                     id,
                     next_tick,
                     last_tick,
-                    job_type: job_type.into(),
+                    job_type,
                 })
                 .collect::<Vec<_>>();
             Ok(ret)
@@ -140,7 +140,7 @@ impl MetaDataStorage for SimpleMetadataStore {
                 })
                 .min()
                 .map(|t| t - now)
-                .map(|t| std::time::Duration::from_secs(t));
+                .map(std::time::Duration::from_secs);
             Ok(val)
         })
     }

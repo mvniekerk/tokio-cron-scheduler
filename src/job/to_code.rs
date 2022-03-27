@@ -7,6 +7,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+pub type PinnedGetFuture<T> =
+    Pin<Box<dyn Future<Output = Result<Option<Arc<RwLock<T>>>, JobSchedulerError>> + Send>>;
+
 pub trait ToCode<T>
 where
     T: Send,
@@ -16,10 +19,7 @@ where
         context: &Context,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>>;
 
-    fn get(
-        &mut self,
-        uuid: Uuid,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Arc<RwLock<T>>>, JobSchedulerError>> + Send>>;
+    fn get(&mut self, uuid: Uuid) -> PinnedGetFuture<T>;
 }
 
 pub trait JobCode: ToCode<Box<JobToRunAsync>> + Send {}

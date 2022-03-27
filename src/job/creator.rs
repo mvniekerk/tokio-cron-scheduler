@@ -116,7 +116,6 @@ impl JobCreator {
                     if let Err(e) = done_tx_on_send.send(Err(JobSchedulerError::CantAdd)) {
                         eprintln!("Error sending failure of adding job {:?}", e);
                     }
-                    return;
                 }
             });
 

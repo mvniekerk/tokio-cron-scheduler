@@ -65,9 +65,7 @@ impl Scheduler {
                 }
                 let mut next_ticks = next_ticks.unwrap();
                 let to_be_deleted = next_ticks.iter().filter_map(|v| {
-                    if v.id.is_none() {
-                        return None;
-                    }
+                    v.id.as_ref()?;
                     if v.next_tick == 0 {
                         let id: Uuid = v.id.as_ref().unwrap().into();
                         Some(id)
@@ -124,7 +122,6 @@ impl Scheduler {
                 for uuid in must_runs {
                     {
                         let tx = notify_tx.clone();
-                        let uuid = uuid.clone();
                         tokio::spawn(async move {
                             if let Err(e) = tx.send((uuid, JobState::Scheduled)) {
                                 eprintln!("Error sending notification activation {:?}", e);
@@ -133,7 +130,6 @@ impl Scheduler {
                     }
                     {
                         let tx = job_activation_tx.clone();
-                        let uuid = uuid.clone();
                         tokio::spawn(async move {
                             if let Err(e) = tx.send(uuid) {
                                 eprintln!("Error sending job activation tx {:?}", e);
@@ -144,7 +140,7 @@ impl Scheduler {
                     let storage = metadata_storage.clone();
                     tokio::spawn(async move {
                         let mut w = storage.write().await;
-                        let job = w.get(uuid.clone()).await;
+                        let job = w.get(uuid).await;
 
                         let next_and_last_tick = match job {
                             Ok(Some(job)) => {

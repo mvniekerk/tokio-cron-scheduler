@@ -28,7 +28,7 @@ impl NotificationRunner {
             let (job_id, state) = val.unwrap();
             let mut storage = storage.write().await;
             let notifications = storage
-                .list_notification_guids_for_job_and_state(job_id.clone(), state)
+                .list_notification_guids_for_job_and_state(job_id, state)
                 .await;
             if let Err(_e) = notifications {
                 eprintln!(
@@ -40,12 +40,10 @@ impl NotificationRunner {
             let notifications = notifications.unwrap();
             let mut code = code.write().await;
             for notification_id in notifications {
-                let code = code.get(notification_id.clone()).await;
+                let code = code.get(notification_id).await;
                 match code {
                     Ok(Some(code)) => {
                         let code = code.clone();
-                        let job_id = job_id.clone();
-                        let state = state.clone();
                         tokio::spawn(async move {
                             let mut code = code.write().await;
                             (code)(job_id, notification_id, state).await;
