@@ -436,10 +436,8 @@ impl JobsSchedulerLocked {
                     eprintln!("Could not send shutdown sequence run {:?}", e);
                 }
             });
-        } else {
-            if let Err(e) = tx.send(false) {
-                eprintln!("Could not send shutdown sequence not run {:?}", e);
-            }
+        } else if let Err(e) = tx.send(false) {
+            eprintln!("Could not send shutdown sequence not run {:?}", e);
         }
         let r = rx.recv();
         if let Err(e) = r {

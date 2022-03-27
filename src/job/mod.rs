@@ -557,11 +557,12 @@ impl JobLocked {
     /// Add a notification to run on a list of state notifications
     pub fn on_notifications_add(
         &self,
-        mut job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         run: Box<OnJobNotification>,
         states: Vec<JobState>,
     ) -> Result<Uuid, JobSchedulerError> {
         if !job_scheduler.inited() {
+            let mut job_scheduler = job_scheduler.clone();
             job_scheduler.init()?;
         }
         let job_id = self.guid();
@@ -574,7 +575,7 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_start_notification_remove`.
     pub fn on_start_notification_add(
         &self,
-        job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         on_start: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         self.on_notifications_add(job_scheduler, on_start, vec![JobState::Started])
@@ -584,14 +585,15 @@ impl JobLocked {
     /// Remove a notification optionally for a certain type of states
     pub fn on_notification_removal(
         &self,
-        mut job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
         states: Option<Vec<JobState>>,
     ) -> Result<(NotificationId, bool), JobSchedulerError> {
         if !job_scheduler.inited() {
+            let mut job_scheduler = job_scheduler.clone();
             job_scheduler.init()?;
         }
-        let context = job_scheduler.context;
+        let context = job_scheduler.context();
         NotificationDeleter::remove(&context, notification_id, states)
     }
 
@@ -600,7 +602,7 @@ impl JobLocked {
     /// `on_start_notification_add`
     pub fn on_start_notification_remove(
         &self,
-        job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         self.on_notification_removal(
@@ -616,7 +618,7 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_stop_notification_remove`.
     pub fn on_done_notification_add(
         &mut self,
-        job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         on_stop: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         self.on_notifications_add(job_scheduler, on_stop, vec![JobState::Done])
@@ -627,7 +629,7 @@ impl JobLocked {
     /// `on_done_notification_add`
     pub fn on_done_notification_remove(
         &mut self,
-        job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         self.on_notification_removal(job_scheduler, notification_id, Some(vec![JobState::Done]))
@@ -639,7 +641,7 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
     pub fn on_removed_notification_add(
         &mut self,
-        job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         on_removed: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         self.on_notifications_add(job_scheduler, on_removed, vec![JobState::Removed])
@@ -650,7 +652,7 @@ impl JobLocked {
     /// `on_removed_notification_add`
     pub fn on_removed_notification_remove(
         &mut self,
-        job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         self.on_notification_removal(
@@ -666,7 +668,7 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
     pub fn on_stop_notification_add(
         &mut self,
-        job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         on_removed: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         self.on_notifications_add(job_scheduler, on_removed, vec![JobState::Stop])
@@ -677,7 +679,7 @@ impl JobLocked {
     /// `on_removed_notification_add`
     pub fn on_stop_notification_remove(
         &mut self,
-        job_scheduler: JobsSchedulerLocked,
+        job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         self.on_notification_removal(job_scheduler, notification_id, Some(vec![JobState::Stop]))
