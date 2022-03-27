@@ -49,7 +49,6 @@ async fn main() {
         })
     })
     .unwrap();
-    println!("6");
     let four_s_job_async_clone = four_s_job_async.clone();
     let js = sched.clone();
     println!("4s job id {:?}", four_s_job_async.guid());

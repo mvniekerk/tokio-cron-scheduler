@@ -132,7 +132,7 @@ impl SimpleNotificationCode {
                     NotificationData {
                         job_id:
                             Some(JobIdAndNotification {
-                                job_id: Some(job_id),
+                                notification_id: Some(job_id),
                                 ..
                             }),
                         ..

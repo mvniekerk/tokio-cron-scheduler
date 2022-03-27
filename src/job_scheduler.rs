@@ -187,9 +187,9 @@ impl JobsSchedulerLocked {
         let job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>> =
             Arc::new(RwLock::new(Box::new(job_code)));
 
-        let notification_code = SimpleNotificationCode::default();
-        let notification_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>> =
-            Arc::new(RwLock::new(Box::new(notification_code)));
+        let notify_code = SimpleNotificationCode::default();
+        let notify_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>> =
+            Arc::new(RwLock::new(Box::new(notify_code)));
 
         let (storage_init_tx, storage_init_rx) = std::sync::mpsc::channel();
 
@@ -198,7 +198,7 @@ impl JobsSchedulerLocked {
                 metadata_storage,
                 notification_storage,
                 job_code,
-                notification_code,
+                notify_code,
             )
             .await;
             if let Err(e) = storage_init_tx.send(context) {

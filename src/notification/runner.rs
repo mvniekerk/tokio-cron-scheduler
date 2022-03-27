@@ -50,7 +50,10 @@ impl NotificationRunner {
                         });
                     }
                     _ => {
-                        eprintln!("Could not get notification code for {:?}", notification_id);
+                        eprintln!(
+                            " nCould not get notification code for {:?}",
+                            notification_id
+                        );
                         continue;
                     }
                 }
