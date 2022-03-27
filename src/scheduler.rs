@@ -1,12 +1,10 @@
 use crate::context::Context;
 use crate::job::job_data::{JobState, JobType};
-use crate::store::MetaDataStorage;
 use crate::JobSchedulerError;
-use chrono::{DateTime, Utc};
-use std::ops::Add;
+use chrono::Utc;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
-use tokio::sync::broadcast::{Receiver, Sender};
+use std::time::Duration;
+use tokio::sync::broadcast::Sender;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -62,6 +60,7 @@ impl Scheduler {
                     w.list_next_ticks().await
                 };
                 if let Err(e) = next_ticks {
+                    eprintln!("Error with listing next ticks {:?}", e);
                     continue 'next_tick;
                 }
                 let mut next_ticks = next_ticks.unwrap();
@@ -127,13 +126,19 @@ impl Scheduler {
                         let tx = notify_tx.clone();
                         let uuid = uuid.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = tx.send((uuid, JobState::Scheduled)) {}
+                            if let Err(e) = tx.send((uuid, JobState::Scheduled)) {
+                                eprintln!("Error sending notification activation {:?}", e);
+                            }
                         });
                     }
                     {
                         let tx = job_activation_tx.clone();
                         let uuid = uuid.clone();
-                        tokio::spawn(async move { if let Err(e) = tx.send(uuid) {} });
+                        tokio::spawn(async move {
+                            if let Err(e) = tx.send(uuid) {
+                                eprintln!("Error sending job activation tx {:?}", e);
+                            }
+                        });
                     }
 
                     let storage = metadata_storage.clone();
@@ -142,7 +147,7 @@ impl Scheduler {
                         let job = w.get(uuid.clone()).await;
 
                         let next_and_last_tick = match job {
-                            Ok(Some(mut job)) => {
+                            Ok(Some(job)) => {
                                 let job_type: JobType = JobType::from_i32(job.job_type).unwrap();
                                 let schedule = job.schedule();
                                 let repeated_every = job.repeated_every();

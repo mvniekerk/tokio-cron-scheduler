@@ -41,7 +41,7 @@ impl JobRunner {
             match code {
                 Ok(Some(job)) => {
                     let mut job = job.write().await;
-                    let mut v = (job)(uuid.clone(), job_scheduler.clone());
+                    let v = (job)(uuid.clone(), job_scheduler.clone());
                     let tx = tx_notify.clone();
                     tokio::spawn(async move {
                         v.await;

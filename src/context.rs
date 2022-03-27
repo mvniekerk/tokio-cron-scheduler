@@ -1,6 +1,6 @@
 use crate::job::job_data::{JobState, NotificationData};
 use crate::job::to_code::{JobCode, NotificationCode};
-use crate::job::{JobLocked, JobToRunAsync, NotificationId};
+use crate::job::{JobToRunAsync, NotificationId};
 use crate::store::{MetaDataStorage, NotificationStore};
 use crate::{JobSchedulerError, JobStoredData, OnJobNotification};
 use std::sync::Arc;

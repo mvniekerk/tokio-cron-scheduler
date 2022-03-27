@@ -16,7 +16,7 @@ impl NotificationCreator {
     async fn listen_for_additions(
         storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         mut rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
-        mut tx_created: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
+        tx_created: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -56,7 +56,9 @@ impl NotificationCreator {
             let val = storage.add_or_update(val).await;
             if let Err(e) = val {
                 eprintln!("Error adding or updating {:?}", e);
-                tx_created.send(Err((e, Some(notification_id))));
+                if let Err(e) = tx_created.send(Err((e, Some(notification_id)))) {
+                    eprintln!("Error sending adding or updating error {:?}", e);
+                }
                 continue;
             }
 
@@ -103,8 +105,8 @@ impl NotificationCreator {
         tokio::spawn(async move {
             tokio::spawn(async move {
                 // TODO can maybe not use RwLock
-                if let Err(e) = create_tx.send((data, Arc::new(RwLock::new(run)))) {
-                    eprintln!("Error sending notificaton data");
+                if let Err(_e) = create_tx.send((data, Arc::new(RwLock::new(run)))) {
+                    eprintln!("Error sending notification data");
                 }
             });
 
@@ -120,7 +122,7 @@ impl NotificationCreator {
                     Err((e, Some(uuid))) => {
                         if uuid == notification_id {
                             if let Err(e) = tx.send(Err(e)) {
-                                eprintln!("Error sending notification addition failure");
+                                eprintln!("Error sending notification addition failure {:?}", e);
                             }
                         }
                     }

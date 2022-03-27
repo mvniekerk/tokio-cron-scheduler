@@ -8,7 +8,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 #[derive(Default)]
 pub struct NotificationDeleter {}
@@ -17,7 +16,7 @@ impl NotificationDeleter {
     async fn listen_to_job_removals(
         storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         mut rx_job_delete: Receiver<JobId>,
-        mut tx_notification_deleted: Sender<
+        tx_notification_deleted: Sender<
             Result<
                 (NotificationId, bool, Option<Vec<JobState>>),
                 (JobSchedulerError, Option<NotificationId>),
@@ -57,7 +56,7 @@ impl NotificationDeleter {
     async fn listen_for_notification_removals(
         storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         mut rx: Receiver<(NotificationId, Option<Vec<JobState>>)>,
-        mut tx_deleted: Sender<
+        tx_deleted: Sender<
             Result<
                 (NotificationId, bool, Option<Vec<JobState>>),
                 (JobSchedulerError, Option<NotificationId>),

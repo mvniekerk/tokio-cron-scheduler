@@ -107,7 +107,7 @@ impl MetaDataStorage for SimpleMetadataStore {
             let mut w = data.write().await;
             let val = w.get_mut(&guid);
             match val {
-                Some(mut val) => {
+                Some(val) => {
                     val.set_next_tick(next_tick);
                     val.set_last_tick(last_tick);
                     Ok(())

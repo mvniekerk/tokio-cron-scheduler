@@ -1,4 +1,3 @@
-use crate::context;
 use crate::context::Context;
 use crate::error::JobSchedulerError;
 use crate::job::to_code::{JobCode, NotificationCode};
@@ -8,14 +7,13 @@ use crate::scheduler::Scheduler;
 use crate::simple::{
     SimpleJobCode, SimpleMetadataStore, SimpleNotificationCode, SimpleNotificationStore,
 };
-use crate::store::{InitStore, MetaDataStorage, NotificationStore};
+use crate::store::{MetaDataStorage, NotificationStore};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 #[cfg(feature = "signal")]
 use tokio::signal::unix::SignalKind;
 use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 pub type ShutdownNotification =
@@ -90,7 +88,7 @@ impl JobsSchedulerLocked {
         Ok(Arc::new(context))
     }
 
-    async fn init_actors(mut self) -> Result<(), JobSchedulerError> {
+    async fn init_actors(self) -> Result<(), JobSchedulerError> {
         let for_job_runner = self.clone();
         let Self {
             context,
@@ -105,7 +103,7 @@ impl JobsSchedulerLocked {
         } = self;
 
         {
-            let mut job_creator = job_creator.write().await;
+            let job_creator = job_creator.write().await;
             job_creator.init(&context).await?;
         }
 
@@ -145,7 +143,7 @@ impl JobsSchedulerLocked {
     ///
     /// Initialize the actors
     pub fn init(&mut self) -> Result<(), JobSchedulerError> {
-        let mut init = self.clone();
+        let init = self.clone();
 
         let (scheduler_init_tx, scheduler_init_rx) = std::sync::mpsc::channel();
 

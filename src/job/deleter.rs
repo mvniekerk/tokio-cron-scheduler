@@ -15,7 +15,7 @@ impl JobDeleter {
     async fn listen_to_removals(
         storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
         mut rx: Receiver<Uuid>,
-        mut tx_deleted: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
+        tx_deleted: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
         loop {
             let val = rx.recv().await;

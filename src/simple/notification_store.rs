@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::sync::{RwLock, RwLockReadGuard};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 pub struct SimpleNotificationStore {
@@ -91,7 +91,7 @@ impl DataStore<NotificationData> for SimpleNotificationStore {
                                 notifications.insert(job_id.clone(), HashMap::new());
                             }
                             let job = notifications.get_mut(&job_id);
-                            if let Some(mut job) = job {
+                            if let Some(job) = job {
                                 job.insert(notification_id, data);
                             }
 
@@ -202,9 +202,9 @@ impl NotificationStore for SimpleNotificationStore {
                     let mut notifications = notifications.write().await;
                     let job = notifications.get_mut(&job_id);
                     match job {
-                        Some(mut job) => {
+                        Some(job) => {
                             if job.contains_key(&notification_id) {
-                                let mut notification = job.get_mut(&notification_id).unwrap();
+                                let notification = job.get_mut(&notification_id).unwrap();
                                 if notification.job_states.contains(&state) {
                                     ret = true;
                                 }
@@ -236,7 +236,7 @@ impl NotificationStore for SimpleNotificationStore {
         Box::new(async move {
             let mut jobs = jobs.write().await;
 
-            jobs.retain(|k, v| *v != job_id);
+            jobs.retain(|_k, v| *v != job_id);
 
             let mut notifications = notifications.write().await;
             notifications.remove(&job_id);

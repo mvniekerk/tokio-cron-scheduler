@@ -3,8 +3,6 @@ use crate::job::{Job, JobToRunAsync};
 use crate::{JobScheduler, JobSchedulerError, JobToRun};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
-use std::ops::Add;
-use std::time::{Duration, SystemTime};
 use tokio::sync::oneshot::Receiver;
 use uuid::Uuid;
 

@@ -1,7 +1,7 @@
 use crate::context::Context;
 use crate::job::job_data::{JobIdAndNotification, JobState, NotificationData};
 use crate::job::to_code::{JobCode, NotificationCode, ToCode};
-use crate::job::{JobLocked, JobToRunAsync, NotificationId};
+use crate::job::{JobToRunAsync, NotificationId};
 use crate::{JobSchedulerError, JobStoredData, OnJobNotification};
 use std::collections::HashMap;
 use std::future::Future;
@@ -114,7 +114,7 @@ impl SimpleNotificationCode {
     async fn listen_for_additions(
         data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>,
         mut rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
-        mut tx: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
+        tx: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -150,7 +150,7 @@ impl SimpleNotificationCode {
     async fn listen_for_removals(
         data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>,
         mut rx: Receiver<(Uuid, Option<Vec<JobState>>)>,
-        mut tx: Sender<
+        tx: Sender<
             Result<
                 (Uuid, bool, Option<Vec<JobState>>),
                 (JobSchedulerError, Option<NotificationId>),

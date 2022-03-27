@@ -6,7 +6,7 @@ use crate::JobSchedulerError;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::broadcast::Receiver;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -30,7 +30,7 @@ impl NotificationRunner {
             let notifications = storage
                 .list_notification_guids_for_job_and_state(job_id.clone(), state)
                 .await;
-            if let Err(e) = notifications {
+            if let Err(_e) = notifications {
                 eprintln!(
                     "Error getting the list of notifications guids for job {:?} and state {:?}",
                     job_id, state

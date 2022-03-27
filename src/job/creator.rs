@@ -16,7 +16,7 @@ impl JobCreator {
     async fn listen_to_additions(
         storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
         mut rx: Receiver<(JobStoredData, Arc<RwLock<Box<JobToRunAsync>>>)>,
-        mut tx_created: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
+        tx_created: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -111,7 +111,7 @@ impl JobCreator {
             let done_tx_on_send = done_tx.clone();
             tokio::spawn(async move {
                 let job = Arc::new(RwLock::new(job));
-                if let Err(e) = tx.send((data, job)) {
+                if let Err(_e) = tx.send((data, job)) {
                     eprintln!("Error sending new job");
                     if let Err(e) = done_tx_on_send.send(Err(JobSchedulerError::CantAdd)) {
                         eprintln!("Error sending failure of adding job {:?}", e);
