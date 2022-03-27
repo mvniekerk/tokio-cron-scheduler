@@ -2,7 +2,6 @@ mod context;
 mod error;
 mod job;
 mod job_scheduler;
-mod job_store;
 #[cfg(feature = "nats_scheduler")]
 mod nats;
 mod notification;

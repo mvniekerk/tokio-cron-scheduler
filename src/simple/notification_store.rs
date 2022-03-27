@@ -185,12 +185,13 @@ impl NotificationStore for SimpleNotificationStore {
         &mut self,
         notification_id: Uuid,
         state: JobState,
-    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>> + Send>> {
         let state: i32 = state.into();
 
         let jobs = self.notification_vs_job.clone();
         let notifications = self.data.clone();
         Box::pin(async move {
+            let mut ret = false;
             let job_id = {
                 let r = jobs.read().await;
                 r.get(&notification_id).cloned()
@@ -204,6 +205,9 @@ impl NotificationStore for SimpleNotificationStore {
                         Some(mut job) => {
                             if job.contains_key(&notification_id) {
                                 let mut notification = job.get_mut(&notification_id).unwrap();
+                                if notification.job_states.contains(&state) {
+                                    ret = true;
+                                }
                                 notification.job_states.retain(|v| *v != state);
                                 if notification.job_states.is_empty() {
                                     job.remove(&notification_id);
@@ -213,7 +217,7 @@ impl NotificationStore for SimpleNotificationStore {
                             if job.is_empty() {
                                 notifications.remove(&job_id);
                             }
-                            Ok(())
+                            Ok(ret)
                         }
                         None => Err(JobSchedulerError::CantRemove),
                     }

@@ -1,6 +1,6 @@
 use crate::job::job_data::{JobState, NotificationData};
 use crate::job::to_code::{JobCode, NotificationCode};
-use crate::job::{JobLocked, JobToRunAsync};
+use crate::job::{JobLocked, JobToRunAsync, NotificationId};
 use crate::store::{MetaDataStorage, NotificationStore};
 use crate::{JobSchedulerError, JobStoredData, OnJobNotification};
 use std::sync::Arc;
@@ -30,14 +30,24 @@ pub struct Context {
     pub notify_create_tx: Sender<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
     pub notify_create_rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
 
-    pub notify_created_tx: Sender<Uuid>,
-    pub notify_created_rx: Receiver<Uuid>,
+    pub notify_created_tx: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
+    pub notify_created_rx: Receiver<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
 
     pub notify_delete_tx: Sender<(Uuid, Option<Vec<JobState>>)>,
     pub notify_delete_rx: Receiver<(Uuid, Option<Vec<JobState>>)>,
 
-    pub notify_deleted_tx: Sender<(Uuid, Option<Vec<JobState>>)>,
-    pub notify_deleted_rx: Receiver<(Uuid, Option<Vec<JobState>>)>,
+    pub notify_deleted_tx: Sender<
+        Result<
+            (NotificationId, bool, Option<Vec<JobState>>),
+            (JobSchedulerError, Option<NotificationId>),
+        >,
+    >,
+    pub notify_deleted_rx: Receiver<
+        Result<
+            (NotificationId, bool, Option<Vec<JobState>>),
+            (JobSchedulerError, Option<NotificationId>),
+        >,
+    >,
     // TODO need to add when notification was deleted and there's no more references to it
     pub metadata_storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
     pub notification_storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,

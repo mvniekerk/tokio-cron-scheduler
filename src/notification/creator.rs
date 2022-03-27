@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::job::job_data::NotificationData;
+use crate::job::job_data::{JobState, NotificationData};
 use crate::store::NotificationStore;
 use crate::{JobSchedulerError, OnJobNotification};
 use std::future::Future;
@@ -16,7 +16,7 @@ impl NotificationCreator {
     async fn listen_for_additions(
         storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         mut rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
-        mut tx_created: Sender<Uuid>,
+        mut tx_created: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -56,9 +56,11 @@ impl NotificationCreator {
             let val = storage.add_or_update(val).await;
             if let Err(e) = val {
                 eprintln!("Error adding or updating {:?}", e);
+                tx_created.send(Err((e, Some(notification_id))));
+                continue;
             }
 
-            if let Err(e) = tx_created.send(notification_id) {
+            if let Err(e) = tx_created.send(Ok(notification_id)) {
                 eprintln!("Error sending {:?}", e);
             }
         }
@@ -77,5 +79,63 @@ impl NotificationCreator {
             ));
             Ok(())
         })
+    }
+
+    pub fn add(
+        context: &Context,
+        run: Box<OnJobNotification>,
+        job_states: Vec<JobState>,
+        job_id: &Uuid,
+    ) -> Result<Uuid, JobSchedulerError> {
+        let notification_id = Uuid::new_v4();
+        let data = NotificationData {
+            job_id: Some(crate::job::job_data::JobIdAndNotification {
+                job_id: Some(job_id.into()),
+                notification_id: Some(notification_id.into()),
+            }),
+            job_states: job_states.iter().map(|i| *i as i32).collect::<Vec<_>>(),
+            extra: vec![],
+        };
+        let create_tx = context.notify_create_tx.clone();
+        let mut created_rx = context.notify_created_tx.subscribe();
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        tokio::spawn(async move {
+            tokio::spawn(async move {
+                // TODO can maybe not use RwLock
+                if let Err(e) = create_tx.send((data, Arc::new(RwLock::new(run)))) {
+                    eprintln!("Error sending notificaton data");
+                }
+            });
+
+            while let Ok(e) = created_rx.recv().await {
+                match e {
+                    Ok(uuid) => {
+                        if uuid == notification_id {
+                            if let Err(e) = tx.send(Ok(uuid)) {
+                                eprintln!("Error sending notification addition success {:?}", e);
+                            }
+                        }
+                    }
+                    Err((e, Some(uuid))) => {
+                        if uuid == notification_id {
+                            if let Err(e) = tx.send(Err(e)) {
+                                eprintln!("Error sending notification addition failure");
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        let rx = rx.recv();
+        match rx {
+            Ok(ret) => ret,
+            Err(e) => {
+                eprintln!("Error receiving status from notification addition {:?}", e);
+                Err(JobSchedulerError::CantAdd)
+            }
+        }
     }
 }

@@ -3,7 +3,6 @@ use crate::context::Context;
 use crate::error::JobSchedulerError;
 use crate::job::to_code::{JobCode, NotificationCode};
 use crate::job::{JobCreator, JobDeleter, JobLocked, JobRunner};
-use crate::job_store::{JobStore, JobStoreLocked};
 use crate::notification::{NotificationCreator, NotificationDeleter, NotificationRunner};
 use crate::scheduler::Scheduler;
 use crate::simple::{
@@ -165,7 +164,7 @@ impl JobsSchedulerLocked {
     }
 
     ///
-    /// Create a new `JobStoreLocked` using the `SimpleMetadataStore`, `SimpleNotificationStore`,
+    /// Create a new `MetaDataStorage` and `NotificationStore` using the `SimpleMetadataStore`, `SimpleNotificationStore`,
     /// `SimpleJobCode` and `SimpleNotificationCode` implementation
     pub fn new() -> Result<Self, JobSchedulerError> {
         let metadata_storage = SimpleMetadataStore::default();

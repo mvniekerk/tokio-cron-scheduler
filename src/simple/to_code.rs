@@ -1,7 +1,7 @@
 use crate::context::Context;
 use crate::job::job_data::{JobIdAndNotification, JobState, NotificationData};
 use crate::job::to_code::{JobCode, NotificationCode, ToCode};
-use crate::job::{JobLocked, JobToRunAsync};
+use crate::job::{JobLocked, JobToRunAsync, NotificationId};
 use crate::{JobSchedulerError, JobStoredData, OnJobNotification};
 use std::collections::HashMap;
 use std::future::Future;
@@ -114,7 +114,7 @@ impl SimpleNotificationCode {
     async fn listen_for_additions(
         data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>,
         mut rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
-        mut tx: Sender<Uuid>,
+        mut tx: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -140,7 +140,7 @@ impl SimpleNotificationCode {
                 let mut w = data.write().await;
                 w.insert(uuid.clone(), val);
             }
-            if let Err(e) = tx.send(uuid.clone()) {
+            if let Err(e) = tx.send(Ok(uuid.clone())) {
                 eprintln!("Error sending notification created {:?} {:?}", e, uuid);
             }
         }
@@ -150,7 +150,12 @@ impl SimpleNotificationCode {
     async fn listen_for_removals(
         data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<OnJobNotification>>>>>>,
         mut rx: Receiver<(Uuid, Option<Vec<JobState>>)>,
-        mut tx: Sender<(Uuid, Option<Vec<JobState>>)>,
+        mut tx: Sender<
+            Result<
+                (Uuid, bool, Option<Vec<JobState>>),
+                (JobSchedulerError, Option<NotificationId>),
+            >,
+        >,
     ) {
         loop {
             let val = rx.recv().await;
@@ -167,7 +172,7 @@ impl SimpleNotificationCode {
                 let mut w = data.write().await;
                 w.remove(&uuid);
             }
-            if let Err(e) = tx.send((uuid.clone(), states)) {
+            if let Err(e) = tx.send(Ok((uuid.clone(), true, states))) {
                 eprintln!("Error sending notification removed {:?} {:?}", e, uuid)
             }
         }

@@ -17,7 +17,12 @@ impl NotificationDeleter {
     async fn listen_to_job_removals(
         storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         mut rx_job_delete: Receiver<JobId>,
-        mut tx_notification_deleted: Sender<(NotificationId, Option<Vec<JobState>>)>,
+        mut tx_notification_deleted: Sender<
+            Result<
+                (NotificationId, bool, Option<Vec<JobState>>),
+                (JobSchedulerError, Option<NotificationId>),
+            >,
+        >,
     ) {
         loop {
             let val = rx_job_delete.recv().await;
@@ -41,7 +46,7 @@ impl NotificationDeleter {
                     eprintln!("Error deleting notification {:?}", e);
                     continue;
                 }
-                if let Err(e) = tx_notification_deleted.send((notification_id, None)) {
+                if let Err(e) = tx_notification_deleted.send(Ok((notification_id, true, None))) {
                     eprintln!("Error sending deletion {:?}", e);
                     continue;
                 }
@@ -52,7 +57,12 @@ impl NotificationDeleter {
     async fn listen_for_notification_removals(
         storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         mut rx: Receiver<(NotificationId, Option<Vec<JobState>>)>,
-        mut tx_deleted: Sender<(NotificationId, Option<Vec<JobState>>)>,
+        mut tx_deleted: Sender<
+            Result<
+                (NotificationId, bool, Option<Vec<JobState>>),
+                (JobSchedulerError, Option<NotificationId>),
+            >,
+        >,
     ) {
         loop {
             let val = rx.recv().await;
@@ -73,7 +83,8 @@ impl NotificationDeleter {
                             eprintln!("Error deleting notification for state {:?}", e);
                             continue;
                         }
-                        if let Err(e) = tx_deleted.send((uuid, Some(vec![state]))) {
+                        let delete = delete.unwrap();
+                        if let Err(e) = tx_deleted.send(Ok((uuid, delete, Some(vec![state])))) {
                             eprintln!("Error sending notification deleted state {:?}", e);
                         }
                     }
@@ -83,7 +94,7 @@ impl NotificationDeleter {
                         eprintln!("Error deleting notification for all states {:?}", e);
                         continue;
                     }
-                    if let Err(e) = tx_deleted.send((uuid, None)) {
+                    if let Err(e) = tx_deleted.send(Ok((uuid, true, None))) {
                         eprintln!("Error sending {:?}", e);
                     }
                 }
@@ -113,5 +124,54 @@ impl NotificationDeleter {
             ));
             Ok(())
         })
+    }
+
+    pub fn remove(
+        context: &Context,
+        notification_id: &NotificationId,
+        states: Option<Vec<JobState>>,
+    ) -> Result<(NotificationId, bool), JobSchedulerError> {
+        let notification_id = notification_id.clone();
+        let delete_tx = context.notify_delete_tx.clone();
+        let mut deleted_rx = context.notify_deleted_tx.subscribe();
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        tokio::spawn(async move {
+            tokio::spawn(async move {
+                if let Err(e) = delete_tx.send((notification_id.clone(), states)) {
+                    eprintln!("Error sending notification removal {:?}", e);
+                }
+            });
+            while let Ok(val) = deleted_rx.recv().await {
+                match val {
+                    Ok((uuid, deleted, _)) => {
+                        if uuid == notification_id {
+                            if let Err(e) = tx.send(Ok((uuid, deleted))) {
+                                eprintln!("Error sending notification removal success {:?}", e);
+                            }
+                            break;
+                        }
+                    }
+                    Err((e, Some(uuid))) => {
+                        if uuid == notification_id {
+                            if let Err(e) = tx.send(Err(e)) {
+                                eprintln!("Error sending removal error {:?}", e);
+                            }
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        let ret = rx.recv();
+        match ret {
+            Ok(ret) => ret,
+            Err(e) => {
+                eprintln!("Error getting result from notification removal {:?}", e);
+                Err(JobSchedulerError::CantRemove)
+            }
+        }
     }
 }

@@ -2,7 +2,6 @@ use crate::context::Context;
 use crate::job::job_data::JobState;
 use crate::job::to_code::JobCode;
 use crate::job_scheduler::JobsSchedulerLocked;
-use crate::job_store::JobStoreLocked;
 use crate::JobSchedulerError;
 use std::future::Future;
 use std::pin::Pin;

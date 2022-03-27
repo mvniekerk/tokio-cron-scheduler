@@ -21,7 +21,7 @@ pub trait NotificationStore: DataStore<NotificationData> + InitStore {
         &mut self,
         notification_id: Uuid,
         state: JobState,
-    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>>;
+    ) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>> + Send>>;
 
     fn delete_for_job(
         &mut self,

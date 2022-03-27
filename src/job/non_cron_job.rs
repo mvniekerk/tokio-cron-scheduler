@@ -1,6 +1,5 @@
 use crate::job::job_data::{JobStoredData, JobType};
 use crate::job::{Job, JobToRunAsync};
-use crate::job_store::JobStoreLocked;
 use crate::{JobScheduler, JobSchedulerError, JobToRun};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
