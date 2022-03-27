@@ -108,11 +108,12 @@ impl JobCreator {
                     }
                 })
             });
+            let done_tx_on_send = done_tx.clone();
             tokio::spawn(async move {
                 let job = Arc::new(RwLock::new(job));
                 if let Err(e) = tx.send((data, job)) {
                     eprintln!("Error sending new job");
-                    if let Err(e) = done_tx.send(Err(JobSchedulerError::CantAdd)) {
+                    if let Err(e) = done_tx_on_send.send(Err(JobSchedulerError::CantAdd)) {
                         eprintln!("Error sending failure of adding job {:?}", e);
                     }
                     return;
@@ -134,6 +135,7 @@ impl JobCreator {
                             if let Err(e) = done_tx.send(Err(e)) {
                                 eprintln!("Could not send failure {:?}", e);
                             }
+                            break;
                         }
                     }
                     _ => {}

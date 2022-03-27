@@ -207,7 +207,7 @@ impl Scheduler {
                     if let Err(e) = tx.send(true) {
                         eprintln!("Tick send error {:?}", e);
                     }
-                    tokio::time::sleep(Duration::from_millis(500));
+                    tokio::time::sleep(Duration::from_millis(500)).await;
                 }
             });
             Ok(())

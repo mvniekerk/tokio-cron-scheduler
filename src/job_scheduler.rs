@@ -33,6 +33,7 @@ pub struct JobsSchedulerLocked {
     pub notification_deleter: Arc<RwLock<NotificationDeleter>>,
     pub notification_runner: Arc<RwLock<NotificationRunner>>,
     pub scheduler: Arc<RwLock<Scheduler>>,
+    pub shutdown_notifier: Option<Box<ShutdownNotification>>,
 }
 
 impl Clone for JobsSchedulerLocked {
@@ -47,6 +48,7 @@ impl Clone for JobsSchedulerLocked {
             notification_deleter: self.notification_deleter.clone(),
             notification_runner: self.notification_runner.clone(),
             scheduler: self.scheduler.clone(),
+            shutdown_notifier: None,
         }
     }
 }
@@ -396,8 +398,20 @@ impl JobsSchedulerLocked {
     ///
     /// Shut the scheduler down
     pub fn shutdown(&mut self) -> Result<(), JobSchedulerError> {
-        let mut w = self.0.write().map_err(|_| JobSchedulerError::Shutdown)?;
-        w.shutdown().map_err(|_| JobSchedulerError::Shutdown)?;
+        let mut notify = None;
+        std::mem::swap(&mut self.shutdown_notifier, &mut notify);
+
+        let scheduler = self.scheduler.clone();
+        tokio::spawn(async move {
+            let mut scheduler = scheduler.write().await;
+            scheduler.shutdown().await;
+        });
+        if let Some(mut notify) = notify {
+            tokio::spawn(async move {
+                let val = notify();
+                val.await;
+            });
+        }
         Ok(())
     }
 
@@ -435,36 +449,19 @@ impl JobsSchedulerLocked {
 
     ///
     /// Code that is run after the shutdown was run
-    pub fn set_shutdown_handler(
-        &mut self,
-        job: Box<ShutdownNotification>,
-    ) -> Result<(), JobSchedulerError> {
-        let mut w = self
-            .0
-            .write()
-            .map_err(|_| JobSchedulerError::AddShutdownNotifier)?;
-        w.set_shutdown_handler(job)?;
-        Ok(())
+    pub fn set_shutdown_handler(&mut self, job: Box<ShutdownNotification>) {
+        self.shutdown_notifier = Some(job);
     }
 
     ///
     /// Remove the shutdown handler
-    pub fn remove_shutdown_handler(&mut self) -> Result<(), JobSchedulerError> {
-        let mut w = self
-            .0
-            .write()
-            .map_err(|_| JobSchedulerError::RemoveShutdownNotifier)?;
-        w.remove_shutdown_handler()?;
-        Ok(())
+    pub fn remove_shutdown_handler(&mut self) {
+        self.shutdown_notifier = None;
     }
 
     ///
-    /// Get the job store for this job scheduler
-    pub fn get_job_store(&self) -> Result<JobStoreLocked, JobSchedulerError> {
-        let js = {
-            let r = self.0.read().map_err(|_| JobSchedulerError::GetJobStore)?;
-            r.get_job_store()?
-        };
-        Ok(js)
+    /// Get the context
+    pub fn context(&self) -> Arc<Context> {
+        self.context.clone()
     }
 }
