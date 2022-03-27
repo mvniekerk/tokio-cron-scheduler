@@ -64,7 +64,7 @@ impl DataStore<JobStoredData> for SimpleMetadataStore {
 }
 
 impl InitStore for SimpleMetadataStore {
-    fn init(&mut self) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
+    fn init(&mut self) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         self.inited = true;
         Box::pin(std::future::ready(Ok(())))
     }
@@ -114,6 +114,34 @@ impl MetaDataStorage for SimpleMetadataStore {
                 }
                 None => Err(JobSchedulerError::UpdateJobData),
             }
+        })
+    }
+
+    fn time_till_next_job(
+        &mut self,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<std::time::Duration>, JobSchedulerError>> + Send>>
+    {
+        let data = self.data.clone();
+        Box::pin(async move {
+            let r = data.read().await;
+            let now = Utc::now();
+            let now = now.timestamp() as u64;
+            let val = r
+                .iter()
+                .filter_map(|(_, jd)| match jd.next_tick {
+                    0 => None,
+                    i => {
+                        if i > now {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    }
+                })
+                .min()
+                .map(|t| t - now)
+                .map(|t| std::time::Duration::from_secs(t));
+            Ok(val)
         })
     }
 }

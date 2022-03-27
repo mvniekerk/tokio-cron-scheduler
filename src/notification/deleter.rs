@@ -94,7 +94,7 @@ impl NotificationDeleter {
     pub fn init(
         &mut self,
         context: &Context,
-    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let rx_job_delete = context.job_delete_tx.subscribe();
         let rx_notification_delete = context.notify_delete_tx.subscribe();
         let tx_notification_deleted = context.notify_deleted_tx.clone();

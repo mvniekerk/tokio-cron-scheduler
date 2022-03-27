@@ -11,7 +11,7 @@ pub use notification_store::NotificationRunnableCodeGet;
 pub use notification_store::NotificationStore;
 
 pub trait InitStore {
-    fn init(&mut self) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>>;
+    fn init(&mut self) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>>;
     fn inited(&mut self) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>>>>;
 }
 

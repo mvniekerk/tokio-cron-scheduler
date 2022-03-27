@@ -1,24 +1,31 @@
 use crate::context::Context;
 use crate::job::job_data::{JobState, JobType};
 use crate::store::MetaDataStorage;
+use crate::JobSchedulerError;
 use chrono::{DateTime, Utc};
 use std::ops::Add;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use tokio::sync::broadcast::Sender;
+use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
 pub struct Scheduler {
     pub shutdown: Arc<RwLock<bool>>,
+    pub ticker_tx: Sender<bool>,
+    pub ticking: bool,
     pub inited: bool,
 }
 
 impl Default for Scheduler {
     fn default() -> Self {
+        let (ticker_tx, _ticker_rx) = tokio::sync::broadcast::channel(200);
         Self {
             shutdown: Arc::new(RwLock::new(false)),
             inited: false,
+            // Here be breadcrumb
+            ticker_tx,
+            ticking: false,
         }
     }
 }
@@ -37,8 +44,10 @@ impl Scheduler {
 
         self.inited = true;
 
+        let mut ticker_rx = self.ticker_tx.subscribe();
+
         tokio::spawn(async move {
-            'next_tick: loop {
+            'next_tick: while let Ok(true) = ticker_rx.recv().await {
                 let shutdown = {
                     let r = shutdown.read().await;
                     *r
@@ -172,5 +181,36 @@ impl Scheduler {
     pub async fn shutdown(&mut self) {
         let mut w = self.shutdown.write().await;
         *w = true;
+
+        if let Err(e) = self.ticker_tx.send(false) {
+            eprintln!("Error sending tick {:?}", e);
+        }
+    }
+
+    pub fn tick(&self) -> Result<(), JobSchedulerError> {
+        if let Err(e) = self.ticker_tx.send(true) {
+            eprintln!("Error sending tick {:?}", e);
+            Err(JobSchedulerError::TickError)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn start(&mut self) -> Result<(), JobSchedulerError> {
+        if self.ticking {
+            Err(JobSchedulerError::TickError)
+        } else {
+            self.ticking = true;
+            let tx = self.ticker_tx.clone();
+            tokio::spawn(async move {
+                loop {
+                    if let Err(e) = tx.send(true) {
+                        eprintln!("Tick send error {:?}", e);
+                    }
+                    tokio::time::sleep(Duration::from_millis(500));
+                }
+            });
+            Ok(())
+        }
     }
 }

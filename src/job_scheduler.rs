@@ -7,8 +7,7 @@ use crate::job_store::{JobStore, JobStoreLocked};
 use crate::notification::{NotificationCreator, NotificationDeleter, NotificationRunner};
 use crate::scheduler::Scheduler;
 use crate::simple::{
-    SimpleJobCode, SimpleJobScheduler, SimpleMetadataStore, SimpleNotificationCode,
-    SimpleNotificationStore,
+    SimpleJobCode, SimpleMetadataStore, SimpleNotificationCode, SimpleNotificationStore,
 };
 use crate::store::{InitStore, MetaDataStorage, NotificationStore};
 use std::future::Future;
@@ -100,6 +99,7 @@ impl JobsSchedulerLocked {
             notification_creator,
             notification_deleter,
             notification_runner,
+            scheduler,
             ..
         } = self;
 
@@ -133,13 +133,18 @@ impl JobsSchedulerLocked {
             runner.init(&context, for_job_runner).await?;
         }
 
+        {
+            let mut scheduler = scheduler.write().await;
+            scheduler.init(&context);
+        }
+
         Ok(())
     }
 
     ///
     /// Initialize the actors
     pub fn init(&mut self) -> Result<(), JobSchedulerError> {
-        let mut init = val.clone();
+        let mut init = self.clone();
 
         let (scheduler_init_tx, scheduler_init_rx) = std::sync::mpsc::channel();
 
@@ -199,7 +204,7 @@ impl JobsSchedulerLocked {
         let val = JobsSchedulerLocked {
             context,
             inited: false,
-            ..Default
+            ..Default::default()
         };
 
         Ok(val)
@@ -241,7 +246,7 @@ impl JobsSchedulerLocked {
         let val = JobsSchedulerLocked {
             context,
             inited: false,
-            ..Default
+            ..Default::default()
         };
 
         Ok(val)
@@ -282,20 +287,8 @@ impl JobsSchedulerLocked {
             self.init()?;
         }
 
-        {
-            let ws = self.0.write();
-            if let Err(e) = ws {
-                eprintln!(
-                    "Could not lock self for removal of {:?} {:?}",
-                    to_be_removed, e
-                );
-                return Err(JobSchedulerError::CantRemove);
-            }
-            let mut ws = ws.unwrap();
-            ws.remove(to_be_removed)?;
-        }
-
-        Ok(())
+        let context = self.context.clone();
+        JobDeleter::remove(&context, to_be_removed)
     }
 
     /// The `tick` method increments time for the JobScheduler and executes
@@ -315,11 +308,23 @@ impl JobsSchedulerLocked {
             self.init()?;
         }
 
-        let mut ws = self.0.write().map_err(|_| JobSchedulerError::TickError)?;
-        if ws.tick(self.clone()).is_err() {
-            return Err(JobSchedulerError::TickError);
+        let scheduler = self.scheduler.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        tokio::spawn(async move {
+            let ret = scheduler.write().await;
+            let ret = ret.tick();
+            if let Err(e) = tx.send(ret) {
+                eprintln!("Error sending tick result {:?}", e);
+            }
+        });
+        let rx = rx.recv();
+        match rx {
+            Ok(ret) => ret,
+            Err(e) => {
+                eprintln!("Error receiving tick result {:?}", e);
+                Err(JobSchedulerError::TickError)
+            }
         }
-        Ok(())
     }
 
     /// The `start` spawns a Tokio task where it loops. Every 500ms it
@@ -331,18 +336,28 @@ impl JobsSchedulerLocked {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
-    pub fn start(&mut self) -> Result<JoinHandle<()>, JobSchedulerError> {
+    pub fn start(&mut self) -> Result<(), JobSchedulerError> {
         if !self.inited {
             self.init()?;
         }
         let scheduler = self.scheduler.clone();
-        let context = self.context.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
         tokio::spawn(async move {
             let mut scheduler = scheduler.write().await;
-            scheduler.init(&context);
+            let started = scheduler.start();
+            if let Err(e) = tx.send(started) {
+                eprintln!("Error sending start result {:?}", e);
+            }
         });
 
-        Ok(jh)
+        let ret = rx.recv();
+        match ret {
+            Ok(ret) => ret,
+            Err(e) => {
+                eprintln!("Error receiving start result {:?}", e);
+                Err(JobSchedulerError::StartScheduler)
+            }
+        }
     }
 
     /// The `time_till_next_job` method returns the duration till the next job
@@ -355,15 +370,27 @@ impl JobsSchedulerLocked {
     ///     std::thread::sleep(sched.time_till_next_job());
     /// }
     /// ```
-    pub fn time_till_next_job(&self) -> Result<std::time::Duration, JobSchedulerError> {
-        let mut w = self
-            .0
-            .write()
-            .map_err(|_| JobSchedulerError::CantGetTimeUntil)?;
-        let l = w
-            .time_till_next_job()
-            .map_err(|_| JobSchedulerError::CantGetTimeUntil)?;
-        Ok(l)
+    pub fn time_till_next_job(&mut self) -> Result<Option<std::time::Duration>, JobSchedulerError> {
+        if !self.inited {
+            self.init()?;
+        }
+        let metadata = self.context.metadata_storage.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        tokio::spawn(async move {
+            let mut metadata = metadata.write().await;
+            let time = metadata.time_till_next_job().await;
+            if let Err(e) = tx.send(time) {
+                eprintln!("Error sending result of time till next job {:?}", e);
+            }
+        });
+        let ret = rx.recv();
+        match ret {
+            Ok(ret) => ret,
+            Err(e) => {
+                eprintln!("Error getting return of time till next job {:?}", e);
+                Err(JobSchedulerError::CantGetTimeUntil)
+            }
+        }
     }
 
     ///

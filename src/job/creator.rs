@@ -54,7 +54,7 @@ impl JobCreator {
     pub fn init(
         &self,
         context: &Context,
-    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let rx = context.job_create_tx.subscribe();
         let tx_created = context.job_created_tx.clone();
         let storage = context.metadata_storage.clone();
@@ -108,15 +108,16 @@ impl JobCreator {
                     }
                 })
             });
-            let job = Arc::new(RwLock::new(job));
-
-            if let Err(e) = tx.send((data, job)) {
-                eprintln!("Error sending new job");
-                if let Err(e) = done_tx.send(Err(JobSchedulerError::CantAdd)) {
-                    eprintln!("Error sending failure of adding job {:?}", e);
+            tokio::spawn(async move {
+                let job = Arc::new(RwLock::new(job));
+                if let Err(e) = tx.send((data, job)) {
+                    eprintln!("Error sending new job");
+                    if let Err(e) = done_tx.send(Err(JobSchedulerError::CantAdd)) {
+                        eprintln!("Error sending failure of adding job {:?}", e);
+                    }
+                    return;
                 }
-                return;
-            }
+            });
 
             while let Ok(val) = rx.recv().await {
                 match val {

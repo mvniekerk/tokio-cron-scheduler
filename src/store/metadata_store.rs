@@ -17,6 +17,9 @@ pub trait MetaDataStorage: DataStore<JobStoredData> + InitStore {
         next_tick: Option<DateTime<Utc>>,
         last_tick: Option<DateTime<Utc>>,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>>;
+    fn time_till_next_job(
+        &mut self,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<std::time::Duration>, JobSchedulerError>> + Send>>;
 }
 
 pub trait JobCodeGet: CodeGet<Box<JobToRunAsync>> {}

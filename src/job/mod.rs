@@ -65,19 +65,15 @@ pub trait Job {
     fn count(&self) -> u32;
     fn increment_count(&mut self);
     fn job_id(&self) -> Uuid;
-    fn run(&mut self, jobs: JobScheduler) -> Receiver<bool>;
     fn job_type(&self) -> JobType;
     fn ran(&self) -> bool;
     fn set_ran(&mut self, ran: bool);
     fn stop(&self) -> bool;
     fn set_stopped(&mut self);
     fn set_started(&mut self);
-    fn job_data_from_job_store(
-        &mut self,
-        job_store: JobStoreLocked,
-    ) -> Result<Option<JobStoredData>, JobSchedulerError>;
     fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError>;
     fn set_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError>;
+    fn run(&mut self, jobs: JobScheduler) -> Receiver<bool>;
 }
 
 impl JobLocked {

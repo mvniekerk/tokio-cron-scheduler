@@ -66,27 +66,6 @@ impl Job for CronJob {
         self.data.id.as_ref().cloned().map(|e| e.into()).unwrap()
     }
 
-    fn run(&mut self, jobs: JobScheduler) -> Receiver<bool> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let job_id = self.job_id();
-
-        if !self.async_job {
-            (self.run)(job_id, jobs);
-            if let Err(e) = tx.send(true) {
-                eprintln!("Error notifying done {:?}", e);
-            }
-        } else {
-            let future = (self.run_async)(job_id, jobs);
-            tokio::task::spawn(async move {
-                future.await;
-                if let Err(e) = tx.send(true) {
-                    eprintln!("Error notifying done {:?}", e);
-                }
-            });
-        }
-        rx
-    }
-
     fn job_type(&self) -> JobType {
         JobType::Cron
     }
@@ -111,15 +90,6 @@ impl Job for CronJob {
         self.data.stopped = false;
     }
 
-    fn job_data_from_job_store(
-        &mut self,
-        job_store: JobStoreLocked,
-    ) -> Result<Option<JobStoredData>, JobSchedulerError> {
-        let mut job_store = job_store;
-        let jd = job_store.get_job_data(&self.job_id())?;
-        Ok(jd)
-    }
-
     fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError> {
         Ok(Some(self.data.clone()))
     }
@@ -127,5 +97,26 @@ impl Job for CronJob {
     fn set_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError> {
         self.data = job_data;
         Ok(())
+    }
+
+    fn run(&mut self, jobs: JobScheduler) -> Receiver<bool> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let job_id = self.job_id();
+
+        if !self.async_job {
+            (self.run)(job_id, jobs);
+            if let Err(e) = tx.send(true) {
+                eprintln!("Error notifying done {:?}", e);
+            }
+        } else {
+            let future = (self.run_async)(job_id, jobs);
+            tokio::task::spawn(async move {
+                future.await;
+                if let Err(e) = tx.send(true) {
+                    eprintln!("Error notifying done {:?}", e);
+                }
+            });
+        }
+        rx
     }
 }

@@ -24,8 +24,8 @@ pub struct Context {
     pub job_delete_tx: Sender<Uuid>,
     pub job_delete_rx: Receiver<Uuid>,
 
-    pub job_deleted_tx: Sender<Uuid>,
-    pub job_deleted_rx: Receiver<Uuid>,
+    pub job_deleted_tx: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
+    pub job_deleted_rx: Receiver<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
 
     pub notify_create_tx: Sender<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,
     pub notify_create_rx: Receiver<(NotificationData, Arc<RwLock<Box<OnJobNotification>>>)>,

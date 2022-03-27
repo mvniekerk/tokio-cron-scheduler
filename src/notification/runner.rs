@@ -63,7 +63,7 @@ impl NotificationRunner {
     pub fn init(
         &mut self,
         context: &Context,
-    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let code = context.notification_code.clone();
         let rx = context.notify_tx.subscribe();
         let storage = context.notification_storage.clone();

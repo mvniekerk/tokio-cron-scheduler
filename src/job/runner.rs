@@ -63,7 +63,7 @@ impl JobRunner {
         &mut self,
         context: &Context,
         job_scheduler: JobsSchedulerLocked,
-    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let job_code = context.job_code.clone();
         let notify_tx = context.notify_tx.clone();
         let job_activation_rx = context.job_activation_tx.subscribe();

@@ -43,7 +43,7 @@ impl SimpleJobCode {
 
     async fn listen_for_removals(
         data: Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<JobToRunAsync>>>>>>,
-        mut rx: Receiver<Uuid>,
+        mut rx: Receiver<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -52,8 +52,10 @@ impl SimpleJobCode {
                 break;
             }
             let uuid = val.unwrap();
-            let mut w = data.write().await;
-            w.remove(&uuid);
+            if let Ok(uuid) = uuid {
+                let mut w = data.write().await;
+                w.remove(&uuid);
+            }
         }
     }
 }

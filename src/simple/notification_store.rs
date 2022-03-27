@@ -25,7 +25,7 @@ impl Default for SimpleNotificationStore {
 }
 
 impl InitStore for SimpleNotificationStore {
-    fn init(&mut self) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>>>> {
+    fn init(&mut self) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         self.inited = true;
         Box::pin(std::future::ready(Ok(())))
     }

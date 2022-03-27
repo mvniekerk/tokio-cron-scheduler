@@ -15,7 +15,7 @@ impl JobDeleter {
     async fn listen_to_removals(
         storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
         mut rx: Receiver<Uuid>,
-        mut tx_deleted: Sender<Uuid>,
+        mut tx_deleted: Sender<Result<Uuid, (JobSchedulerError, Option<Uuid>)>>,
     ) {
         loop {
             let val = rx.recv().await;
@@ -29,10 +29,13 @@ impl JobDeleter {
                 let delete = storage.delete(uuid.clone()).await;
                 if let Err(e) = delete {
                     eprintln!("Error deleting {:?}", e);
+                    if let Err(e) = tx_deleted.send(Err((e, Some(uuid)))) {
+                        eprintln!("Error sending delete error {:?}", e);
+                    }
                     continue;
                 }
             }
-            if let Err(e) = tx_deleted.send(uuid) {
+            if let Err(e) = tx_deleted.send(Ok(uuid)) {
                 eprintln!("Error sending error {:?}", e);
             }
         }
@@ -50,5 +53,52 @@ impl JobDeleter {
             tokio::spawn(JobDeleter::listen_to_removals(storage, rx, tx_deleted));
             Ok(())
         })
+    }
+
+    pub fn remove(context: &Context, job_id: &Uuid) -> Result<(), JobSchedulerError> {
+        let delete = context.job_delete_tx.clone();
+        let mut deleted = context.job_deleted_tx.subscribe();
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        let job_id = job_id.clone();
+        tokio::spawn(async move {
+            let job_id_for_send = job_id.clone();
+            tokio::spawn(async move {
+                if let Err(e) = delete.send(job_id_for_send) {
+                    eprintln!("Error sending delete id {:?}", e);
+                }
+            });
+            while let Ok(deleted) = deleted.recv().await {
+                let ret = match deleted {
+                    Ok(uuid) => {
+                        if uuid == job_id {
+                            Ok(())
+                        } else {
+                            continue;
+                        }
+                    }
+                    Err((e, Some(uuid))) => {
+                        if uuid == job_id {
+                            Err(e)
+                        } else {
+                            continue;
+                        }
+                    }
+                    _ => continue,
+                };
+                if let Err(e) = tx.send(ret) {
+                    eprintln!("Error sending removal result {:?}", e);
+                }
+            }
+        });
+
+        let ret = rx.recv();
+        match ret {
+            Ok(ret) => ret,
+            Err(e) => {
+                eprintln!("Error receiving result from job deletion {:?}", e);
+                Err(JobSchedulerError::CantRemove)
+            }
+        }
     }
 }
