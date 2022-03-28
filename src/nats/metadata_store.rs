@@ -1,7 +1,7 @@
 use crate::job::job_data::ListOfUuids;
 use crate::nats::{sanitize_nats_bucket, sanitize_nats_key};
 use crate::store::{DataStore, InitStore, MetaDataStorage};
-use crate::{JobAndNextTick, JobSchedulerError, JobStoredData};
+use crate::{JobAndNextTick, JobSchedulerError, JobStoredData, JobUuid};
 use chrono::{DateTime, Utc};
 use nats::jetstream::JetStream;
 use nats::kv::{Config, Store};
@@ -10,7 +10,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, RwLockReadGuard};
 use uuid::Uuid;
 
 const LIST_NAME: &str = "TCS_JOB_LIST";
@@ -99,6 +99,7 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
         let bucket = self.bucket.clone();
         let uuid: Uuid = data.id.as_ref().unwrap().into();
         let get = self.get(uuid);
+        let add_to_list = self.add_to_list_of_guids(uuid);
         Box::pin(async move {
             let bucket = bucket.read().await;
             let bytes = data.encode_length_delimited_to_vec();
@@ -112,11 +113,11 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
                     bucket.create(&*uuid, bytes)
                 }
             };
-            // TODO add to list
-            done.map(|_| ()).map_err(|e| {
-                eprintln!("Error adding or updating value {:?}", e);
-                JobSchedulerError::CantAdd
-            })
+            let added = add_to_list.await;
+            match (done, added) {
+                (Ok(()), Ok(())) => Ok(()),
+                _ => Err(JobSchedulerError::CantAdd),
+            }
         })
     }
 
@@ -125,14 +126,18 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
         guid: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let bucket = self.bucket.clone();
+        let removed_from_list = self.remove_from_list(guid);
         Box::pin(async move {
             let bucket = bucket.read().await;
             let guid = sanitize_nats_key(&*guid.to_string());
-            // TODO remove from list
-            bucket.delete(&*guid).map(|_| ()).map_err(|e| {
-                eprintln!("Error removing job data {:?}", e);
-                JobSchedulerError::CantRemove
-            })
+
+            let deleted = bucket.delete(&*guid);
+            let removed_from_list = removed_from_list.await;
+
+            match (deleted, removed_from_list) {
+                (Ok(()), Ok(())) => Ok(()),
+                _ => JobSchedulerError::CantRemove,
+            }
         })
     }
 }
@@ -290,6 +295,84 @@ impl NatsMetadataStore {
                     Err(JobSchedulerError::CantListGuids)
                 }
             }
+        })
+    }
+
+    fn add_to_list_of_guids(
+        &self,
+        uuid: Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
+        let list = self.list_guids();
+        let bucket = self.bucket.clone();
+        Box::pin(async move {
+            let list = list.await;
+            if let Err(e) = list {
+                eprintln!("Could not get list of guids {:?}", e);
+                return Err(JobSchedulerError::ErrorLoadingGuidList);
+            }
+            let mut list = list.unwrap();
+            let exists = list.uuid_in_list(uuid);
+            if exists {
+                return Ok(());
+            }
+            let uuid: JobUuid = uuid.into();
+            list.uuids.push(uuid);
+
+            let bucket = bucket.read().await;
+            NatsMetadataStore::update_list(bucket, list)
+        })
+    }
+
+    fn update_list(
+        bucket: RwLockReadGuard<Store>,
+        list: ListOfUuids,
+    ) -> Result<(), JobSchedulerError> {
+        let has_list_already = bucket
+            .get(&*sanitize_nats_key(LIST_NAME))
+            .ok()
+            .flatten()
+            .is_some();
+        if has_list_already {
+            bucket.put(
+                &*sanitize_nats_key(LIST_NAME),
+                list.encode_length_delimited_to_vec(),
+            )
+        } else {
+            bucket.create(
+                &*sanitize_nats_key(LIST_NAME),
+                list.encode_length_delimited_to_vec(),
+            )
+        }
+        .map(|_| ())
+        .map_err(|e| {
+            eprintln!("Error saving list of guids {:?}", e);
+            JobSchedulerError::CantAdd
+        })
+    }
+
+    fn remove_from_list(
+        &self,
+        uuid: Uuid,
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
+        let list = self.list_guids();
+        let bucket = self.bucket.clone();
+        Box::pin(async move {
+            let list = list.await;
+            if let Err(e) = list {
+                eprintln!("Could not get list of guids {:?}", e);
+                return Err(JobSchedulerError::ErrorLoadingGuidList);
+            }
+            let mut list = list.unwrap();
+            let exists = list.uuid_in_list(uuid);
+            if !exists {
+                return Ok(());
+            }
+            list.uuids.retain(|v| {
+                let v: Uuid = v.into();
+                v != uuid
+            });
+            let bucket = bucket.read().await;
+            NatsMetadataStore::update_list(bucket, list)
         })
     }
 }

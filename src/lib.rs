@@ -23,6 +23,7 @@ use std::ops::Add;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
+use crate::job::job_data::ListOfUuids;
 use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
 use uuid::Uuid;
 
@@ -115,5 +116,18 @@ impl JobStoredData {
 
     pub fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>) {
         self.last_tick = tick.map(|t| t.timestamp() as u64);
+    }
+}
+
+impl ListOfUuids {
+    pub fn uuid_in_list(&self, uuid: Uuid) -> bool {
+        self.uuids
+            .iter()
+            .map(|uuid| {
+                let uuid: Uuid = uuid.into();
+                uuid
+            })
+            .find(|val| val == uuid)
+            .is_some()
     }
 }

@@ -1,6 +1,8 @@
 mod metadata_store;
+mod notification_store;
 
 pub use metadata_store::NatsMetadataStore;
+pub use notification_store::NatsNotificationStore;
 
 pub fn sanitize_nats_key(key: &str) -> String {
     key.replace('#', ".")
