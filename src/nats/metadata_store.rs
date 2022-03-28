@@ -1,76 +1,23 @@
 use crate::job::job_data::ListOfUuids;
-use crate::nats::{sanitize_nats_bucket, sanitize_nats_key};
+use crate::nats::{sanitize_nats_key, NatsStore};
 use crate::store::{DataStore, InitStore, MetaDataStorage};
 use crate::{JobAndNextTick, JobSchedulerError, JobStoredData, JobUuid};
 use chrono::{DateTime, Utc};
-use nats::jetstream::JetStream;
-use nats::kv::{Config, Store};
+use nats::kv::Store;
 use prost::Message;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, RwLockReadGuard};
+use tokio::sync::RwLockReadGuard;
 use uuid::Uuid;
 
 const LIST_NAME: &str = "TCS_JOB_LIST";
 
 ///
 /// A Nats KV store backed metadata store
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct NatsMetadataStore {
-    pub context: Arc<RwLock<JetStream>>,
-    pub inited: bool,
-    pub bucket_name: String,
-    pub bucket: Arc<RwLock<Store>>,
-}
-
-impl Default for NatsMetadataStore {
-    fn default() -> Self {
-        let nats_host =
-            std::env::var("NATS_HOST").unwrap_or_else(|_| "nats://localhost".to_string());
-        let nats_app = std::env::var("NATS_APP").unwrap_or_else(|_| "Unknown Nats app".to_string());
-        let connection = {
-            let username = std::env::var("NATS_USERNAME");
-            let password = std::env::var("NATS_PASSWORD");
-            match (username, password) {
-                (Ok(username), Ok(password)) => {
-                    let mut options =
-                        nats::Options::with_user_pass(&*username, &*password).with_name(&*nats_app);
-                    if std::path::Path::new("/etc/runtime-certs/").exists() {
-                        options = options
-                            .add_root_certificate("/etc/runtime-certs/ca.crt")
-                            .client_cert("/etc/runtime-certs/tls.crt", "/etc/runtime-certs/tls.key")
-                    }
-                    options.connect(&*nats_host)
-                }
-                _ => nats::connect(&*nats_host),
-            }
-        }
-        .unwrap();
-        let bucket_name =
-            std::env::var("NATS_BUCKET_NAME").unwrap_or_else(|_| "tokiocron".to_string());
-        let bucket_name = sanitize_nats_bucket(&bucket_name);
-        let bucket_description = std::env::var("NATS_BUCKET_DESCRIPTION")
-            .unwrap_or_else(|_| "Tokio Cron Scheduler".to_string());
-        let context = nats::jetstream::new(connection);
-        let bucket = context
-            .create_key_value(&Config {
-                bucket: bucket_name.clone(),
-                description: bucket_description,
-                history: 1,
-                ..Default::default()
-            })
-            .unwrap();
-        let context = Arc::new(RwLock::new(context));
-        let bucket = Arc::new(RwLock::new(bucket));
-        Self {
-            context,
-            inited: true,
-            bucket_name,
-            bucket,
-        }
-    }
+    pub store: NatsStore,
 }
 
 impl DataStore<JobStoredData> for NatsMetadataStore {
@@ -79,7 +26,7 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
         id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Option<JobStoredData>, JobSchedulerError>> + Send>>
     {
-        let bucket = self.bucket.clone();
+        let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let r = bucket.read().await;
             let id = sanitize_nats_key(&*id.to_string());
@@ -96,7 +43,7 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
         &mut self,
         data: JobStoredData,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
-        let bucket = self.bucket.clone();
+        let bucket = self.store.bucket.clone();
         let uuid: Uuid = data.id.as_ref().unwrap().into();
         let get = self.get(uuid);
         let add_to_list = self.add_to_list_of_guids(uuid);
@@ -125,7 +72,7 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
         &mut self,
         guid: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
-        let bucket = self.bucket.clone();
+        let bucket = self.store.bucket.clone();
         let removed_from_list = self.remove_from_list(guid);
         Box::pin(async move {
             let bucket = bucket.read().await;
@@ -152,7 +99,7 @@ impl InitStore for NatsMetadataStore {
     }
 
     fn inited(&mut self) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>>>> {
-        let inited = self.inited;
+        let inited = self.store.inited;
         Box::pin(async move { Ok(inited) })
     }
 }
@@ -162,7 +109,7 @@ impl MetaDataStorage for NatsMetadataStore {
         &mut self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<JobAndNextTick>, JobSchedulerError>> + Send>> {
         let list_guids = self.list_guids();
-        let bucket = self.bucket.clone();
+        let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let list = list_guids.await;
             if let Err(e) = list {
@@ -198,7 +145,7 @@ impl MetaDataStorage for NatsMetadataStore {
         last_tick: Option<DateTime<Utc>>,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let get = self.get(guid);
-        let bucket = self.bucket.clone();
+        let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let get = get.await;
             match get {
@@ -234,7 +181,7 @@ impl MetaDataStorage for NatsMetadataStore {
         &mut self,
     ) -> Pin<Box<dyn Future<Output = Result<Option<Duration>, JobSchedulerError>> + Send>> {
         let list = self.list_guids();
-        let bucket = self.bucket.clone();
+        let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let list = list.await;
             if let Err(e) = list {
@@ -277,7 +224,7 @@ impl NatsMetadataStore {
     fn list_guids(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<ListOfUuids, JobSchedulerError>> + Send>> {
-        let bucket = self.bucket.clone();
+        let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let r = bucket.read().await;
             let list = r.get(&*sanitize_nats_key(LIST_NAME));
@@ -303,7 +250,7 @@ impl NatsMetadataStore {
         uuid: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let list = self.list_guids();
-        let bucket = self.bucket.clone();
+        let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let list = list.await;
             if let Err(e) = list {
@@ -355,7 +302,7 @@ impl NatsMetadataStore {
         uuid: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let list = self.list_guids();
-        let bucket = self.bucket.clone();
+        let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let list = list.await;
             if let Err(e) = list {
