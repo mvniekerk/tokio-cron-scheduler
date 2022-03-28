@@ -10,7 +10,7 @@ mod simple;
 mod store;
 
 #[cfg(feature = "nats_scheduler")]
-pub use crate::nats::NatsJobScheduler;
+pub use crate::nats::NatsMetadataStore;
 use chrono::{DateTime, Utc};
 use cron::Schedule;
 pub use error::JobSchedulerError;

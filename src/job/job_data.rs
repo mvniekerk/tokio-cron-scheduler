@@ -84,6 +84,11 @@ pub struct JobAndNextTick {
     #[prost(uint64, optional, tag="4")]
     pub last_tick: ::core::option::Option<u64>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListOfUuids {
+    #[prost(message, repeated, tag="1")]
+    pub uuids: ::prost::alloc::vec::Vec<Uuid>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum JobState {

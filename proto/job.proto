@@ -70,3 +70,7 @@ message JobAndNextTick {
   optional uint64 last_tick = 4;
 }
 
+message ListOfUuids {
+  repeated Uuid uuids = 1;
+}
+
