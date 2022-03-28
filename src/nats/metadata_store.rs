@@ -115,7 +115,7 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
             };
             let added = add_to_list.await;
             match (done, added) {
-                (Ok(()), Ok(())) => Ok(()),
+                (Ok(_), Ok(_)) => Ok(()),
                 _ => Err(JobSchedulerError::CantAdd),
             }
         })
@@ -135,8 +135,8 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
             let removed_from_list = removed_from_list.await;
 
             match (deleted, removed_from_list) {
-                (Ok(()), Ok(())) => Ok(()),
-                _ => JobSchedulerError::CantRemove,
+                (Ok(_), Ok(_)) => Ok(()),
+                _ => Err(JobSchedulerError::CantRemove),
             }
         })
     }

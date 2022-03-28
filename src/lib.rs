@@ -127,7 +127,6 @@ impl ListOfUuids {
                 let uuid: Uuid = uuid.into();
                 uuid
             })
-            .find(|val| val == uuid)
-            .is_some()
+            .any(|val| val == uuid)
     }
 }
