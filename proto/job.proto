@@ -74,3 +74,12 @@ message ListOfUuids {
   repeated Uuid uuids = 1;
 }
 
+message JobAndNotifications {
+  Uuid job_id = 1;
+  repeated Uuid notification_ids = 2;
+}
+
+message ListOfJobsAndNotifications {
+  repeated JobAndNotifications job_and_notifications = 1;
+}
+

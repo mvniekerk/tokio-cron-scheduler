@@ -89,6 +89,18 @@ pub struct ListOfUuids {
     #[prost(message, repeated, tag="1")]
     pub uuids: ::prost::alloc::vec::Vec<Uuid>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct JobAndNotifications {
+    #[prost(message, optional, tag="1")]
+    pub job_id: ::core::option::Option<Uuid>,
+    #[prost(message, repeated, tag="2")]
+    pub notification_ids: ::prost::alloc::vec::Vec<Uuid>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListOfJobsAndNotifications {
+    #[prost(message, repeated, tag="1")]
+    pub job_and_notifications: ::prost::alloc::vec::Vec<JobAndNotifications>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum JobState {

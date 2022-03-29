@@ -1,7 +1,10 @@
-use crate::job::job_data::{JobState, NotificationData};
+use crate::job::job_data::{
+    JobAndNotifications, JobState, ListOfJobsAndNotifications, NotificationData,
+};
+use crate::job::{JobId, NotificationId};
 use crate::nats::{sanitize_nats_key, NatsStore};
 use crate::store::{DataStore, InitStore, NotificationStore};
-use crate::{JobSchedulerError, JobUuid, ListOfUuids};
+use crate::{JobSchedulerError, JobUuid};
 use nats::kv::Store;
 use prost::Message;
 use std::future::Future;
@@ -40,19 +43,27 @@ impl DataStore<NotificationData> for NatsNotificationStore {
         data: NotificationData,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let bucket = self.store.bucket.clone();
-        let uuid: Uuid = data
+        let notification_id: Uuid = data
             .job_id
             .as_ref()
             .and_then(|j| j.notification_id.as_ref())
             .unwrap()
             .into();
-        let get = self.get(uuid);
-        let add_to_list = self.add_to_list_of_guids(uuid);
+
+        let job_id: Uuid = data
+            .job_id
+            .as_ref()
+            .and_then(|j| j.job_id.as_ref())
+            .unwrap()
+            .into();
+
+        let get = self.get(notification_id);
+        let add_to_list = self.add_to_list_of_guids(job_id, notification_id);
         Box::pin(async move {
             let bucket = bucket.read().await;
             let bytes = data.encode_length_delimited_to_vec();
             let prev = get.await;
-            let uuid = sanitize_nats_key(&*uuid.to_string());
+            let uuid = sanitize_nats_key(&*notification_id.to_string());
             let done = match prev {
                 Ok(Some(_)) => bucket.put(&*uuid, bytes),
                 Ok(None) => bucket.create(&*uuid, bytes),
@@ -140,7 +151,8 @@ impl NotificationStore for NatsNotificationStore {
 impl NatsNotificationStore {
     fn list_guids(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<ListOfUuids, JobSchedulerError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<ListOfJobsAndNotifications, JobSchedulerError>> + Send>>
+    {
         let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let r = bucket.read().await;
@@ -148,12 +160,12 @@ impl NatsNotificationStore {
             match list {
                 Ok(Some(list)) => {
                     let list = list.as_slice();
-                    ListOfUuids::decode(list).map_err(|e| {
+                    ListOfJobsAndNotifications::decode(list).map_err(|e| {
                         eprintln!("Error decoding list value {:?}", e);
                         JobSchedulerError::CantListGuids
                     })
                 }
-                Ok(None) => Ok(ListOfUuids::default()),
+                Ok(None) => Ok(ListOfJobsAndNotifications::default()),
                 Err(e) => {
                     eprintln!("Error getting list of guids {:?}", e);
                     Err(JobSchedulerError::CantListGuids)
@@ -164,7 +176,8 @@ impl NatsNotificationStore {
 
     fn add_to_list_of_guids(
         &self,
-        uuid: Uuid,
+        job_id: JobId,
+        notification_id: NotificationId,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let list = self.list_guids();
         let bucket = self.store.bucket.clone();
@@ -175,12 +188,48 @@ impl NatsNotificationStore {
                 return Err(JobSchedulerError::ErrorLoadingGuidList);
             }
             let mut list = list.unwrap();
-            let exists = list.uuid_in_list(uuid);
-            if exists {
-                return Ok(());
+            let mut job_found = false;
+            for job in list.job_and_notifications.iter_mut() {
+                let this_job = job
+                    .job_id
+                    .as_ref()
+                    .filter(|j| {
+                        let j: Uuid = JobUuid {
+                            id1: j.id1,
+                            id2: j.id2,
+                        }
+                        .into();
+                        j == job_id
+                    })
+                    .is_some();
+                if this_job {
+                    job_found = true;
+                    let contains = job
+                        .notification_ids
+                        .iter()
+                        .find(|u| {
+                            let u: Uuid = JobUuid {
+                                id1: u.id1,
+                                id2: u.id2,
+                            }
+                            .into();
+                            u == notification_id
+                        })
+                        .is_some();
+                    if !contains {
+                        let notification: JobUuid = notification_id.into();
+                        job.notification_ids.push(notification)
+                    }
+                }
             }
-            let uuid: JobUuid = uuid.into();
-            list.uuids.push(uuid);
+            if !job_found {
+                let job_id: JobUuid = job_id.into();
+                let notification_id: JobUuid = notification_id.into();
+                list.job_and_notifications.push(JobAndNotifications {
+                    job_id: Some(job_id),
+                    notification_ids: vec![notification_id],
+                });
+            }
 
             let bucket = bucket.read().await;
             NatsNotificationStore::update_list(bucket, list)
@@ -189,7 +238,7 @@ impl NatsNotificationStore {
 
     fn update_list(
         bucket: RwLockReadGuard<Store>,
-        list: ListOfUuids,
+        list: ListOfJobsAndNotifications,
     ) -> Result<(), JobSchedulerError> {
         let has_list_already = bucket
             .get(&*sanitize_nats_key(LIST_NAME))
@@ -216,7 +265,7 @@ impl NatsNotificationStore {
 
     fn remove_from_list(
         &self,
-        uuid: Uuid,
+        uuid: NotificationId,
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let list = self.list_guids();
         let bucket = self.store.bucket.clone();
@@ -227,14 +276,18 @@ impl NatsNotificationStore {
                 return Err(JobSchedulerError::ErrorLoadingGuidList);
             }
             let mut list = list.unwrap();
-            let exists = list.uuid_in_list(uuid);
+            let mut exists = false;
+            for job_and_notifications in list.job_and_notifications.iter_mut() {
+                job_and_notifications.notification_ids.retain(|n| {
+                    let n: Uuid = n.into();
+                    let retain = n != uuid;
+                    exists |= !retain;
+                    retain
+                });
+            }
             if !exists {
                 return Ok(());
             }
-            list.uuids.retain(|v| {
-                let v: Uuid = v.into();
-                v != uuid
-            });
             let bucket = bucket.read().await;
             NatsNotificationStore::update_list(bucket, list)
         })
