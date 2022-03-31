@@ -1,4 +1,5 @@
 use crate::job::job_data::{JobIdAndNotification, JobState, NotificationData};
+use crate::job::{JobId, NotificationId};
 use crate::store::{DataStore, InitStore, NotificationStore};
 use crate::JobSchedulerError;
 use std::collections::HashMap;
@@ -140,9 +141,9 @@ impl DataStore<NotificationData> for SimpleNotificationStore {
 impl NotificationStore for SimpleNotificationStore {
     fn list_notification_guids_for_job_and_state(
         &mut self,
-        job_id: Uuid,
+        job_id: JobId,
         state: JobState,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<NotificationId>, JobSchedulerError>> + Send>> {
         let state: i32 = state.into();
         let notifications = self.data.clone();
         Box::pin(async move {
@@ -228,10 +229,10 @@ impl NotificationStore for SimpleNotificationStore {
     fn delete_for_job(
         &mut self,
         job_id: Uuid,
-    ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let jobs = self.notification_vs_job.clone();
         let notifications = self.data.clone();
-        Box::new(async move {
+        Box::pin(async move {
             let mut jobs = jobs.write().await;
 
             jobs.retain(|_k, v| *v != job_id);

@@ -119,17 +119,77 @@ impl InitStore for NatsNotificationStore {
 impl NotificationStore for NatsNotificationStore {
     fn list_notification_guids_for_job_and_state(
         &mut self,
-        job: Uuid,
+        job: JobId,
         state: JobState,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>> + Send>> {
-        todo!()
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<NotificationId>, JobSchedulerError>> + Send>> {
+        let list_of_notification_guids = self.list_notification_guids_for_job_id(job);
+        let bucket = self.store.bucket.clone();
+        let state = state as i32;
+        Box::pin(async move {
+            let list_of_notification_guids = list_of_notification_guids.await;
+            if let Err(e) = list_of_notification_guids {
+                eprintln!("Could not get list of guids {:?}", e);
+                return Err(e);
+            }
+            let list_of_notification_guids = list_of_notification_guids.unwrap();
+            let bucket = bucket.read().await;
+            let notification_ids = list_of_notification_guids
+                .iter()
+                .filter_map(|s| {
+                    let notification_id = *s;
+                    bucket
+                        .get(&*sanitize_nats_key(&*notification_id.to_string()))
+                        .ok()
+                        .flatten()
+                        .and_then(|b| NotificationData::decode(b.as_slice()).ok())
+                        .filter(|nd| nd.job_states.contains(&state))
+                        .map(|_| notification_id)
+                })
+                .collect::<Vec<_>>();
+            Ok(notification_ids)
+        })
     }
 
     fn list_notification_guids_for_job_id(
         &mut self,
         job_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Uuid>, JobSchedulerError>> + Send>> {
-        todo!()
+        let list_guids = self.list_guids();
+        Box::pin(async move {
+            let list_guids = list_guids.await;
+            if let Err(e) = list_guids {
+                eprintln!("Error getting {:?}", e);
+                return Err(e);
+            }
+            let list_guids = list_guids.unwrap();
+            let list = list_guids
+                .job_and_notifications
+                .iter()
+                .flat_map(|j| {
+                    j.job_id
+                        .as_ref()
+                        .filter(|id| {
+                            let id: Uuid = JobUuid {
+                                id1: id.id1,
+                                id2: id.id2,
+                            }
+                            .into();
+                            id == job_id
+                        })
+                        .map(|_i| {
+                            j.notification_ids
+                                .iter()
+                                .map(|n| {
+                                    let n: Uuid = n.into();
+                                    n
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            Ok(list)
+        })
     }
 
     fn delete_notification_for_state(
@@ -137,14 +197,86 @@ impl NotificationStore for NatsNotificationStore {
         notification_id: Uuid,
         state: JobState,
     ) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>> + Send>> {
-        todo!()
+        let get = self.get(notification_id);
+        let mut self_clone = self.clone();
+
+        Box::pin(async move {
+            let data = get.await;
+            let mut data = match data {
+                Ok(Some(get)) => get,
+                Ok(None) => {
+                    eprintln!("Notification not found {:?}", notification_id);
+                    return Err(JobSchedulerError::CantRemove);
+                }
+                Err(e) => {
+                    eprintln!("Error getting notification {:?}", e);
+                    return Err(e);
+                }
+            };
+            let state = state as i32;
+
+            let mut deleted = false;
+            data.job_states.retain(|s| {
+                let ret = *s != state;
+                deleted |= !ret;
+                ret
+            });
+
+            if data.job_states.is_empty() {
+                // Need to delete
+                let delete = self_clone.delete(notification_id).await;
+                if let Err(e) = delete {
+                    eprintln!("Could not delete notification {:?}", e);
+                    return Err(e);
+                }
+                let delete = self_clone.remove_from_list(notification_id).await;
+                delete.map(|_| true)
+            } else {
+                // Need to update
+                self_clone.add_or_update(data).await.map(|_| deleted)
+            }
+        })
     }
 
     fn delete_for_job(
         &mut self,
         job_id: Uuid,
-    ) -> Box<dyn Future<Output = Result<(), JobSchedulerError>>> {
-        todo!()
+    ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
+        let list_guids = self.list_guids();
+        let mut self_clone = self.clone();
+        Box::pin(async move {
+            let list_guids = list_guids.await;
+            if let Err(e) = list_guids {
+                eprintln!("Error getting list of guids {:?}", e);
+                return Err(e);
+            }
+            let list_guids = list_guids.unwrap();
+            let notifications = list_guids
+                .job_and_notifications
+                .into_iter()
+                .filter(|l| {
+                    l.job_id
+                        .as_ref()
+                        .map(|u| {
+                            let u: Uuid = u.into();
+                            u == job_id
+                        })
+                        .is_some()
+                })
+                .flat_map(|l: JobAndNotifications| l.notification_ids)
+                .map(|u| {
+                    let u: Uuid = u.into();
+                    u
+                });
+            for notification_id in notifications {
+                let deleted = self_clone.delete(notification_id).await;
+                if let Err(e) = deleted {
+                    eprintln!("Error deleting notification {:?}", notification_id);
+                    return Err(e);
+                }
+            }
+            Ok(())
+        })
     }
 }
 
@@ -204,18 +336,14 @@ impl NatsNotificationStore {
                     .is_some();
                 if this_job {
                     job_found = true;
-                    let contains = job
-                        .notification_ids
-                        .iter()
-                        .find(|u| {
-                            let u: Uuid = JobUuid {
-                                id1: u.id1,
-                                id2: u.id2,
-                            }
-                            .into();
-                            u == notification_id
-                        })
-                        .is_some();
+                    let contains = job.notification_ids.iter().any(|u| {
+                        let u: Uuid = JobUuid {
+                            id1: u.id1,
+                            id2: u.id2,
+                        }
+                        .into();
+                        u == notification_id
+                    });
                     if !contains {
                         let notification: JobUuid = notification_id.into();
                         job.notification_ids.push(notification)
