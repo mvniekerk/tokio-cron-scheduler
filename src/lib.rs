@@ -9,23 +9,28 @@ mod scheduler;
 mod simple;
 mod store;
 
-#[cfg(feature = "nats_scheduler")]
-pub use crate::nats::NatsMetadataStore;
+use std::ops::Add;
+use std::str::FromStr;
+use std::time::{Duration, SystemTime};
+
+use crate::job::job_data::ListOfUuids;
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
+use uuid::Uuid;
+
+#[cfg(feature = "nats_scheduler")]
+pub use crate::nats::{NatsMetadataStore, NatsNotificationStore, NatsStore};
 pub use error::JobSchedulerError;
 pub use job::job_data::JobState as JobNotification;
 pub use job::JobLocked as Job;
 pub use job::JobToRun;
 pub use job::OnJobNotification;
 pub use job_scheduler::JobsSchedulerLocked as JobScheduler;
-use std::ops::Add;
-use std::str::FromStr;
-use std::time::{Duration, SystemTime};
 
-use crate::job::job_data::ListOfUuids;
-use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
-use uuid::Uuid;
+pub use simple::{
+    SimpleJobCode, SimpleMetadataStore, SimpleNotificationCode, SimpleNotificationStore,
+};
 
 impl From<Uuid> for JobUuid {
     fn from(uuid: Uuid) -> Self {

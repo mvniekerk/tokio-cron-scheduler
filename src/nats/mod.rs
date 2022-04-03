@@ -1,12 +1,13 @@
 mod metadata_store;
 mod notification_store;
 
-pub use metadata_store::NatsMetadataStore;
 use nats::jetstream::JetStream;
 use nats::kv::{Config, Store};
-pub use notification_store::NatsNotificationStore;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+pub use metadata_store::NatsMetadataStore;
+pub use notification_store::NatsNotificationStore;
 
 pub fn sanitize_nats_key(key: &str) -> String {
     key.replace('#', ".")

@@ -40,4 +40,14 @@ signal = ["tokio/signal"]
 nats_scheduler = ["nats"]
 default = ["nats_scheduler"]
 
+[[example]]
+name = "simple"
+path = "examples/simple_job.rs"
+
+[[example]]
+name = "nats"
+path = "examples/nats_job.rs"
+[nats.features]
+default = ["nats_scheduler"]
+
 
