@@ -32,35 +32,39 @@ pub use simple::{
     SimpleJobCode, SimpleMetadataStore, SimpleNotificationCode, SimpleNotificationStore,
 };
 
-impl From<Uuid> for JobUuid {
-    fn from(uuid: Uuid) -> Self {
-        let uuid = uuid.as_u128();
+impl JobUuid {
+    pub fn from_u128(uuid: u128) -> Self {
         let id1 = (uuid >> 64) as u64;
         let id2 = (uuid & 0xFFFF_FFFF_FFFF_FFFF) as u64;
-        JobUuid { id1, id2 }
+        Self { id1, id2 }
+    }
+
+    pub fn as_u128(&self) -> u128 {
+        ((self.id1 as u128) << 64) + (self.id2 as u128)
+    }
+}
+
+impl From<Uuid> for JobUuid {
+    fn from(uuid: Uuid) -> Self {
+        JobUuid::from_u128(uuid.as_u128())
     }
 }
 
 impl From<&Uuid> for JobUuid {
     fn from(uuid: &Uuid) -> Self {
-        let uuid = uuid.as_u128();
-        let id1 = (uuid >> 64) as u64;
-        let id2 = (uuid & 0xFFFF_FFFF_FFFF_FFFF) as u64;
-        JobUuid { id1, id2 }
+        JobUuid::from_u128(uuid.as_u128())
     }
 }
 
 impl From<JobUuid> for Uuid {
     fn from(uuid: JobUuid) -> Self {
-        let id = ((uuid.id1 as u128) << 64) + (uuid.id2 as u128);
-        Uuid::from_u128(id)
+        Uuid::from_u128(uuid.as_u128())
     }
 }
 
 impl From<&JobUuid> for Uuid {
     fn from(uuid: &JobUuid) -> Self {
-        let id = ((uuid.id1 as u128) << 64) + (uuid.id2 as u128);
-        Uuid::from_u128(id)
+        Uuid::from_u128(uuid.as_u128())
     }
 }
 

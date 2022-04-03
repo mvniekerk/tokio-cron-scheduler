@@ -13,10 +13,16 @@ use tokio::sync::RwLockReadGuard;
 use uuid::Uuid;
 
 const LIST_NAME: &str = "TCS_NOTIFICATION_LIST";
+const NOTIFICATION_PRE: &str = "NOTIF_";
 
 #[derive(Clone, Default)]
 pub struct NatsNotificationStore {
     pub store: NatsStore,
+}
+
+fn uuid_to_nats_id(uuid: Uuid) -> String {
+    let uuid = NOTIFICATION_PRE.to_string() + &*uuid.to_string();
+    sanitize_nats_key(&*uuid)
 }
 
 impl DataStore<NotificationData> for NatsNotificationStore {
@@ -28,7 +34,7 @@ impl DataStore<NotificationData> for NatsNotificationStore {
         let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let r = bucket.read().await;
-            let id = sanitize_nats_key(&*id.to_string());
+            let id = uuid_to_nats_id(id);
             r.get(&*id)
                 .map_err(|e| {
                     eprintln!("Error getting data {:?}", e);
@@ -61,9 +67,9 @@ impl DataStore<NotificationData> for NatsNotificationStore {
         let add_to_list = self.add_to_list_of_guids(job_id, notification_id);
         Box::pin(async move {
             let bucket = bucket.read().await;
-            let bytes = data.encode_length_delimited_to_vec();
+            let bytes = data.encode_to_vec();
             let prev = get.await;
-            let uuid = sanitize_nats_key(&*notification_id.to_string());
+            let uuid = uuid_to_nats_id(notification_id);
             let done = match prev {
                 Ok(Some(_)) => bucket.put(&*uuid, bytes),
                 Ok(None) => bucket.create(&*uuid, bytes),
@@ -88,7 +94,7 @@ impl DataStore<NotificationData> for NatsNotificationStore {
         let removed_from_list = self.remove_from_list(guid);
         Box::pin(async move {
             let bucket = bucket.read().await;
-            let guid = sanitize_nats_key(&*guid.to_string());
+            let guid = uuid_to_nats_id(guid);
 
             let deleted = bucket.delete(&*guid);
             let removed_from_list = removed_from_list.await;
@@ -138,7 +144,7 @@ impl NotificationStore for NatsNotificationStore {
                 .filter_map(|s| {
                     let notification_id = *s;
                     bucket
-                        .get(&*sanitize_nats_key(&*notification_id.to_string()))
+                        .get(&*uuid_to_nats_id(notification_id))
                         .ok()
                         .flatten()
                         .and_then(|b| NotificationData::decode(b.as_slice()).ok())
@@ -374,15 +380,9 @@ impl NatsNotificationStore {
             .flatten()
             .is_some();
         if has_list_already {
-            bucket.put(
-                &*sanitize_nats_key(LIST_NAME),
-                list.encode_length_delimited_to_vec(),
-            )
+            bucket.put(&*sanitize_nats_key(LIST_NAME), list.encode_to_vec())
         } else {
-            bucket.create(
-                &*sanitize_nats_key(LIST_NAME),
-                list.encode_length_delimited_to_vec(),
-            )
+            bucket.create(&*sanitize_nats_key(LIST_NAME), list.encode_to_vec())
         }
         .map(|_| ())
         .map_err(|e| {

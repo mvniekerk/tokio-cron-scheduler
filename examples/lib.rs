@@ -22,17 +22,17 @@ pub async fn run_example(mut sched: JobScheduler) {
 
     // Adding a job notification without it being added to the scheduler will automatically add it to
     // the job store, but with stopped marking
-    five_s_job.on_removed_notification_add(
-        &sched,
-        Box::new(|job_id, notification_id, type_of_notification| {
-            Box::pin(async move {
-                println!(
-                    "5s Job {:?} was removed, notification {:?} ran ({:?})",
-                    job_id, notification_id, type_of_notification
-                );
-            })
-        }),
-    );
+    // five_s_job.on_removed_notification_add(
+    //     &sched,
+    //     Box::new(|job_id, notification_id, type_of_notification| {
+    //         Box::pin(async move {
+    //             println!(
+    //                 "5s Job {:?} was removed, notification {:?} ran ({:?})",
+    //                 job_id, notification_id, type_of_notification
+    //             );
+    //         })
+    //     }),
+    // );
     let five_s_job_guid = five_s_job.guid();
     sched.add(five_s_job);
 
