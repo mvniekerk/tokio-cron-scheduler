@@ -125,6 +125,8 @@ impl JobStoredData {
 }
 
 impl ListOfUuids {
+    // Allowing dead code for non-Nats library users.
+    #[allow(dead_code)]
     pub fn uuid_in_list(&self, uuid: Uuid) -> bool {
         self.uuids
             .iter()

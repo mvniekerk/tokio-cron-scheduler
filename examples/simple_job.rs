@@ -1,8 +1,8 @@
-use crate::shared::run_example;
+use crate::lib::run_example;
 use std::time::Duration;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
-mod shared;
+mod lib;
 
 #[tokio::main]
 async fn main() {
