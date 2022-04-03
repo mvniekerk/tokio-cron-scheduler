@@ -18,11 +18,11 @@ categories = ["date-and-time"]
 
 [dependencies]
 tokio = { version = "1", features = ["time", "rt", "sync"] }
-cron = "0.8"
+cron = "0.10.0"
 chrono = "0.4"
 time = "0.1.44"
 uuid = { version = "0.8", features = ["v4"] }
-prost = "0.9"
+prost = "0.10"
 
 [dependencies.nats]
 version = "0.18.1"
@@ -33,7 +33,7 @@ optional = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [build-dependencies]
-prost-build = { version = "0.9" }
+prost-build = { version = "0.10" }
 
 [features]
 signal = ["tokio/signal"]

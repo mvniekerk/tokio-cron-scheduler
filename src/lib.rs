@@ -23,6 +23,7 @@ use uuid::Uuid;
 pub use crate::nats::{NatsMetadataStore, NatsNotificationStore, NatsStore};
 pub use error::JobSchedulerError;
 pub use job::job_data::JobState as JobNotification;
+pub use job::to_code::{JobCode, NotificationCode, PinnedGetFuture, ToCode};
 pub use job::JobLocked as Job;
 pub use job::JobToRun;
 pub use job::OnJobNotification;
