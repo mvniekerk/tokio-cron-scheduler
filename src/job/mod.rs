@@ -1,11 +1,10 @@
-use crate::cron_job::CronJob;
-use crate::job_data::{JobState, JobStoredData, JobType};
+use crate::job::job_data::{JobState, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
-use crate::job_store::JobStoreLocked;
-use crate::non_cron_job::NonCronJob;
-use crate::{JobScheduler, JobSchedulerError};
+use crate::{JobScheduler, JobSchedulerError, JobStoredData};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+use cron_job::CronJob;
+use non_cron_job::NonCronJob;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -14,12 +13,27 @@ use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::oneshot::Receiver;
 use uuid::Uuid;
 
-pub type JobToRun = dyn FnMut(Uuid, JobsSchedulerLocked) + Send + Sync;
-pub type JobToRunAsync = dyn FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+mod creator;
+mod cron_job;
+mod deleter;
+pub mod job_data;
+mod non_cron_job;
+mod runner;
+pub mod to_code;
+use crate::notification::{NotificationCreator, NotificationDeleter};
+pub use creator::JobCreator;
+pub use deleter::JobDeleter;
+pub use runner::JobRunner;
+
+pub type JobId = Uuid;
+pub type NotificationId = Uuid;
+
+pub type JobToRun = dyn FnMut(JobId, JobsSchedulerLocked) + Send + Sync;
+pub type JobToRunAsync = dyn FnMut(JobId, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
     + Send
     + Sync;
 
-pub type OnJobNotification = dyn FnMut(Uuid, Uuid, JobState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+pub type OnJobNotification = dyn FnMut(JobId, NotificationId, JobState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
     + Send
     + Sync;
 
@@ -51,19 +65,15 @@ pub trait Job {
     fn count(&self) -> u32;
     fn increment_count(&mut self);
     fn job_id(&self) -> Uuid;
-    fn run(&mut self, jobs: JobScheduler) -> Receiver<bool>;
     fn job_type(&self) -> JobType;
     fn ran(&self) -> bool;
     fn set_ran(&mut self, ran: bool);
     fn stop(&self) -> bool;
     fn set_stopped(&mut self);
     fn set_started(&mut self);
-    fn job_data_from_job_store(
-        &mut self,
-        job_store: JobStoreLocked,
-    ) -> Result<Option<JobStoredData>, JobSchedulerError>;
     fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError>;
     fn set_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError>;
+    fn run(&mut self, jobs: JobScheduler) -> Receiver<bool>;
 }
 
 impl JobLocked {
@@ -98,19 +108,12 @@ impl JobLocked {
                     .unwrap_or(0),
                 job_type: JobType::Cron.into(),
                 count: 0,
-                on_stop: vec![],
-                on_started: vec![],
-                on_removed: vec![],
-                on_done: vec![],
-                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::CronJob(
-                    crate::job_data::CronJob {
-                        schedule: schedule.to_string(),
-                    },
-                )),
+                job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
+                    schedule: schedule.to_string(),
+                })),
             },
             run: Box::new(run),
             run_async: Box::new(nop_async),
@@ -151,19 +154,12 @@ impl JobLocked {
                     .unwrap_or(0),
                 job_type: JobType::Cron.into(),
                 count: 0,
-                on_stop: vec![],
-                on_started: vec![],
-                on_removed: vec![],
-                on_done: vec![],
-                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::CronJob(
-                    crate::job_data::CronJob {
-                        schedule: schedule.to_string(),
-                    },
-                )),
+                job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
+                    schedule: schedule.to_string(),
+                })),
             },
             run: Box::new(nop),
             run_async: Box::new(run),
@@ -235,16 +231,11 @@ impl JobLocked {
                     + duration.as_secs(),
                 job_type: JobType::OneShot.into(),
                 count: 0,
-                on_stop: vec![],
-                on_started: vec![],
-                on_removed: vec![],
-                on_done: vec![],
-                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::NonCronJob(
-                    crate::job_data::NonCronJob {
+                job: Some(job_data::job_stored_data::Job::NonCronJob(
+                    job_data::NonCronJob {
                         repeating: false,
                         repeated_every: duration.as_secs(),
                     },
@@ -322,16 +313,11 @@ impl JobLocked {
                     .unwrap_or(0),
                 job_type: JobType::OneShot.into(),
                 count: 0,
-                on_stop: vec![],
-                on_started: vec![],
-                on_removed: vec![],
-                on_done: vec![],
-                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::NonCronJob(
-                    crate::job_data::NonCronJob {
+                job: Some(job_data::job_stored_data::Job::NonCronJob(
+                    job_data::NonCronJob {
                         repeating: false,
                         repeated_every: instant.duration_since(Instant::now()).as_secs(),
                     },
@@ -415,16 +401,11 @@ impl JobLocked {
                     .unwrap_or(0),
                 job_type: JobType::Repeated.into(),
                 count: 0,
-                on_stop: vec![],
-                on_started: vec![],
-                on_removed: vec![],
-                on_done: vec![],
-                on_scheduled: vec![],
                 extra: vec![],
                 ran: false,
                 stopped: false,
-                job: Some(crate::job_data::job_stored_data::Job::NonCronJob(
-                    crate::job_data::NonCronJob {
+                job: Some(job_data::job_stored_data::Job::NonCronJob(
+                    job_data::NonCronJob {
                         repeating: true,
                         repeated_every: duration.as_secs(),
                     },
@@ -575,53 +556,61 @@ impl JobLocked {
     ///
     /// Add a notification to run on a list of state notifications
     pub fn on_notifications_add(
-        &mut self,
-        mut job_store: JobStoreLocked,
+        &self,
+        job_scheduler: &JobsSchedulerLocked,
         run: Box<OnJobNotification>,
         states: Vec<JobState>,
     ) -> Result<Uuid, JobSchedulerError> {
-        let inited = job_store.inited()?;
-        if !inited {
-            job_store.init()?;
+        if !job_scheduler.inited() {
+            let mut job_scheduler = job_scheduler.clone();
+            job_scheduler.init()?;
         }
-
-        let self_job_locked = self.clone();
         let job_id = self.guid();
-        let uuid = Uuid::new_v4();
-        let mut js = job_store;
-
-        let contains_job = js.has_job(&job_id)?;
-        if !contains_job {
-            self.set_stop(true)?;
-            if let Err(e) = js.add_no_start(self_job_locked) {
-                eprintln!("Could not add job");
-                return Err(e);
-            }
-        }
-        js.add_notification(&job_id, &uuid, run, states)
-            .map(|_| uuid)
+        let context = job_scheduler.context();
+        NotificationCreator::add(&context, run, states, &job_id)
     }
 
     ///
     /// Run something when the task is started. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_start_notification_remove`.
     pub fn on_start_notification_add(
-        &mut self,
-        job_store: JobStoreLocked,
+        &self,
+        job_scheduler: &JobsSchedulerLocked,
         on_start: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
-        self.on_notifications_add(job_store, on_start, vec![JobState::Started])
+        self.on_notifications_add(job_scheduler, on_start, vec![JobState::Started])
+    }
+
+    ///
+    /// Remove a notification optionally for a certain type of states
+    pub fn on_notification_removal(
+        &self,
+        job_scheduler: &JobsSchedulerLocked,
+        notification_id: &Uuid,
+        states: Option<Vec<JobState>>,
+    ) -> Result<(NotificationId, bool), JobSchedulerError> {
+        if !job_scheduler.inited() {
+            let mut job_scheduler = job_scheduler.clone();
+            job_scheduler.init()?;
+        }
+        let context = job_scheduler.context();
+        NotificationDeleter::remove(&context, notification_id, states)
     }
 
     ///
     /// Remove the notification when the task was started. Uses the same UUID that was returned by
     /// `on_start_notification_add`
     pub fn on_start_notification_remove(
-        &mut self,
-        mut job_store: JobStoreLocked,
+        &self,
+        job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
-        job_store.remove_notification_for_job_state(notification_id, JobState::Started)
+        self.on_notification_removal(
+            job_scheduler,
+            notification_id,
+            Some(vec![JobState::Started]),
+        )
+        .map(|(_, deleted)| deleted)
     }
 
     ///
@@ -629,10 +618,10 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_stop_notification_remove`.
     pub fn on_done_notification_add(
         &mut self,
-        job_store: JobStoreLocked,
+        job_scheduler: &JobsSchedulerLocked,
         on_stop: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
-        self.on_notifications_add(job_store, on_stop, vec![JobState::Done])
+        self.on_notifications_add(job_scheduler, on_stop, vec![JobState::Done])
     }
 
     ///
@@ -640,10 +629,11 @@ impl JobLocked {
     /// `on_done_notification_add`
     pub fn on_done_notification_remove(
         &mut self,
-        mut job_store: JobStoreLocked,
+        job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
-        job_store.remove_notification_for_job_state(notification_id, JobState::Done)
+        self.on_notification_removal(job_scheduler, notification_id, Some(vec![JobState::Done]))
+            .map(|(_, deleted)| deleted)
     }
 
     ///
@@ -651,10 +641,10 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
     pub fn on_removed_notification_add(
         &mut self,
-        job_store: JobStoreLocked,
+        job_scheduler: &JobsSchedulerLocked,
         on_removed: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
-        self.on_notifications_add(job_store, on_removed, vec![JobState::Removed])
+        self.on_notifications_add(job_scheduler, on_removed, vec![JobState::Removed])
     }
 
     ///
@@ -662,10 +652,15 @@ impl JobLocked {
     /// `on_removed_notification_add`
     pub fn on_removed_notification_remove(
         &mut self,
-        mut job_store: JobStoreLocked,
+        job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
-        job_store.remove_notification_for_job_state(notification_id, JobState::Removed)
+        self.on_notification_removal(
+            job_scheduler,
+            notification_id,
+            Some(vec![JobState::Removed]),
+        )
+        .map(|(_, deleted)| deleted)
     }
 
     ///
@@ -673,10 +668,10 @@ impl JobLocked {
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
     pub fn on_stop_notification_add(
         &mut self,
-        job_store: JobStoreLocked,
+        job_scheduler: &JobsSchedulerLocked,
         on_removed: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
-        self.on_notifications_add(job_store, on_removed, vec![JobState::Stop])
+        self.on_notifications_add(job_scheduler, on_removed, vec![JobState::Stop])
     }
 
     ///
@@ -684,10 +679,11 @@ impl JobLocked {
     /// `on_removed_notification_add`
     pub fn on_stop_notification_remove(
         &mut self,
-        mut job_store: JobStoreLocked,
+        job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
-        job_store.remove_notification_for_job_state(notification_id, JobState::Stop)
+        self.on_notification_removal(job_scheduler, notification_id, Some(vec![JobState::Stop]))
+            .map(|(_, deleted)| deleted)
     }
 
     ///
