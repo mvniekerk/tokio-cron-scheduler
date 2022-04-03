@@ -8,21 +8,8 @@ You'll need a running instance of NATS that is running with Jetstream. You'll be
 From https://docs.nats.io/running-a-nats-service/introduction/running/nats_docker/jetstream_docker :
 
 ```bash
-docker run --network host -p 4222:4222 nats -js
+docker run --rm -it -p 4222:4222 -p 6222:6222 -p 7222:7222 -p 8222:8222 nats -js -DV
 ```
 
-### Job metadata storage engine
 
-You can either set up the job store using a builder pattern or leave it to be set up using environment variables.
-
-#### Builder pattern
-
-You can either set up the job listener using a builder pattern or leave it to be set up using environment variables.
-
-#### Environmental variables
-
-
-### Job listener
-
-### Builder pattern
 
