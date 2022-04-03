@@ -191,3 +191,19 @@ Since 0.6
 
 Adds the Nats metadata store, notification store (NatsMetadataStore, NatsNotificationStore). Use a Nats system as a way to store the metadata and notifications.
 
+## Design
+
+### Job activity
+![Job activity](./doc/job_activity.svg)
+
+### Create job
+![Create job](./doc/create_job.svg)
+
+### Create notification
+![Create notification](./doc/create_notification.svg)
+
+### Delete job
+![Delete job](./doc/delete_job.svg)
+
+### Delete notification
+![Delete notification](./doc/delete_notification.svg)
