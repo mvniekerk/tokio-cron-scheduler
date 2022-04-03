@@ -4,6 +4,7 @@ use crate::{JobScheduler, JobSchedulerError, JobToRun};
 use chrono::{DateTime, Utc};
 use cron::Schedule;
 use tokio::sync::oneshot::Receiver;
+use tracing::error;
 use uuid::Uuid;
 
 pub struct CronJob {
@@ -102,14 +103,14 @@ impl Job for CronJob {
         if !self.async_job {
             (self.run)(job_id, jobs);
             if let Err(e) = tx.send(true) {
-                eprintln!("Error notifying done {:?}", e);
+                error!("Error notifying done {:?}", e);
             }
         } else {
             let future = (self.run_async)(job_id, jobs);
             tokio::task::spawn(async move {
                 future.await;
                 if let Err(e) = tx.send(true) {
-                    eprintln!("Error notifying done {:?}", e);
+                    error!("Error notifying done {:?}", e);
                 }
             });
         }

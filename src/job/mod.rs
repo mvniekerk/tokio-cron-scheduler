@@ -11,6 +11,7 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::oneshot::Receiver;
+use tracing::error;
 use uuid::Uuid;
 
 mod creator;
@@ -521,7 +522,7 @@ impl JobLocked {
 
         let job_data = self.job_data();
         if let Err(e) = job_data {
-            eprintln!("Could not get job data");
+            error!("Could not get job data");
             return Err(e);
         }
 

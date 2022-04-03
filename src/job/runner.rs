@@ -8,6 +8,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tracing::error;
 use uuid::Uuid;
 
 #[derive(Default)]
@@ -23,7 +24,7 @@ impl JobRunner {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving {:?}", e);
+                error!("Error receiving {:?}", e);
                 break;
             }
             let uuid = val.unwrap();
@@ -31,7 +32,7 @@ impl JobRunner {
                 let tx = tx_notify.clone();
                 tokio::spawn(async move {
                     if let Err(e) = tx.send((uuid, JobState::Started)) {
-                        eprintln!("Error sending {:?}", e);
+                        error!("Error sending {:?}", e);
                     }
                 });
             }
@@ -45,12 +46,12 @@ impl JobRunner {
                     tokio::spawn(async move {
                         v.await;
                         if let Err(e) = tx.send((uuid, JobState::Done)) {
-                            eprintln!("Error sending {:?}", e);
+                            error!("Error sending {:?}", e);
                         }
                     });
                 }
                 _ => {
-                    eprintln!("Error getting {:?} from job code", uuid);
+                    error!("Error getting {:?} from job code", uuid);
                     continue;
                 }
             }

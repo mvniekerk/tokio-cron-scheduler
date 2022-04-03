@@ -14,6 +14,7 @@ use std::sync::Arc;
 #[cfg(feature = "signal")]
 use tokio::signal::unix::SignalKind;
 use tokio::sync::RwLock;
+use tracing::error;
 use uuid::Uuid;
 
 pub type ShutdownNotification =
@@ -149,7 +150,7 @@ impl JobsSchedulerLocked {
         }
         {
             let mut w = self.inited.write().map_err(|e| {
-                eprintln!("Could not get write lock on inited {:?}", e);
+                error!("Could not get write lock on inited {:?}", e);
                 JobSchedulerError::CantInit
             })?;
             *w = true;
@@ -161,7 +162,7 @@ impl JobsSchedulerLocked {
         tokio::spawn(async move {
             let init = init.init_actors().await;
             if let Err(e) = scheduler_init_tx.send(init) {
-                eprintln!("Error sending error {:?}", e);
+                error!("Error sending error {:?}", e);
             }
         });
 
@@ -202,7 +203,7 @@ impl JobsSchedulerLocked {
             )
             .await;
             if let Err(e) = storage_init_tx.send(context) {
-                eprintln!("Error sending init success {:?}", e);
+                error!("Error sending init success {:?}", e);
             }
         });
 
@@ -251,7 +252,7 @@ impl JobsSchedulerLocked {
             )
             .await;
             if let Err(e) = storage_init_tx.send(context) {
-                eprintln!("Error sending init success {:?}", e);
+                error!("Error sending init success {:?}", e);
             }
         });
 
@@ -340,14 +341,14 @@ impl JobsSchedulerLocked {
             let ret = scheduler.write().await;
             let ret = ret.tick();
             if let Err(e) = tx.send(ret) {
-                eprintln!("Error sending tick result {:?}", e);
+                error!("Error sending tick result {:?}", e);
             }
         });
         let rx = rx.recv();
         match rx {
             Ok(ret) => ret,
             Err(e) => {
-                eprintln!("Error receiving tick result {:?}", e);
+                error!("Error receiving tick result {:?}", e);
                 Err(JobSchedulerError::TickError)
             }
         }
@@ -373,7 +374,7 @@ impl JobsSchedulerLocked {
             let mut scheduler = scheduler.write().await;
             let started = scheduler.start();
             if let Err(e) = tx.send(started) {
-                eprintln!("Error sending start result {:?}", e);
+                error!("Error sending start result {:?}", e);
             }
         });
 
@@ -381,7 +382,7 @@ impl JobsSchedulerLocked {
         match ret {
             Ok(ret) => ret,
             Err(e) => {
-                eprintln!("Error receiving start result {:?}", e);
+                error!("Error receiving start result {:?}", e);
                 Err(JobSchedulerError::StartScheduler)
             }
         }
@@ -408,14 +409,14 @@ impl JobsSchedulerLocked {
             let mut metadata = metadata.write().await;
             let time = metadata.time_till_next_job().await;
             if let Err(e) = tx.send(time) {
-                eprintln!("Error sending result of time till next job {:?}", e);
+                error!("Error sending result of time till next job {:?}", e);
             }
         });
         let ret = rx.recv();
         match ret {
             Ok(ret) => ret,
             Err(e) => {
-                eprintln!("Error getting return of time till next job {:?}", e);
+                error!("Error getting return of time till next job {:?}", e);
                 Err(JobSchedulerError::CantGetTimeUntil)
             }
         }
@@ -438,15 +439,15 @@ impl JobsSchedulerLocked {
                 let val = notify();
                 val.await;
                 if let Err(e) = tx.send(true) {
-                    eprintln!("Could not send shutdown sequence run {:?}", e);
+                    error!("Could not send shutdown sequence run {:?}", e);
                 }
             });
         } else if let Err(e) = tx.send(false) {
-            eprintln!("Could not send shutdown sequence not run {:?}", e);
+            error!("Could not send shutdown sequence not run {:?}", e);
         }
         let r = rx.recv();
         if let Err(e) = r {
-            eprintln!("Could not get shutdown sequence run state {:?}", e);
+            error!("Could not get shutdown sequence run state {:?}", e);
         }
         Ok(())
     }
@@ -478,7 +479,7 @@ impl JobsSchedulerLocked {
                 .expect("Could not await ctrl-c");
 
             if let Err(err) = l.shutdown() {
-                eprintln!("{:?}", err);
+                error!("{:?}", err);
             }
         });
     }

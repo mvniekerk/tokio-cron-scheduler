@@ -8,6 +8,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tracing::error;
 
 #[derive(Default)]
 pub struct NotificationDeleter {}
@@ -21,25 +22,25 @@ impl NotificationDeleter {
         loop {
             let val = rx_job_delete.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving delete jobs {:?}", e);
+                error!("Error receiving delete jobs {:?}", e);
                 break;
             }
             let job_id = val.unwrap();
             let mut storage = storage.write().await;
             let guids = storage.list_notification_guids_for_job_id(job_id).await;
             if let Err(e) = guids {
-                eprintln!("Error with getting guids for job id {:?}", e);
+                error!("Error with getting guids for job id {:?}", e);
                 continue;
             }
             let guids = guids.unwrap();
             // TODO first check for removal callback
             for notification_id in guids {
                 if let Err(e) = storage.delete(notification_id).await {
-                    eprintln!("Error deleting notification {:?}", e);
+                    error!("Error deleting notification {:?}", e);
                     continue;
                 }
                 if let Err(e) = tx_notification_deleted.send(Ok((notification_id, true, None))) {
-                    eprintln!("Error sending deletion {:?}", e);
+                    error!("Error sending deletion {:?}", e);
                     continue;
                 }
             }
@@ -54,7 +55,7 @@ impl NotificationDeleter {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving notification removals {:?}", e);
+                error!("Error receiving notification removals {:?}", e);
                 break;
             }
             let (uuid, states) = val.unwrap();
@@ -64,22 +65,22 @@ impl NotificationDeleter {
                     for state in states {
                         let delete = storage.delete_notification_for_state(uuid, state).await;
                         if let Err(e) = delete {
-                            eprintln!("Error deleting notification for state {:?}", e);
+                            error!("Error deleting notification for state {:?}", e);
                             continue;
                         }
                         let delete = delete.unwrap();
                         if let Err(e) = tx_deleted.send(Ok((uuid, delete, Some(vec![state])))) {
-                            eprintln!("Error sending notification deleted state {:?}", e);
+                            error!("Error sending notification deleted state {:?}", e);
                         }
                     }
                 } else {
                     let w = storage.delete(uuid).await;
                     if let Err(e) = w {
-                        eprintln!("Error deleting notification for all states {:?}", e);
+                        error!("Error deleting notification for all states {:?}", e);
                         continue;
                     }
                     if let Err(e) = tx_deleted.send(Ok((uuid, true, None))) {
-                        eprintln!("Error sending {:?}", e);
+                        error!("Error sending {:?}", e);
                     }
                 }
             }
@@ -123,7 +124,7 @@ impl NotificationDeleter {
         tokio::spawn(async move {
             tokio::spawn(async move {
                 if let Err(e) = delete_tx.send((notification_id, states)) {
-                    eprintln!("Error sending notification removal {:?}", e);
+                    error!("Error sending notification removal {:?}", e);
                 }
             });
             while let Ok(val) = deleted_rx.recv().await {
@@ -131,7 +132,7 @@ impl NotificationDeleter {
                     Ok((uuid, deleted, _)) => {
                         if uuid == notification_id {
                             if let Err(e) = tx.send(Ok((uuid, deleted))) {
-                                eprintln!("Error sending notification removal success {:?}", e);
+                                error!("Error sending notification removal success {:?}", e);
                             }
                             break;
                         }
@@ -139,7 +140,7 @@ impl NotificationDeleter {
                     Err((e, Some(uuid))) => {
                         if uuid == notification_id {
                             if let Err(e) = tx.send(Err(e)) {
-                                eprintln!("Error sending removal error {:?}", e);
+                                error!("Error sending removal error {:?}", e);
                             }
                             break;
                         }
@@ -152,7 +153,7 @@ impl NotificationDeleter {
         match ret {
             Ok(ret) => ret,
             Err(e) => {
-                eprintln!("Error getting result from notification removal {:?}", e);
+                error!("Error getting result from notification removal {:?}", e);
                 Err(JobSchedulerError::CantRemove)
             }
         }
