@@ -140,3 +140,7 @@ pub async fn run_example(mut sched: JobScheduler) {
     info!("Goodbye.");
     sched.shutdown();
 }
+
+fn main() {
+    eprintln!("Should not be run on its own.");
+}
