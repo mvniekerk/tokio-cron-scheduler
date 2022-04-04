@@ -30,11 +30,10 @@ pub type JobId = Uuid;
 pub type NotificationId = Uuid;
 
 pub type JobToRun = dyn FnMut(JobId, JobsSchedulerLocked) + Send + Sync;
-pub type JobToRunAsync = dyn FnMut(JobId, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
-    + Send
-    + Sync;
+pub type JobToRunAsync =
+    dyn FnMut(JobId, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync;
 
-pub type OnJobNotification = dyn FnMut(JobId, NotificationId, JobState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+pub type OnJobNotification = dyn FnMut(JobId, NotificationId, JobState) -> Pin<Box<dyn Future<Output = ()> + Send>>
     + Send
     + Sync;
 
@@ -42,10 +41,7 @@ fn nop(_uuid: Uuid, _jobs: JobsSchedulerLocked) {
     // Do nothing
 }
 
-fn nop_async(
-    _uuid: Uuid,
-    _jobs: JobsSchedulerLocked,
-) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> {
+fn nop_async(_uuid: Uuid, _jobs: JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {})
 }
 
@@ -137,7 +133,7 @@ impl JobLocked {
     pub fn new_async<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
-        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
     {
@@ -203,7 +199,7 @@ impl JobLocked {
     pub fn new_cron_job_async<T>(schedule: &str, run: T) -> Result<Self, Box<dyn std::error::Error>>
     where
         T: 'static,
-        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
     {
@@ -283,7 +279,7 @@ impl JobLocked {
     pub fn new_one_shot_async<T>(duration: Duration, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
-        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
     {
@@ -374,7 +370,7 @@ impl JobLocked {
     ) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
-        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
     {
@@ -453,7 +449,7 @@ impl JobLocked {
     pub fn new_repeated_async<T>(duration: Duration, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
-        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
     {

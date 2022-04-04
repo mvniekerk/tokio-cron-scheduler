@@ -18,7 +18,7 @@ use tracing::error;
 use uuid::Uuid;
 
 pub type ShutdownNotification =
-    dyn FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync;
+    dyn FnMut() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync;
 
 /// The JobScheduler contains and executes the scheduled jobs.
 pub struct JobsSchedulerLocked {
