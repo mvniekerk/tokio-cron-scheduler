@@ -31,7 +31,7 @@ impl InitStore for SimpleNotificationStore {
         Box::pin(std::future::ready(Ok(())))
     }
 
-    fn inited(&mut self) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>>>> {
+    fn inited(&mut self) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>> + Send>> {
         let val = self.inited;
         Box::pin(std::future::ready(Ok(val)))
     }
