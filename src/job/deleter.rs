@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tracing::error;
 use uuid::Uuid;
 
 #[derive(Default)]
@@ -20,7 +21,7 @@ impl JobDeleter {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving value {:?}", e);
+                error!("Error receiving value {:?}", e);
                 break;
             }
             let uuid = val.unwrap();
@@ -28,15 +29,15 @@ impl JobDeleter {
                 let mut storage = storage.write().await;
                 let delete = storage.delete(uuid).await;
                 if let Err(e) = delete {
-                    eprintln!("Error deleting {:?}", e);
+                    error!("Error deleting {:?}", e);
                     if let Err(e) = tx_deleted.send(Err((e, Some(uuid)))) {
-                        eprintln!("Error sending delete error {:?}", e);
+                        error!("Error sending delete error {:?}", e);
                     }
                     continue;
                 }
             }
             if let Err(e) = tx_deleted.send(Ok(uuid)) {
-                eprintln!("Error sending error {:?}", e);
+                error!("Error sending error {:?}", e);
             }
         }
     }
@@ -64,7 +65,7 @@ impl JobDeleter {
         tokio::spawn(async move {
             tokio::spawn(async move {
                 if let Err(e) = delete.send(job_id) {
-                    eprintln!("Error sending delete id {:?}", e);
+                    error!("Error sending delete id {:?}", e);
                 }
             });
             while let Ok(deleted) = deleted.recv().await {
@@ -86,7 +87,7 @@ impl JobDeleter {
                     _ => continue,
                 };
                 if let Err(e) = tx.send(ret) {
-                    eprintln!("Error sending removal result {:?}", e);
+                    error!("Error sending removal result {:?}", e);
                 }
             }
         });
@@ -95,7 +96,7 @@ impl JobDeleter {
         match ret {
             Ok(ret) => ret,
             Err(e) => {
-                eprintln!("Error receiving result from job deletion {:?}", e);
+                error!("Error receiving result from job deletion {:?}", e);
                 Err(JobSchedulerError::CantRemove)
             }
         }

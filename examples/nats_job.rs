@@ -4,15 +4,20 @@ use tokio_cron_scheduler::{
     Job, JobScheduler, NatsMetadataStore, NatsNotificationStore, SimpleJobCode,
     SimpleNotificationCode,
 };
+use tracing::{info, Level};
+use tracing_subscriber::FmtSubscriber;
 
 mod lib;
 
 #[tokio::main]
 async fn main() {
-    println!("Remember to have a running Nats instance to connect to. For example:\n");
-    println!(
-        "docker run --rm -it -p 4222:4222 -p 6222:6222 -p 7222:7222 -p 8222:8222 nats -js -DV"
-    );
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::TRACE)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    info!("Remember to have a running Nats instance to connect to. For example:\n");
+    info!("docker run --rm -it -p 4222:4222 -p 6222:6222 -p 7222:7222 -p 8222:8222 nats -js -DV");
     let metadata_storage = Box::new(NatsMetadataStore::default());
     let notification_storage = Box::new(NatsNotificationStore::default());
 

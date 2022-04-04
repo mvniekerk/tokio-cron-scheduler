@@ -7,6 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tracing::error;
 use uuid::Uuid;
 
 #[derive(Default)]
@@ -21,12 +22,12 @@ impl NotificationCreator {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving {:?}", e);
+                error!("Error receiving {:?}", e);
                 break;
             }
             let (data, _) = val.unwrap();
             if data.job_id.is_none() {
-                eprintln!("Empty job id {:?}", data);
+                error!("Empty job id {:?}", data);
                 continue;
             }
             let notification_id = data
@@ -34,7 +35,7 @@ impl NotificationCreator {
                 .as_ref()
                 .and_then(|j| j.notification_id.as_ref());
             if notification_id.is_none() {
-                eprintln!("Empty job id or notification id {:?}", data);
+                error!("Empty job id or notification id {:?}", data);
                 continue;
             }
             let notification_id: Uuid = notification_id.unwrap().into();
@@ -55,15 +56,15 @@ impl NotificationCreator {
 
             let val = storage.add_or_update(val).await;
             if let Err(e) = val {
-                eprintln!("Error adding or updating {:?}", e);
+                error!("Error adding or updating {:?}", e);
                 if let Err(e) = tx_created.send(Err((e, Some(notification_id)))) {
-                    eprintln!("Error sending adding or updating error {:?}", e);
+                    error!("Error sending adding or updating error {:?}", e);
                 }
                 continue;
             }
 
             if let Err(e) = tx_created.send(Ok(notification_id)) {
-                eprintln!("Error sending {:?}", e);
+                error!("Error sending {:?}", e);
             }
         }
     }
@@ -107,7 +108,7 @@ impl NotificationCreator {
             tokio::spawn(async move {
                 // TODO can maybe not use RwLock
                 if let Err(_e) = create_tx.send((data, Arc::new(RwLock::new(run)))) {
-                    eprintln!("Error sending notification data");
+                    error!("Error sending notification data");
                 }
             });
 
@@ -118,10 +119,7 @@ impl NotificationCreator {
                         Ok(uuid) => {
                             if uuid == notification_id {
                                 if let Err(e) = tx.send(Ok(uuid)) {
-                                    eprintln!(
-                                        "Error sending notification addition success {:?}",
-                                        e
-                                    );
+                                    error!("Error sending notification addition success {:?}", e);
                                 }
                                 break 'receiving_additions;
                             }
@@ -129,10 +127,7 @@ impl NotificationCreator {
                         Err((e, Some(uuid))) => {
                             if uuid == notification_id {
                                 if let Err(e) = tx.send(Err(e)) {
-                                    eprintln!(
-                                        "Error sending notification addition failure {:?}",
-                                        e
-                                    );
+                                    error!("Error sending notification addition failure {:?}", e);
                                 }
                                 break 'receiving_additions;
                             }
@@ -140,7 +135,7 @@ impl NotificationCreator {
                         _ => {}
                     },
                     Err(e) => {
-                        eprintln!("Error receiving from created {:?}", e);
+                        error!("Error receiving from created {:?}", e);
                     }
                 }
             }
@@ -150,7 +145,7 @@ impl NotificationCreator {
         match rx {
             Ok(ret) => ret,
             Err(e) => {
-                eprintln!("Error receiving status from notification addition {:?}", e);
+                error!("Error receiving status from notification addition {:?}", e);
                 Err(JobSchedulerError::CantAdd)
             }
         }

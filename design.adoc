@@ -1,8 +1,6 @@
 
 = Design
 
-TODO: RW Locks of jobs
-
 == Job activity
 
 [plantuml, job_activity_puml, svg]

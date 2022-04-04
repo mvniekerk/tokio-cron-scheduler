@@ -7,6 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tracing::error;
 use uuid::Uuid;
 
 #[derive(Default)]
@@ -21,7 +22,7 @@ impl JobCreator {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving {:?}", e);
+                error!("Error receiving {:?}", e);
                 break;
             }
             let (data, _) = val.unwrap();
@@ -29,7 +30,7 @@ impl JobCreator {
                 Some(uuid) => uuid,
                 None => {
                     if let Err(e) = tx_created.send(Err((JobSchedulerError::CantAdd, None))) {
-                        eprintln!("Error sending creation error {:?}", e);
+                        error!("Error sending creation error {:?}", e);
                     }
                     continue;
                 }
@@ -38,15 +39,15 @@ impl JobCreator {
                 let mut storage = storage.write().await;
                 let saved = storage.add_or_update(data).await;
                 if let Err(e) = saved {
-                    eprintln!("Error saving job metadata {:?}", e);
+                    error!("Error saving job metadata {:?}", e);
                     if let Err(e) = tx_created.send(Err((e, Some(uuid)))) {
-                        eprintln!("Could not send failure {:?}", e);
+                        error!("Could not send failure {:?}", e);
                     }
                     continue;
                 }
             }
             if let Err(e) = tx_created.send(Ok(uuid)) {
-                eprintln!("Error sending created job {:?}", e);
+                error!("Error sending created job {:?}", e);
             }
         }
     }
@@ -76,9 +77,9 @@ impl JobCreator {
             let uuid = job.guid();
 
             if let Err(e) = data {
-                eprintln!("Error getting job data {:?}", e);
+                error!("Error getting job data {:?}", e);
                 if let Err(e) = done_tx.send(Err(e)) {
-                    eprintln!("Could not notify of error {:?}", e);
+                    error!("Could not notify of error {:?}", e);
                 }
                 return;
             }
@@ -89,7 +90,7 @@ impl JobCreator {
                     let job_done = {
                         let w = job.0.write();
                         if let Err(e) = w {
-                            eprintln!("Error getting job {:?}", e);
+                            error!("Error getting job {:?}", e);
                             return;
                         }
                         let mut w = w.unwrap();
@@ -98,11 +99,11 @@ impl JobCreator {
                     let job_done = job_done.await;
                     match job_done {
                         Err(e) => {
-                            eprintln!("Error running job {:?} {:?}", job_id, e);
+                            error!("Error running job {:?} {:?}", job_id, e);
                         }
                         Ok(val) => {
                             if !val {
-                                eprintln!("Error running job {:?}", job_id);
+                                error!("Error running job {:?}", job_id);
                             }
                         }
                     }
@@ -112,9 +113,9 @@ impl JobCreator {
             tokio::spawn(async move {
                 let job = Arc::new(RwLock::new(job));
                 if let Err(_e) = tx.send((data, job)) {
-                    eprintln!("Error sending new job");
+                    error!("Error sending new job");
                     if let Err(e) = done_tx_on_send.send(Err(JobSchedulerError::CantAdd)) {
-                        eprintln!("Error sending failure of adding job {:?}", e);
+                        error!("Error sending failure of adding job {:?}", e);
                     }
                 }
             });
@@ -124,7 +125,7 @@ impl JobCreator {
                     Ok(ret_uuid) => {
                         if ret_uuid == uuid {
                             if let Err(e) = done_tx.send(Ok(uuid)) {
-                                eprintln!("Could not send successful addition {:?}", e);
+                                error!("Could not send successful addition {:?}", e);
                             }
                             break;
                         }
@@ -132,7 +133,7 @@ impl JobCreator {
                     Err((e, Some(ret_uuid))) => {
                         if ret_uuid == uuid {
                             if let Err(e) = done_tx.send(Err(e)) {
-                                eprintln!("Could not send failure {:?}", e);
+                                error!("Could not send failure {:?}", e);
                             }
                             break;
                         }
@@ -143,7 +144,7 @@ impl JobCreator {
         });
 
         let uuid = done_rx.recv().map_err(|e| {
-            eprintln!("Could not receive done from add {:?}", e);
+            error!("Could not receive done from add {:?}", e);
             JobSchedulerError::CantAdd
         })??;
         Ok(uuid)

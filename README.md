@@ -7,6 +7,7 @@ Inspired by https://github.com/lholden/job_scheduler
 
 [![](https://docs.rs/tokio_cron_scheduler/badge.svg)](https://docs.rs/tokio_cron_scheduler) [![](https://img.shields.io/crates/v/tokio_cron_scheduler.svg)](https://crates.io/crates/tokio_cron_scheduler) [![](https://travis-ci.org/mvniekerk/tokio_cron_scheduler.svg?branch=master)](https://travis-ci.org/mvniekerk/tokio_cron_scheduler)
 
+Optional persistent storage implementation currently provided by Nats.
 
 ## Usage
 
@@ -76,19 +77,19 @@ async fn main() {
       println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
     }).unwrap();
   
-    jj.on_start_notification_add(Box::new(|job_id, notification_id, type_of_notification| {
+    jj.on_start_notification_add(&sched, Box::new(|job_id, notification_id, type_of_notification| {
       Box::pin(async move {
         println!("Job {:?} was started, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
       })
     }));
 
-    jj.on_stop_notification_add(Box::new(|job_id, notification_id, type_of_notification| {
+    jj.on_stop_notification_add(&sched, Box::new(|job_id, notification_id, type_of_notification| {
       Box::pin(async move {
         println!("Job {:?} was completed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
       })
     }));
     
-    jj.on_removed_notification_add(Box::new(|job_id, notification_id, type_of_notification| {
+    jj.on_removed_notification_add(&sched, Box::new(|job_id, notification_id, type_of_notification| {
       Box::pin(async move {
         println!("Job {:?} was removed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
       })
@@ -163,10 +164,10 @@ TokioCronScheduler is licensed under either of
 * MIT license ([LICENSE-MIT](LICENSE-MIT) or
   http://opensource.org/licenses/MIT)
 
-## Custom scheduler
-Since version 0.4 a custom job scheduler can be used. In `src/simple_job_scheduler` you can find the 
-default implementation that is used when you call `JobScheduler::new()`. To use your own, call
-`JobScheduler::new_with_scheduler(your_own_scheduler_here)`.
+## Custom storage
+The MetadataStore and NotificationStore traits can be implemented and be used in the JobScheduler. 
+
+A default volatile hashmap based version is provided with the SimpleMetadataStore and SimpleNotificationStore. A persistent version using Nats is provided with NatsMetadataStore and NatsNotificationStore.
 
 ## Contributing
 
@@ -184,3 +185,25 @@ Since 0.5
 Adds `shutdown_on_signal` and `shutdown_on_ctrl_c` to the scheduler. 
 Both shuts the system down (stops the scheduler, removes all the tasks) when a signal
 was received.
+
+### nats_scheduler
+Since 0.6
+
+Adds the Nats metadata store, notification store (NatsMetadataStore, NatsNotificationStore). Use a Nats system as a way to store the metadata and notifications.
+
+## Design
+
+### Job activity
+![Job activity](./doc/job_activity.svg)
+
+### Create job
+![Create job](./doc/create_job.svg)
+
+### Create notification
+![Create notification](./doc/create_notification.svg)
+
+### Delete job
+![Delete job](./doc/delete_job.svg)
+
+### Delete notification
+![Delete notification](./doc/delete_notification.svg)

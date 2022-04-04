@@ -9,6 +9,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tracing::error;
 use uuid::Uuid;
 
 pub type LockedJobToRunMap = Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<JobToRunAsync>>>>>>;
@@ -35,7 +36,7 @@ impl SimpleJobCode {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving {:?}", e);
+                error!("Error receiving {:?}", e);
                 break;
             }
             let (JobStoredData { id: job_id, .. }, val) = val.unwrap();
@@ -52,7 +53,7 @@ impl SimpleJobCode {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving job removal {:?}", e);
+                error!("Error receiving job removal {:?}", e);
                 break;
             }
             let uuid = val.unwrap();
@@ -123,7 +124,7 @@ impl SimpleNotificationCode {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving {:?}", e);
+                error!("Error receiving {:?}", e);
                 break;
             }
             let (uuid, val) = val.unwrap();
@@ -145,7 +146,7 @@ impl SimpleNotificationCode {
                 w.insert(uuid, val);
             }
             if let Err(e) = tx.send(Ok(uuid)) {
-                eprintln!("Error sending notification created {:?} {:?}", e, uuid);
+                error!("Error sending notification created {:?} {:?}", e, uuid);
             }
         }
     }
@@ -159,11 +160,11 @@ impl SimpleNotificationCode {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving job removal {:?}", e);
+                error!("Error receiving job removal {:?}", e);
                 break;
             }
             let (uuid, states) = val.unwrap();
-            eprintln!(
+            error!(
                 "Removing notification uuid {:?} and not caring about states!",
                 uuid
             );
@@ -172,7 +173,7 @@ impl SimpleNotificationCode {
                 w.remove(&uuid);
             }
             if let Err(e) = tx.send(Ok((uuid, true, states))) {
-                eprintln!("Error sending notification removed {:?} {:?}", e, uuid)
+                error!("Error sending notification removed {:?} {:?}", e, uuid)
             }
         }
     }

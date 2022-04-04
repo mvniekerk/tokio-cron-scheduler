@@ -10,6 +10,7 @@ use prost::Message;
 use std::future::Future;
 use std::pin::Pin;
 use tokio::sync::RwLockReadGuard;
+use tracing::error;
 use uuid::Uuid;
 
 const LIST_NAME: &str = "TCS_NOTIFICATION_LIST";
@@ -37,7 +38,7 @@ impl DataStore<NotificationData> for NatsNotificationStore {
             let id = uuid_to_nats_id(id);
             r.get(&*id)
                 .map_err(|e| {
-                    eprintln!("Error getting data {:?}", e);
+                    error!("Error getting data {:?}", e);
                     JobSchedulerError::GetJobData
                 })
                 .map(|v| v.and_then(|v| NotificationData::decode(v.as_slice()).ok()))
@@ -74,7 +75,7 @@ impl DataStore<NotificationData> for NatsNotificationStore {
                 Ok(Some(_)) => bucket.put(&*uuid, bytes),
                 Ok(None) => bucket.create(&*uuid, bytes),
                 Err(e) => {
-                    eprintln!("Error getting existing value {:?}, assuming does not exist and hope for the best", e);
+                    error!("Error getting existing value {:?}, assuming does not exist and hope for the best", e);
                     bucket.create(&*uuid, bytes)
                 }
             };
@@ -134,7 +135,7 @@ impl NotificationStore for NatsNotificationStore {
         Box::pin(async move {
             let list_of_notification_guids = list_of_notification_guids.await;
             if let Err(e) = list_of_notification_guids {
-                eprintln!("Could not get list of guids {:?}", e);
+                error!("Could not get list of guids {:?}", e);
                 return Err(e);
             }
             let list_of_notification_guids = list_of_notification_guids.unwrap();
@@ -164,7 +165,7 @@ impl NotificationStore for NatsNotificationStore {
         Box::pin(async move {
             let list_guids = list_guids.await;
             if let Err(e) = list_guids {
-                eprintln!("Error getting {:?}", e);
+                error!("Error getting {:?}", e);
                 return Err(e);
             }
             let list_guids = list_guids.unwrap();
@@ -211,11 +212,11 @@ impl NotificationStore for NatsNotificationStore {
             let mut data = match data {
                 Ok(Some(get)) => get,
                 Ok(None) => {
-                    eprintln!("Notification not found {:?}", notification_id);
+                    error!("Notification not found {:?}", notification_id);
                     return Err(JobSchedulerError::CantRemove);
                 }
                 Err(e) => {
-                    eprintln!("Error getting notification {:?}", e);
+                    error!("Error getting notification {:?}", e);
                     return Err(e);
                 }
             };
@@ -232,7 +233,7 @@ impl NotificationStore for NatsNotificationStore {
                 // Need to delete
                 let delete = self_clone.delete(notification_id).await;
                 if let Err(e) = delete {
-                    eprintln!("Could not delete notification {:?}", e);
+                    error!("Could not delete notification {:?}", e);
                     return Err(e);
                 }
                 let delete = self_clone.remove_from_list(notification_id).await;
@@ -253,7 +254,7 @@ impl NotificationStore for NatsNotificationStore {
         Box::pin(async move {
             let list_guids = list_guids.await;
             if let Err(e) = list_guids {
-                eprintln!("Error getting list of guids {:?}", e);
+                error!("Error getting list of guids {:?}", e);
                 return Err(e);
             }
             let list_guids = list_guids.unwrap();
@@ -277,7 +278,7 @@ impl NotificationStore for NatsNotificationStore {
             for notification_id in notifications {
                 let deleted = self_clone.delete(notification_id).await;
                 if let Err(e) = deleted {
-                    eprintln!("Error deleting notification {:?}", notification_id);
+                    error!("Error deleting notification {:?}", notification_id);
                     return Err(e);
                 }
             }
@@ -299,13 +300,13 @@ impl NatsNotificationStore {
                 Ok(Some(list)) => {
                     let list = list.as_slice();
                     ListOfJobsAndNotifications::decode(list).map_err(|e| {
-                        eprintln!("Error decoding list value {:?}", e);
+                        error!("Error decoding list value {:?}", e);
                         JobSchedulerError::CantListGuids
                     })
                 }
                 Ok(None) => Ok(ListOfJobsAndNotifications::default()),
                 Err(e) => {
-                    eprintln!("Error getting list of guids {:?}", e);
+                    error!("Error getting list of guids {:?}", e);
                     Err(JobSchedulerError::CantListGuids)
                 }
             }
@@ -322,7 +323,7 @@ impl NatsNotificationStore {
         Box::pin(async move {
             let list = list.await;
             if let Err(e) = list {
-                eprintln!("Could not get list of guids {:?}", e);
+                error!("Could not get list of guids {:?}", e);
                 return Err(JobSchedulerError::ErrorLoadingGuidList);
             }
             let mut list = list.unwrap();
@@ -386,7 +387,7 @@ impl NatsNotificationStore {
         }
         .map(|_| ())
         .map_err(|e| {
-            eprintln!("Error saving list of guids {:?}", e);
+            error!("Error saving list of guids {:?}", e);
             JobSchedulerError::CantAdd
         })
     }
@@ -400,7 +401,7 @@ impl NatsNotificationStore {
         Box::pin(async move {
             let list = list.await;
             if let Err(e) = list {
-                eprintln!("Could not get list of guids {:?}", e);
+                error!("Could not get list of guids {:?}", e);
                 return Err(JobSchedulerError::ErrorLoadingGuidList);
             }
             let mut list = list.unwrap();

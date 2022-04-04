@@ -9,6 +9,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::sync::RwLockReadGuard;
+use tracing::error;
 use uuid::Uuid;
 
 const LIST_NAME: &str = "TCS_JOB_LIST";
@@ -38,7 +39,7 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
             let id = uuid_to_nats_id(id);
             r.get(&*id)
                 .map_err(|e| {
-                    eprintln!("Error getting data {:?}", e);
+                    error!("Error getting data {:?}", e);
                     JobSchedulerError::GetJobData
                 })
                 .map(|v| v.and_then(|v| JobStoredData::decode(v.as_slice()).ok()))
@@ -62,7 +63,7 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
                 Ok(Some(_)) => bucket.put(&*uuid, bytes),
                 Ok(None) => bucket.create(&*uuid, bytes),
                 Err(e) => {
-                    eprintln!("Error getting existing value {:?}, assuming does not exist and hope for the best", e);
+                    error!("Error getting existing value {:?}, assuming does not exist and hope for the best", e);
                     bucket.create(&*uuid, bytes)
                 }
             };
@@ -119,7 +120,7 @@ impl MetaDataStorage for NatsMetadataStore {
         Box::pin(async move {
             let list = list_guids.await;
             if let Err(e) = list {
-                eprintln!("Error getting list of guids {:?}", e);
+                error!("Error getting list of guids {:?}", e);
             }
             let list = list.unwrap();
             let bucket = bucket.read().await;
@@ -167,16 +168,16 @@ impl MetaDataStorage for NatsMetadataStore {
                         .put(&*uuid_to_nats_id(guid), bytes)
                         .map(|_| ())
                         .map_err(|e| {
-                            eprintln!("Error updating value {:?}", e);
+                            error!("Error updating value {:?}", e);
                             JobSchedulerError::UpdateJobData
                         })
                 }
                 Ok(None) => {
-                    eprintln!("Could not get value to update");
+                    error!("Could not get value to update");
                     Err(JobSchedulerError::UpdateJobData)
                 }
                 Err(e) => {
-                    eprintln!("Could not get value to update {:?}", e);
+                    error!("Could not get value to update {:?}", e);
                     Err(JobSchedulerError::UpdateJobData)
                 }
             }
@@ -191,7 +192,7 @@ impl MetaDataStorage for NatsMetadataStore {
         Box::pin(async move {
             let list = list.await;
             if let Err(e) = list {
-                eprintln!("Could not get list of guids {:?}", e);
+                error!("Could not get list of guids {:?}", e);
                 return Err(JobSchedulerError::CantGetTimeUntil);
             }
             let list = list.unwrap();
@@ -236,12 +237,12 @@ impl NatsMetadataStore {
             let list = r.get(&*sanitize_nats_key(LIST_NAME));
             match list {
                 Ok(Some(list)) => ListOfUuids::decode(list.as_slice()).map_err(|e| {
-                    eprintln!("Error decoding list value {:?}", e);
+                    error!("Error decoding list value {:?}", e);
                     JobSchedulerError::CantListGuids
                 }),
                 Ok(None) => Ok(ListOfUuids::default()),
                 Err(e) => {
-                    eprintln!("Error getting list of guids {:?}", e);
+                    error!("Error getting list of guids {:?}", e);
                     Err(JobSchedulerError::CantListGuids)
                 }
             }
@@ -258,7 +259,7 @@ impl NatsMetadataStore {
         Box::pin(async move {
             let list = list.await;
             if let Err(e) = list {
-                eprintln!("Could not get list of guids {:?}", e);
+                error!("Could not get list of guids {:?}", e);
                 return Err(JobSchedulerError::ErrorLoadingGuidList);
             }
             let mut list = list.unwrap();
@@ -290,7 +291,7 @@ impl NatsMetadataStore {
         }
         .map(|_| ())
         .map_err(|e| {
-            eprintln!("Error saving list of guids {:?}", e);
+            error!("Error saving list of guids {:?}", e);
             JobSchedulerError::CantAdd
         })
     }
@@ -304,7 +305,7 @@ impl NatsMetadataStore {
         Box::pin(async move {
             let list = list.await;
             if let Err(e) = list {
-                eprintln!("Could not get list of guids {:?}", e);
+                error!("Could not get list of guids {:?}", e);
                 return Err(JobSchedulerError::ErrorLoadingGuidList);
             }
             let mut list = list.unwrap();

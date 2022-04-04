@@ -8,6 +8,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::RwLock;
+use tracing::error;
 use uuid::Uuid;
 
 #[derive(Default)]
@@ -22,7 +23,7 @@ impl NotificationRunner {
         loop {
             let val = rx.recv().await;
             if let Err(e) = val {
-                eprintln!("Error receiving value {:?}", e);
+                error!("Error receiving value {:?}", e);
                 break;
             }
             let (job_id, state) = val.unwrap();
@@ -31,7 +32,7 @@ impl NotificationRunner {
                 .list_notification_guids_for_job_and_state(job_id, state)
                 .await;
             if let Err(_e) = notifications {
-                eprintln!(
+                error!(
                     "Error getting the list of notifications guids for job {:?} and state {:?}",
                     job_id, state
                 );
@@ -50,7 +51,7 @@ impl NotificationRunner {
                         });
                     }
                     _ => {
-                        eprintln!(
+                        error!(
                             " nCould not get notification code for {:?}",
                             notification_id
                         );

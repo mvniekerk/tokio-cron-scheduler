@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::RwLock;
+use tracing::error;
 use uuid::Uuid;
 
 pub struct Scheduler {
@@ -60,7 +61,7 @@ impl Scheduler {
                     w.list_next_ticks().await
                 };
                 if let Err(e) = next_ticks {
-                    eprintln!("Error with listing next ticks {:?}", e);
+                    error!("Error with listing next ticks {:?}", e);
                     continue 'next_tick;
                 }
                 let mut next_ticks = next_ticks.unwrap();
@@ -77,7 +78,7 @@ impl Scheduler {
                     let tx = job_delete_tx.clone();
                     tokio::spawn(async move {
                         if let Err(e) = tx.send(uuid) {
-                            eprintln!("Error sending deletion {:?}", e);
+                            error!("Error sending deletion {:?}", e);
                         }
                     });
                 }
@@ -129,7 +130,7 @@ impl Scheduler {
                         let tx = notify_tx.clone();
                         tokio::spawn(async move {
                             if let Err(e) = tx.send((uuid, JobState::Scheduled)) {
-                                eprintln!("Error sending notification activation {:?}", e);
+                                error!("Error sending notification activation {:?}", e);
                             }
                         });
                     }
@@ -137,7 +138,7 @@ impl Scheduler {
                         let tx = job_activation_tx.clone();
                         tokio::spawn(async move {
                             if let Err(e) = tx.send(uuid) {
-                                eprintln!("Error sending job activation tx {:?}", e);
+                                error!("Error sending job activation tx {:?}", e);
                             }
                         });
                     }
@@ -166,7 +167,7 @@ impl Scheduler {
                                 Some((next_tick, last_tick))
                             }
                             _ => {
-                                eprintln!("Could not get job metadata");
+                                error!("Could not get job metadata");
                                 None
                             }
                         };
@@ -175,7 +176,7 @@ impl Scheduler {
                             if let Err(e) =
                                 w.set_next_and_last_tick(uuid, next_tick, last_tick).await
                             {
-                                eprintln!("Could not set next and last tick {:?}", e);
+                                error!("Could not set next and last tick {:?}", e);
                             }
                         }
                     });
@@ -189,13 +190,13 @@ impl Scheduler {
         *w = true;
 
         if let Err(e) = self.ticker_tx.send(false) {
-            eprintln!("Error sending tick {:?}", e);
+            error!("Error sending tick {:?}", e);
         }
     }
 
     pub fn tick(&self) -> Result<(), JobSchedulerError> {
         if let Err(e) = self.ticker_tx.send(true) {
-            eprintln!("Error sending tick {:?}", e);
+            error!("Error sending tick {:?}", e);
             Err(JobSchedulerError::TickError)
         } else {
             Ok(())
@@ -211,7 +212,7 @@ impl Scheduler {
             tokio::spawn(async move {
                 loop {
                     if let Err(e) = tx.send(true) {
-                        eprintln!("Tick send error {:?}", e);
+                        error!("Tick send error {:?}", e);
                     }
                     tokio::time::sleep(Duration::from_millis(500)).await;
                 }
