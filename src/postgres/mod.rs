@@ -1,4 +1,5 @@
 mod metadata_store;
+mod notification_store;
 
 use crate::JobSchedulerError;
 use std::future::Future;
@@ -8,10 +9,18 @@ use tokio::sync::RwLock;
 use tokio_postgres::{Client, NoTls};
 use tracing::error;
 
+pub use metadata_store::PostgresMetadataStore;
+
 #[derive(Clone)]
 pub enum PostgresStore {
     Created(String),
     Inited(Arc<RwLock<Client>>),
+}
+
+impl PostgresStore {
+    pub fn inited(&self) -> bool {
+        matches!(self, PostgresStore::Inited(_))
+    }
 }
 
 impl Default for PostgresStore {

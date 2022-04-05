@@ -12,7 +12,7 @@ use tokio_postgres::Row;
 use tracing::error;
 use uuid::Uuid;
 
-const TABLE: &str = "job_data";
+const TABLE: &str = "job";
 
 #[derive(Clone)]
 pub struct PostgresMetadataStore {
@@ -167,7 +167,7 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                 PostgresStore::Inited(store) => {
                     let store = store.read().await;
                     let val = store
-                        .query("delete from $1 where id = $2", &[&table, &guid])
+                        .query("DELETE FROM $1 WHERE id = $2", &[&table, &guid])
                         .await;
                     match val {
                         Ok(_) => Ok(()),
@@ -296,7 +296,7 @@ impl InitStore for PostgresMetadataStore {
         let store = self.store.clone();
         Box::pin(async move {
             let store = store.read().await;
-            Ok(matches!(*store, PostgresStore::Inited(_)))
+            Ok(store.inited())
         })
     }
 }
