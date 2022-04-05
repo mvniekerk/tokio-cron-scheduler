@@ -25,7 +25,7 @@ use uuid::Uuid;
 pub use crate::nats::{NatsMetadataStore, NatsNotificationStore, NatsStore};
 
 #[cfg(feature = "postgres")]
-pub use crate::postgres::{PostgresMetadataStore, PostgresStore};
+pub use crate::postgres::{PostgresMetadataStore, PostgresNotificationStore, PostgresStore};
 
 pub use error::JobSchedulerError;
 pub use job::job_data::JobState as JobNotification;

@@ -10,6 +10,7 @@ use tokio_postgres::{Client, NoTls};
 use tracing::error;
 
 pub use metadata_store::PostgresMetadataStore;
+pub use notification_store::PostgresNotificationStore;
 
 #[derive(Clone)]
 pub enum PostgresStore {
@@ -43,7 +44,7 @@ impl Default for PostgresStore {
                     + &*db_host
                     + " dbname="
                     + &*dbname
-                    + " username="
+                    + " user="
                     + &*username
                     + &*match password {
                         Some(password) => " password=".to_string() + &*password,

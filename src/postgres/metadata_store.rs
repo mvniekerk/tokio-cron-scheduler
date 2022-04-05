@@ -28,10 +28,11 @@ impl Default for PostgresMetadataStore {
             .unwrap_or_default();
         let table =
             std::env::var("POSTGRES_METADATA_TABLE").unwrap_or_else(|_| TABLE.to_lowercase());
+        let store = Arc::new(RwLock::new(PostgresStore::default()));
         Self {
             init_tables,
             table,
-            ..Default::default()
+            store,
         }
     }
 }

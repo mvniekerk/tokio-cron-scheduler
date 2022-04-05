@@ -29,11 +29,12 @@ impl Default for PostgresNotificationStore {
             .unwrap_or_else(|_| MAIN_TABLE.to_lowercase());
         let states_table = std::env::var("POSTGRES_NOTIFICATION_STATES_TABLE")
             .unwrap_or_else(|_| STATES_TABLE.to_lowercase());
+        let store = Arc::new(RwLock::new(PostgresStore::default()));
         Self {
             init_tables,
             table,
             states_table,
-            ..Default::default()
+            store,
         }
     }
 }

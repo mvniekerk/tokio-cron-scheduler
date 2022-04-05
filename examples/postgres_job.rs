@@ -1,13 +1,11 @@
+mod lib;
 use crate::lib::run_example;
-use std::time::Duration;
 use tokio_cron_scheduler::{
-    Job, JobScheduler, NatsMetadataStore, NatsNotificationStore, SimpleJobCode,
+    JobScheduler, PostgresMetadataStore, PostgresNotificationStore, SimpleJobCode,
     SimpleNotificationCode,
 };
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
-
-mod lib;
 
 #[tokio::main]
 async fn main() {
@@ -16,10 +14,15 @@ async fn main() {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
 
-    info!("Remember to have a running Nats instance to connect to. For example:\n");
-    info!("docker run --rm -it -p 4222:4222 -p 6222:6222 -p 7222:7222 -p 8222:8222 nats -js -DV");
-    let metadata_storage = Box::new(NatsMetadataStore::default());
-    let notification_storage = Box::new(NatsNotificationStore::default());
+    info!("Remember to have a running Postgres instance to connect to. For example:\n");
+    info!("docker run --rm -it -p 5432:5432 -e POSTGRES_USER=\"postgres\" -e POSTGRES_PASSWORD=\"\" -e POSTGRES_HOST_AUTH_METHOD=\"trust\" postgres:14.1");
+
+    let metadata_storage = Box::new(PostgresMetadataStore::default());
+    let notification_storage = Box::new(PostgresNotificationStore::default());
+    if std::env::var("").is_err() {
+        info!("Going to set initialization of tables to true POSTGRES_INIT_METADATA=true");
+        std::env::set_var("POSTGRES_INIT_METADATA", "true")
+    }
 
     let simple_job_code = Box::new(SimpleJobCode::default());
     let simple_notification_code = Box::new(SimpleNotificationCode::default());
