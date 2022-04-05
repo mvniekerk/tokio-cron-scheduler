@@ -7,7 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
-use tracing::error;
+use tracing::{error, warn};
 use uuid::Uuid;
 
 #[derive(Default)]
@@ -64,7 +64,7 @@ impl NotificationCreator {
             }
 
             if let Err(e) = tx_created.send(Ok(notification_id)) {
-                error!("Error sending {:?}", e);
+                warn!("Error sending created state {:?}", e);
             }
         }
     }

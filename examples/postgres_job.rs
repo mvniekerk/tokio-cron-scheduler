@@ -19,9 +19,13 @@ async fn main() {
 
     let metadata_storage = Box::new(PostgresMetadataStore::default());
     let notification_storage = Box::new(PostgresNotificationStore::default());
-    if std::env::var("").is_err() {
-        info!("Going to set initialization of tables to true POSTGRES_INIT_METADATA=true");
-        std::env::set_var("POSTGRES_INIT_METADATA", "true")
+    if std::env::var("POSTGRES_INIT_METADATA").is_err() {
+        info!("Set to not initialize the job metadata tables. POSTGRES_INIT_METADATA=false");
+    }
+    if std::env::var("POSTGRES_INIT_NOTIFICATIONS").is_err() {
+        info!(
+            "Set to not initialization of notification tables. POSTGRES_INIT_NOTIFICATIONS=false"
+        );
     }
 
     let simple_job_code = Box::new(SimpleJobCode::default());

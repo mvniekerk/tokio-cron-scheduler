@@ -52,11 +52,14 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                 PostgresStore::Inited(store) => {
                     let store = store.read().await;
                     let sql = "select \
-                        id, last_updated, next_tick, job_type, count, \
-                        ran, stopped, schedule, repeating, repeating_every, \
+                        id, last_updated, next_tick, last_tick, job_type, count, \
+                        ran, stopped, schedule, repeating, repeated_every, \
                         extra \
-                     from $1 where id = $2 limit 1";
-                    let row = store.query_one(sql, &[&table, &id]).await;
+                     from "
+                        .to_string()
+                        + &*table
+                        + " where id = $1 limit 1";
+                    let row = store.query_one(&*sql, &[&id]).await;
                     if let Err(e) = row {
                         error!("Error getting value {:?}", e);
                         return Err(JobSchedulerError::GetJobData);
@@ -84,25 +87,25 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                 PostgresStore::Inited(store) => {
                     let uuid: Uuid = data.id.as_ref().unwrap().into();
                     let store = store.read().await;
-                    let sql = "INSERT INTO $1 (\
+                    let sql = "INSERT INTO ".to_string()
+                        + &*table
+                        + " (\
                         id, last_updated, next_tick, job_type, count, \
                         ran, stopped, schedule, repeating, repeated_every, \
-                        extra \
+                        extra, last_tick \
                     )\
                     VALUES (\
-                        $2, $3, $4, $5,  $6, \
-                        $7, $8, $9, $10, $11\
-                        $12 \
+                        $1, $2, $3, $4, $5, \
+                        $6, $7, $8, $9, $10,\
+                        $11, $12 \
                     )\
                     ON CONFLICT (id) \
                     DO \
-                        UPDATE $1 \
+                        UPDATE \
                         SET \
-                            last_updated=$3, next_tick=$4, job_type=$5, count=$6, \
-                            ran=$7, stopped=$8, schedule=$9, repeating=$10, repeated_every=$11, \
-                            extra=$12 \
-                        WHERE \
-                            id=$2
+                            last_updated=$2, next_tick=$3, job_type=$4, count=$5, \
+                            ran=$6, stopped=$7, schedule=$8, repeating=$9, repeated_every=$10, \
+                            extra=$11, last_tick=$12
                     ";
                     let last_updated = data.last_updated.as_ref().map(|i| *i as i64);
                     let next_tick = data.next_tick as i64;
@@ -123,12 +126,12 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                         _ => None,
                     };
                     let extra = data.extra;
+                    let last_tick = data.last_tick.as_ref().map(|i| *i as i64);
 
                     let val = store
-                        .query_one(
-                            sql,
+                        .query(
+                            &*sql,
                             &[
-                                &table,
                                 &uuid,
                                 &last_updated,
                                 &next_tick,
@@ -140,6 +143,7 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                                 &repeating,
                                 &repeated_every,
                                 &extra,
+                                &last_tick,
                             ],
                         )
                         .await;
@@ -167,9 +171,8 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                 PostgresStore::Created(_) => Err(JobSchedulerError::CantRemove),
                 PostgresStore::Inited(store) => {
                     let store = store.read().await;
-                    let val = store
-                        .query("DELETE FROM $1 WHERE id = $2", &[&table, &guid])
-                        .await;
+                    let sql = "DELETE FROM ".to_string() + &*table + " WHERE id = $1";
+                    let val = store.query(&*sql, &[&guid]).await;
                     match val {
                         Ok(_) => Ok(()),
                         Err(e) => {
@@ -185,19 +188,24 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
 
 impl From<Row> for JobStoredData {
     fn from(row: Row) -> Self {
+        /*
+        id, last_updated, next_tick, last_tick, job_type, count, \
+                        ran, stopped, schedule, repeating, repeated_every, \
+                        extra
+         */
         let id: Uuid = row.get(0);
         let last_updated = row.try_get(1).ok().map(|i: i64| i as u64);
-        let last_tick = row.try_get(2).ok().map(|i: i64| i as u64);
         let next_tick = row
-            .try_get(3)
+            .try_get(2)
             .ok()
             .map(|i: i64| i as u64)
             .unwrap_or_default();
+        let last_tick = row.try_get(3).ok().map(|i: i64| i as u64);
+
         let job_type: i32 = row.try_get(4).unwrap_or_default();
         let count = row.try_get(5).unwrap_or_default();
-        let extra = row.try_get(6).unwrap_or_default();
-        let ran = row.try_get(7).unwrap_or_default();
-        let stopped = row.try_get(8).unwrap_or_default();
+        let ran = row.try_get(6).unwrap_or_default();
+        let stopped = row.try_get(7).unwrap_or_default();
         let job = {
             use crate::job::job_data::job_stored_data::Job::CronJob as CronJobType;
             use crate::job::job_data::job_stored_data::Job::NonCronJob as NonCronJobType;
@@ -223,7 +231,9 @@ impl From<Row> for JobStoredData {
                 None => None,
             }
         };
-        Self {
+        let extra = row.try_get(11).unwrap_or_default();
+
+        let row = Self {
             id: Some(id.into()),
             last_updated,
             last_tick,
@@ -234,7 +244,8 @@ impl From<Row> for JobStoredData {
             ran,
             stopped,
             job,
-        }
+        };
+        row
     }
 }
 
@@ -255,12 +266,13 @@ impl InitStore for PostgresMetadataStore {
                         if init_tables {
                             if let PostgresStore::Inited(client) = &v {
                                 let v = client.read().await;
-                                let create = v
-                                    .query(
-                                        "CREATE TABLE IF NOT EXISTS $1 (\
-                                            id UUID constraint pk_metadata PRIMARY KEY,\
+                                let sql = "CREATE TABLE IF NOT EXISTS ".to_string()
+                                    + &*table
+                                    + " (\
+                                            id UUID,\
                                             last_updated BIGINT,\
                                             next_tick BIGINT,\
+                                            last_tick BIGINT,\
                                             job_type INTEGER NOT NULL,\
                                             count INTEGER,\
                                             ran BOOL,\
@@ -268,13 +280,12 @@ impl InitStore for PostgresMetadataStore {
                                             schedule TEXT,\
                                             repeating BOOL,\
                                             repeated_every BIGINT,\
-                                            extra BYTEA
-                                        )",
-                                        &[&table],
-                                    )
-                                    .await;
+                                            extra BYTEA,
+                                            CONSTRAINT pk_metadata PRIMARY KEY (id)
+                                        )";
+                                let create = v.execute(&*sql, &[]).await;
                                 if let Err(e) = create {
-                                    error!("Error {:?}", e);
+                                    error!("Error on init Postgres Metadata store {:?}", e);
                                     return Err(JobSchedulerError::CantInit);
                                 }
                             }
@@ -318,9 +329,14 @@ impl MetaDataStorage for PostgresMetadataStore {
                     let now = Utc::now().timestamp();
                     let sql = "SELECT \
                             id, job_type, next_tick, last_tick \
-                        FROM $1 \
-                        WHERE next_tick > 0 && next_tick < $2";
-                    let rows = store.query(sql, &[&table, &now]).await;
+                        FROM "
+                        .to_string()
+                        + &*table
+                        + " \
+                        WHERE \
+                              next_tick > 0 \
+                          AND next_tick < $1";
+                    let rows = store.query(&*sql, &[&now]).await;
                     match rows {
                         Ok(rows) => Ok(rows
                             .iter()
@@ -329,11 +345,11 @@ impl MetaDataStorage for PostgresMetadataStore {
                                 let id: JobUuid = id.into();
                                 let job_type = row.get(1);
                                 let next_tick = row
-                                    .try_get(3)
+                                    .try_get(2)
                                     .ok()
                                     .map(|i: i64| i as u64)
                                     .unwrap_or_default();
-                                let last_tick = row.try_get(4).ok().map(|i: i64| i as u64);
+                                let last_tick = row.try_get(3).ok().map(|i: i64| i as u64);
 
                                 JobAndNextTick {
                                     id: Some(id),
@@ -370,14 +386,14 @@ impl MetaDataStorage for PostgresMetadataStore {
                     let store = store.read().await;
                     let next_tick = next_tick.map(|b| b.timestamp()).unwrap_or(0);
                     let last_tick = last_tick.map(|b| b.timestamp());
-                    let sql = "UPDATE $1 \
+                    let sql = "UPDATE ".to_string()
+                        + &*table
+                        + " \
                         SET \
-                         next_tick=$2, last_tick=$3 \
+                         next_tick=$1, last_tick=$2\
                         WHERE \
-                            id = $4";
-                    let resp = store
-                        .query(sql, &[&table, &next_tick, &last_tick, &guid])
-                        .await;
+                            id = $3";
+                    let resp = store.query(&sql, &[&next_tick, &last_tick, &guid]).await;
                     if let Err(e) = resp {
                         error!("Error updating next and last tick {:?}", e);
                         Err(JobSchedulerError::UpdateJobData)
@@ -403,11 +419,16 @@ impl MetaDataStorage for PostgresMetadataStore {
                     let now = Utc::now().timestamp();
                     let sql = "SELECT \
                             next_tick \
-                        FROM $1 \
-                        WHERE next_tick > 0 && next_tick > $2 \
+                        FROM "
+                        .to_string()
+                        + &*table
+                        + " \
+                        WHERE \
+                              next_tick > 0\
+                          AND next_tick > $2 \
                         ORDER BY next_tick ASC \
                         LIMIT 1";
-                    let row = store.query(sql, &[&table, &now]).await;
+                    let row = store.query(&*sql, &[&now]).await;
                     if let Err(e) = row {
                         error!("Error getting time until next job {:?}", e);
                         return Err(JobSchedulerError::CouldNotGetTimeUntilNextTick);

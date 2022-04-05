@@ -32,7 +32,7 @@ impl JobRunner {
                 let tx = tx_notify.clone();
                 tokio::spawn(async move {
                     if let Err(e) = tx.send((uuid, JobState::Started)) {
-                        error!("Error sending {:?}", e);
+                        error!("Error sending error listening for activation {:?}", e);
                     }
                 });
             }
@@ -46,7 +46,7 @@ impl JobRunner {
                     tokio::spawn(async move {
                         v.await;
                         if let Err(e) = tx.send((uuid, JobState::Done)) {
-                            error!("Error sending {:?}", e);
+                            error!("Error sending spawned task {:?}", e);
                         }
                     });
                 }

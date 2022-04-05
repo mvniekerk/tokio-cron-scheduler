@@ -55,8 +55,9 @@ impl DataStore<NotificationData> for PostgresNotificationStore {
                 PostgresStore::Created(_) => Err(JobSchedulerError::GetJobData),
                 PostgresStore::Inited(store) => {
                     let store = store.read().await;
-                    let sql = "SELECT id, job_id, extra from $1 where id = $2";
-                    let row = store.query(sql, &[&table, &id]).await;
+                    let sql =
+                        "SELECT id, job_id, extra from ".to_string() + &*table + " where id = $1";
+                    let row = store.query(&*sql, &[&id]).await;
                     if let Err(e) = row {
                         error!("Error fetching notification data {:?}", e);
                         return Err(JobSchedulerError::GetJobData);
@@ -70,8 +71,9 @@ impl DataStore<NotificationData> for PostgresNotificationStore {
                     let notification_id: Uuid = row.get(0);
 
                     let job_states = {
-                        let sql = "SELECT state from $1 where id = $2";
-                        let row = store.query(sql, &[&states_table, &notification_id]).await;
+                        let sql =
+                            "SELECT state from ".to_string() + &*states_table + " where id = $1";
+                        let row = store.query(&*sql, &[&notification_id]).await;
                         match row {
                             Ok(rows) => rows
                                 .iter()
@@ -125,24 +127,24 @@ impl DataStore<NotificationData> for PostgresNotificationStore {
                             Some((job_id, notification_id)) => (job_id, notification_id),
                             None => return Err(JobSchedulerError::UpdateJobData),
                         };
-                    let sql = "DELETE FROM $1 WHERE id = $2";
-                    let result = store.query(sql, &[&states_table, &notification_id]).await;
+                    let sql = "DELETE FROM ".to_string() + &*states_table + " WHERE id = $1";
+                    let result = store.query(&*sql, &[&notification_id]).await;
                     if let Err(e) = result {
                         error!("Error deleting {:?}", e);
                     }
 
-                    let sql = "INSERT INTO $1 (id, job_id, extra) \
-                    VALUES ($2, $3, $4) \
+                    let sql = "INSERT INTO ".to_string()
+                        + &*table
+                        + " (id, job_id, extra) \
+                    VALUES ($1, $2, $3) \
                     ON CONFLICT (id) \
                     DO \
-                        UPDATE $1 \
+                        UPDATE \
                         SET \
-                            job_id = $3, extra = $4 \
-                        WHERE \
-                            id = $2";
+                            job_id = $2, extra = $3";
                     let extra = data.extra;
                     let result = store
-                        .query(sql, &[&table, &notification_id, &job_id, &extra])
+                        .query(&*sql, &[&notification_id, &job_id, &extra])
                         .await;
 
                     if let Err(e) = result {
@@ -150,14 +152,16 @@ impl DataStore<NotificationData> for PostgresNotificationStore {
                     }
 
                     if !data.job_states.is_empty() {
-                        let sql = "INSERT INTO $1 (id, state) VALUES ".to_string()
+                        let sql = "INSERT INTO ".to_string()
+                            + &*states_table
+                            + " (id, state) VALUES "
                             + &*data
                                 .job_states
                                 .iter()
-                                .map(|s| format!("($2, {})", s))
+                                .map(|s| format!("($1, {})", s))
                                 .collect::<Vec<_>>()
                                 .join(",");
-                        let result = store.query(&sql, &[&states_table, &notification_id]).await;
+                        let result = store.query(&sql, &[&notification_id]).await;
                         if let Err(e) = result {
                             error!("Error inserting state vals {:?}", e);
                         }
@@ -174,23 +178,17 @@ impl DataStore<NotificationData> for PostgresNotificationStore {
     ) -> Pin<Box<dyn Future<Output = Result<(), JobSchedulerError>> + Send>> {
         let store = self.store.clone();
         let table = self.table.clone();
-        let states_table = self.states_table.clone();
         Box::pin(async move {
             let store = store.read().await;
             match &*store {
                 PostgresStore::Created(_) => Err(JobSchedulerError::CantRemove),
                 PostgresStore::Inited(store) => {
                     let store = store.read().await;
-                    let sql = "DELETE FROM $1 WHERE id = $2";
-                    let result = store.query(sql, &[&states_table, &guid]).await;
-                    if let Err(e) = result {
-                        error!("Error deleting from notification states table {:?}", e);
-                    }
-                    let result = store.query(sql, &[&table, &guid]).await;
-                    if let Err(e) = result {
-                        error!("Error deleting from notifications {:?}", e);
-                    }
-                    Ok(())
+                    let sql = "DELETE FROM ".to_string() + &*table + " WHERE id = $1";
+                    store.query(&*sql, &[&guid]).await.map(|_| ()).map_err(|e| {
+                        error!("Error deleting notification {:?}", e);
+                        JobSchedulerError::CantRemove
+                    })
                 }
             }
         })
@@ -217,23 +215,30 @@ impl InitStore for PostgresNotificationStore {
                             if let PostgresStore::Inited(client) = &v {
                                 let v = client.read().await;
 
-                                let sql = "CREATE TABLE IF NOT EXISTS $1 (\
-                                    id UUID constraint pk_notification_id PRIMARY_KEY,\
-                                    job_id UUID,\
-                                    extra BYTEA\
+                                let sql = "CREATE TABLE IF NOT EXISTS ".to_string()
+                                    + &*table
+                                    + " ( \
+                                    id UUID, \
+                                    job_id UUID, \
+                                    extra BYTEA, \
+                                    CONSTRAINT pk_notification_id PRIMARY KEY (id)
                                 )";
-                                let create = v.query(sql, &[&table]).await;
+                                let create = v.query(&*sql, &[]).await;
                                 if let Err(e) = create {
                                     error!("Error creating notification table {:?}", e);
                                     return Err(JobSchedulerError::CantInit);
                                 }
-                                let sql = "CREATE TABLE IF NOT EXISTS $1 (\
+                                let sql = "CREATE TABLE IF NOT EXISTS ".to_string()
+                                    + &*states_table
+                                    + " (\
                                     id UUID NOT NULL,
                                     state INTEGER NOT NULL,
                                     CONSTRAINT pk_notification_states PRIMARY KEY (id, state),
-                                    CONSTRAINT fk_notification_id FOREIGN KEY (id) REFERENCES $2 (id) ON DELETE CASCADE
+                                    CONSTRAINT fk_notification_id FOREIGN KEY (id) REFERENCES "
+                                    + &*table
+                                    + " (id) ON DELETE CASCADE
                                 )";
-                                let create = v.query(sql, &[&states_table, &table]).await;
+                                let create = v.query(&*sql, &[]).await;
                                 if let Err(e) = create {
                                     error!("Error creating notification states table {:?}", e);
                                     return Err(JobSchedulerError::CantInit);
@@ -281,14 +286,17 @@ impl NotificationStore for PostgresNotificationStore {
                     let state = state as i32;
                     let sql = "SELECT DISTINCT states.id \
                     FROM \
-                     $1 as states \
-                     RIGHT JOIN $2 as st ON st.id = states.id \
+                     "
+                    .to_string()
+                        + &*table
+                        + " as states \
+                     RIGHT JOIN "
+                        + &*states_table
+                        + " as st ON st.id = states.id \
                     WHERE \
-                         job_id = $3 \
-                     AND state = $4";
-                    let result = store
-                        .query(sql, &[&table, &states_table, &job, &state])
-                        .await;
+                         job_id = $1 \
+                     AND state = $2";
+                    let result = store.query(&*sql, &[&job, &state]).await;
                     match result {
                         Ok(rows) => Ok(rows
                             .iter()
@@ -320,8 +328,9 @@ impl NotificationStore for PostgresNotificationStore {
                 PostgresStore::Created(_) => Err(JobSchedulerError::CantListGuids),
                 PostgresStore::Inited(store) => {
                     let store = store.read().await;
-                    let sql = "SELECT DISTINCT id FROM $1 WHERE job_id = $2";
-                    let result = store.query(sql, &[&table, &job_id]).await;
+                    let sql =
+                        "SELECT DISTINCT id FROM ".to_string() + &*table + " WHERE job_id = $1";
+                    let result = store.query(&*sql, &[&job_id]).await;
                     match result {
                         Ok(rows) => Ok(rows
                             .iter()
@@ -358,14 +367,14 @@ impl NotificationStore for PostgresNotificationStore {
                 PostgresStore::Inited(store) => {
                     let store = store.read().await;
                     let state = state as i32;
-                    let sql = "DELETE FROM $1 \
+                    let sql = "DELETE FROM ".to_string()
+                        + &*states_table
+                        + " \
                     WHERE \
-                            id = $2 \
-                        AND state = $3 \
+                            id = $1 \
+                        AND state = $2 \
                     RETURNING state";
-                    let result = store
-                        .query(sql, &[&states_table, &notification_id, &state])
-                        .await;
+                    let result = store.query(&*sql, &[&notification_id, &state]).await;
                     match result {
                         Ok(row) => Ok(!row.is_empty()),
                         Err(e) => {
@@ -391,11 +400,9 @@ impl NotificationStore for PostgresNotificationStore {
                 PostgresStore::Created(_) => Err(JobSchedulerError::CantRemove),
                 PostgresStore::Inited(store) => {
                     let store = store.read().await;
-                    let sql = "DELETE FROM $1 \
-                    WHERE \
-                       job_id = $2";
+                    let sql = "DELETE FROM ".to_string() + &*table + " WHERE job_id = $1";
                     store
-                        .query(sql, &[&table, &job_id])
+                        .query(&*sql, &[&job_id])
                         .await
                         .map(|_| ())
                         .map_err(|e| {
