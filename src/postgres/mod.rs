@@ -32,6 +32,8 @@ impl Default for PostgresStore {
             .unwrap_or_else(|| {
                 let db_host =
                     std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".to_string());
+                let port =
+                    std::env::var("POSTGRES_PORT").unwrap_or_else(|_| "5432".to_string());
                 let dbname =
                     std::env::var("POSTGRES_DB").unwrap_or_else(|_| "postgres".to_string());
                 let username =
@@ -39,15 +41,25 @@ impl Default for PostgresStore {
                 let password = std::env::var("POSTGRES_PASSWORD")
                     .map(Some)
                     .unwrap_or_default();
+                let application_name = std::env::var("POSTGRES_APP_NAME")
+                    .map(Some)
+                    .unwrap_or_default();
+
                 "".to_string()
                     + "host="
                     + &*db_host
+                    + " port="
+                    + &*port
                     + " dbname="
                     + &*dbname
                     + " user="
                     + &*username
                     + &*match password {
                         Some(password) => " password=".to_string() + &*password,
+                        None => "".to_string(),
+                    }
+                    + &*match application_name {
+                        Some(application_name) => " application_name=".to_string() + &*application_name
                         None => "".to_string(),
                     }
             });

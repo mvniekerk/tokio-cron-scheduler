@@ -5,7 +5,7 @@ mod job_scheduler;
 #[cfg(feature = "nats_storage")]
 mod nats;
 mod notification;
-#[cfg(feature = "postgres")]
+#[cfg(feature = "postgres_storage")]
 mod postgres;
 mod scheduler;
 mod simple;
@@ -24,7 +24,7 @@ use uuid::Uuid;
 #[cfg(feature = "nats_storage")]
 pub use crate::nats::{NatsMetadataStore, NatsNotificationStore, NatsStore};
 
-#[cfg(feature = "postgres")]
+#[cfg(feature = "postgres_storage")]
 pub use crate::postgres::{PostgresMetadataStore, PostgresNotificationStore, PostgresStore};
 
 pub use error::JobSchedulerError;

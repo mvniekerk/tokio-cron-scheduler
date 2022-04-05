@@ -2,7 +2,7 @@
 
 ## 0.4, 0.5 ➡ 0.6
 
-Architecturally 0.6 is much different than the previous versions. If you didn't implement your own scheduler, this version's only big change is the adding a reference of the scheduler when creating/removing notifications of a job.
+Architecturally 0.6 is much different from the previous versions. If you didn't implement your own scheduler, this version's only big change is the adding a reference of the scheduler when creating/removing notifications of a job.
 
 ### Removals
 
@@ -64,8 +64,14 @@ Default implementation for the MetadataStore.
 #### SimpleNotificationStore
 Default implementation for the NotificationStore.
 
+#### PostgresMetadataStore
+Postgres implementation of the MetadataStore. Needs postgres_storage feature.
+
+#### PostgresNotificationStore
+Postgres implementation of the NotificationStore. Needs postgres_storage feature.
+
 #### NatsMetadataStore
-Nats implementation of the MetadataStore. Needs nats_scheduler feature.
+Nats implementation of the MetadataStore. Needs nats_storage feature.
 
 #### NatsNotificationStore
-Nats implementation of the NotificationStore. Needs nats_scheduler feature.
+Nats implementation of the NotificationStore. Needs nats_storage feature.

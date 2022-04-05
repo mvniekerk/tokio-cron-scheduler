@@ -29,6 +29,6 @@ NATS_BUCKET_DESCRIPTION | Tokio Cron Scheduler | key/Value bucket description.
 
 
 #### Provide own Jetstream instance
-Both NatsMetadataStore and NatsNotificationStore encapsulates a Jetstream instance. Provide it accordingly. See https://github.com/nats-io/nats.rs .
+Both NatsMetadataStore and NatsNotificationStore encapsulates a NatsStore that in turn encapsulates a Jetstream instance usin . Provide it accordingly. See https://github.com/nats-io/nats.rs .
 
 

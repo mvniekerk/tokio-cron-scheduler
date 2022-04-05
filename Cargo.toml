@@ -7,12 +7,12 @@ edition = "2018"
 documentation = "https://docs.rs/tokio_cron_scheduler/"
 repository = "https://github.com/mvniekerk/tokio-cron-scheduler"
 
-description = "Schedule tasks on tokio using cron-like annotation. Also schedule tasks at an instant or repeat them at a fixed duration."
+description = "Schedule tasks on tokio using cron-like annotation, at an instant or repeat them at a fixed duration. Tasks can optionally be persisted using PostgreSQL or Nats."
 
 license = "MIT/Apache-2.0"
 
 readme = "README.md"
-keywords = ["cron", "crontab", "scheduler", "job", "tokio"]
+keywords = ["cron", "crontab", "scheduler", "job", "tokio", "nats", "postgres", "postgresql"]
 
 categories = ["date-and-time"]
 
@@ -53,9 +53,9 @@ prost-build = { version = "0.10" }
 [features]
 signal = ["tokio/signal"]
 nats_storage = ["nats"]
-postgres = ["tokio-postgres"]
-postgres_native_tls = ["postgres", "postgres-native-tls"]
-postgres_openssl = ["postgres", "postgres-openssl"]
+postgres_storage = ["tokio-postgres"]
+postgres_native_tls = ["postgres_storage", "postgres-native-tls"]
+postgres_openssl = ["postgres_storage", "postgres-openssl"]
 default = []
 
 [[example]]
@@ -71,5 +71,5 @@ required-features = ["nats_storage", "tracing-subscriber"]
 [[example]]
 name = "postgres"
 path = "examples/postgres_job.rs"
-required-features = ["postgres", "tracing-subscriber"]
+required-features = ["postgres_storage", "tracing-subscriber"]
 
