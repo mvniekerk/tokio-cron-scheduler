@@ -302,7 +302,7 @@ impl NotificationStore for PostgresNotificationStore {
                             .iter()
                             .map(|r| {
                                 let uuid: Uuid = r.get(0);
-                                return uuid;
+                                uuid
                             })
                             .collect::<Vec<_>>()),
                         Err(e) => {

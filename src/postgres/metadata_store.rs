@@ -233,7 +233,7 @@ impl From<Row> for JobStoredData {
         };
         let extra = row.try_get(11).unwrap_or_default();
 
-        let row = Self {
+        Self {
             id: Some(id.into()),
             last_updated,
             last_tick,
@@ -244,8 +244,7 @@ impl From<Row> for JobStoredData {
             ran,
             stopped,
             job,
-        };
-        row
+        }
     }
 }
 
