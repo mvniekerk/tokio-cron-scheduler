@@ -12,7 +12,7 @@ description = "Schedule tasks on tokio using cron-like annotation, at an instant
 license = "MIT/Apache-2.0"
 
 readme = "README.md"
-keywords = ["cron", "crontab", "scheduler", "job", "tokio", "nats", "postgres", "postgresql"]
+keywords = ["cron", "scheduler", "tokio", "nats", "postgres"]
 
 categories = ["date-and-time"]
 
