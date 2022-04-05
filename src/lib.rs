@@ -2,9 +2,11 @@ mod context;
 mod error;
 mod job;
 mod job_scheduler;
-#[cfg(feature = "nats_scheduler")]
+#[cfg(feature = "nats_storage")]
 mod nats;
 mod notification;
+#[cfg(feature = "postgres_storage")]
+mod postgres;
 mod scheduler;
 mod simple;
 mod store;
@@ -19,8 +21,12 @@ use cron::Schedule;
 use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
 use uuid::Uuid;
 
-#[cfg(feature = "nats_scheduler")]
+#[cfg(feature = "nats_storage")]
 pub use crate::nats::{NatsMetadataStore, NatsNotificationStore, NatsStore};
+
+#[cfg(feature = "postgres_storage")]
+pub use crate::postgres::{PostgresMetadataStore, PostgresNotificationStore, PostgresStore};
+
 pub use error::JobSchedulerError;
 pub use job::job_data::JobState as JobNotification;
 pub use job::to_code::{JobCode, NotificationCode, PinnedGetFuture, ToCode};

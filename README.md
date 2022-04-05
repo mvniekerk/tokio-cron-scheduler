@@ -2,12 +2,12 @@
 
 Use cron-like scheduling in an async tokio environment.
 Also schedule tasks at an instant or repeat them at a fixed duration.
+Task's data can optionally be persisted using PostgreSQL or Nats.
 
 Inspired by https://github.com/lholden/job_scheduler
 
 [![](https://docs.rs/tokio_cron_scheduler/badge.svg)](https://docs.rs/tokio_cron_scheduler) [![](https://img.shields.io/crates/v/tokio_cron_scheduler.svg)](https://crates.io/crates/tokio_cron_scheduler) [![](https://travis-ci.org/mvniekerk/tokio_cron_scheduler.svg?branch=master)](https://travis-ci.org/mvniekerk/tokio_cron_scheduler)
 
-Optional persistent storage implementation currently provided by Nats.
 
 ## Usage
 
@@ -186,10 +186,61 @@ Adds `shutdown_on_signal` and `shutdown_on_ctrl_c` to the scheduler.
 Both shuts the system down (stops the scheduler, removes all the tasks) when a signal
 was received.
 
-### nats_scheduler
+### postgres_storage
+Since 0.6
+Adds the Postgres metadata store, notification store (PostgresMetadataStore, PostgresNotificationStore). Use a Postgres database to store the metadata and notifications data. 
+
+See [PostgreSQL docs](./postgres.md)
+
+### postgres_native_tls
+Since 0.6
+Uses postgres-native-tls crate as the TLS provider for the PostgreSQL connection.
+
+### postgres_openssl
+Since 0.6
+Uses the postgres-openssl crate as the TLS provider for the PostgreSQL connection.
+
+### nats_storage
 Since 0.6
 
 Adds the Nats metadata store, notification store (NatsMetadataStore, NatsNotificationStore). Use a Nats system as a way to store the metadata and notifications.
+
+See [Nats docs](./nats.md)
+
+## Examples
+
+### simple
+
+Runs the in-memory hashmap based storage
+
+```shell
+ cargo run --example simple --features="tracing-subscriber"
+```
+
+### postgres
+
+Needs a running PostgreSQL instance first:
+
+```shell
+docker run --rm -it -p 5432:5432 -e POSTGRES_USER="postgres" -e POSTGRES_PASSWORD="" -e POSTGRES_HOST_AUTH_METHOD="trust" postgres:14.1
+```
+
+Then run the example:
+```shell
+POSTGRES_INIT_METADATA=true POSTGRES_INIT_NOTIFICATIONS=true cargo run --example postgres --features="postgres tracing-subscriber"
+```
+
+### nats
+
+Needs a running Nats instance first with Jetream enabled:
+```shell
+docker run --rm -it -p 4222:4222 -p 6222:6222 -p 7222:7222 -p 8222:8222 nats -js -DV
+```
+
+Then run the example:
+```shell
+cargo run --example nats --features="nats_storage tracing-subscriber"
+```
 
 ## Design
 

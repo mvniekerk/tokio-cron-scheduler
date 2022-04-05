@@ -117,7 +117,7 @@ impl InitStore for NatsNotificationStore {
         })
     }
 
-    fn inited(&mut self) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>>>> {
+    fn inited(&mut self) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>> + Send>> {
         let inited = self.store.inited;
         Box::pin(async move { Ok(inited) })
     }

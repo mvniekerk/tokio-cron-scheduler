@@ -1,18 +1,18 @@
 [package]
 name = "tokio-cron-scheduler"
-version = "0.6.0-beta.2"
+version = "0.6.0-beta.3"
 authors = ["Michael van Niekerk <mike@agri-io.co.za>"]
 edition = "2018"
 
 documentation = "https://docs.rs/tokio_cron_scheduler/"
 repository = "https://github.com/mvniekerk/tokio-cron-scheduler"
 
-description = "Schedule tasks on tokio using cron-like annotation. Also schedule tasks at an instant or repeat them at a fixed duration."
+description = "Schedule tasks on tokio using cron-like annotation, at an instant or repeat them at a fixed duration. Tasks can optionally be persisted using PostgreSQL or Nats."
 
 license = "MIT/Apache-2.0"
 
 readme = "README.md"
-keywords = ["cron", "crontab", "scheduler", "job", "tokio"]
+keywords = ["cron", "crontab", "scheduler", "job", "tokio", "nats", "postgres", "postgresql"]
 
 categories = ["date-and-time"]
 
@@ -31,6 +31,19 @@ version = "0.18.1"
 features = ["unstable"]
 optional = true
 
+[dependencies.postgres-openssl]
+version = "0.5.0"
+optional = true
+
+[dependencies.postgres-native-tls]
+version = "0.5.0"
+optional = true
+
+[dependencies.tokio-postgres]
+version = "0.7"
+optional = true
+features = ["with-uuid-0_8"]
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
@@ -39,7 +52,10 @@ prost-build = { version = "0.10" }
 
 [features]
 signal = ["tokio/signal"]
-nats_scheduler = ["nats"]
+nats_storage = ["nats"]
+postgres_storage = ["tokio-postgres"]
+postgres_native_tls = ["postgres_storage", "postgres-native-tls"]
+postgres_openssl = ["postgres_storage", "postgres-openssl"]
 default = []
 
 [[example]]
@@ -50,6 +66,10 @@ required-features = ["tracing-subscriber"]
 [[example]]
 name = "nats"
 path = "examples/nats_job.rs"
-required-features = ["nats_scheduler", "tracing-subscriber"]
+required-features = ["nats_storage", "tracing-subscriber"]
 
+[[example]]
+name = "postgres"
+path = "examples/postgres_job.rs"
+required-features = ["postgres_storage", "tracing-subscriber"]
 

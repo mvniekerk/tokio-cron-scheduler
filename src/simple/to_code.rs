@@ -9,7 +9,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
-use tracing::error;
+use tracing::{error, warn};
 use uuid::Uuid;
 
 pub type LockedJobToRunMap = Arc<RwLock<HashMap<Uuid, Arc<RwLock<Box<JobToRunAsync>>>>>>;
@@ -146,7 +146,7 @@ impl SimpleNotificationCode {
                 w.insert(uuid, val);
             }
             if let Err(e) = tx.send(Ok(uuid)) {
-                error!("Error sending notification created {:?} {:?}", e, uuid);
+                warn!("Error sending notification created {:?} {:?}", e, uuid);
             }
         }
     }

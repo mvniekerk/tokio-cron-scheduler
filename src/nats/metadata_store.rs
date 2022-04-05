@@ -105,7 +105,7 @@ impl InitStore for NatsMetadataStore {
         })
     }
 
-    fn inited(&mut self) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>>>> {
+    fn inited(&mut self) -> Pin<Box<dyn Future<Output = Result<bool, JobSchedulerError>> + Send>> {
         let inited = self.store.inited;
         Box::pin(async move { Ok(inited) })
     }
@@ -121,6 +121,7 @@ impl MetaDataStorage for NatsMetadataStore {
             let list = list_guids.await;
             if let Err(e) = list {
                 error!("Error getting list of guids {:?}", e);
+                return Err(e);
             }
             let list = list.unwrap();
             let bucket = bucket.read().await;
