@@ -285,7 +285,8 @@ impl JobsSchedulerLocked {
     ///     println!("I get executed every 10 seconds!");
     /// }));
     /// ```
-    pub fn add(&self, job: JobLocked) -> Result<(), JobSchedulerError> {
+    pub fn add(&self, job: JobLocked) -> Result<Uuid, JobSchedulerError> {
+        let guid = job.guid();
         if !self.inited() {
             let mut s = self.clone();
             s.init()?;
@@ -294,7 +295,7 @@ impl JobsSchedulerLocked {
         let context = self.context.clone();
         JobCreator::add(&context, job)?;
 
-        Ok(())
+        Ok(guid)
     }
 
     /// Remove a job from the `JobScheduler`
@@ -304,9 +305,12 @@ impl JobsSchedulerLocked {
     /// let mut sched = JobScheduler::new();
     /// let job_id = sched.add(Job::new("1/10 * * * * *".parse().unwrap(), || {
     ///     println!("I get executed every 10 seconds!");
-    /// }));
+    /// }))?;
     /// sched.remove(job_id);
     /// ```
+    ///
+    /// Note, the UUID of the job can be fetched calling .guid() on a Job.
+    ///
     pub fn remove(&self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
         if !self.inited() {
             let mut s = self.clone();
