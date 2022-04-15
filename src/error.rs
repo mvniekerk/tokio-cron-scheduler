@@ -23,4 +23,5 @@ pub enum JobSchedulerError {
     CantListGuids,
     CantListNextTicks,
     NotifyOnStateError,
+    ParseSchedule,
 }
