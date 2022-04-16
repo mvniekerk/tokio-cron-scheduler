@@ -27,6 +27,7 @@ pub use crate::nats::{NatsMetadataStore, NatsNotificationStore, NatsStore};
 #[cfg(feature = "postgres_storage")]
 pub use crate::postgres::{PostgresMetadataStore, PostgresNotificationStore, PostgresStore};
 
+pub use context::Context;
 pub use error::JobSchedulerError;
 pub use job::job_data::JobState as JobNotification;
 pub use job::to_code::{JobCode, NotificationCode, PinnedGetFuture, ToCode};
