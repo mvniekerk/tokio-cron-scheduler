@@ -24,4 +24,10 @@ pub enum JobSchedulerError {
     CantListNextTicks,
     NotifyOnStateError,
     ParseSchedule,
+    #[cfg(feature = "nats_storage")]
+    BuilderNeedsField(String),
+    #[cfg(feature = "nats_storage")]
+    NatsCouldNotConnect(String),
+    #[cfg(feature = "nats_storage")]
+    NatsCouldNotCreateKvStore(String),
 }

@@ -22,7 +22,7 @@ use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
 use uuid::Uuid;
 
 #[cfg(feature = "nats_storage")]
-pub use crate::nats::{NatsMetadataStore, NatsNotificationStore, NatsStore};
+pub use crate::nats::{NatsMetadataStore, NatsNotificationStore, NatsStore, NatsStoreBuilder};
 
 #[cfg(feature = "postgres_storage")]
 pub use crate::postgres::{PostgresMetadataStore, PostgresNotificationStore, PostgresStore};
