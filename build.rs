@@ -2,6 +2,7 @@ use std::env;
 use std::error::Error;
 use std::path::Path;
 use std::process::Command;
+use std::fs;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -12,14 +13,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     prost_build.protoc_arg("--experimental_allow_proto3_optional");
     prost_build.compile_protos(&["./proto/job.proto"], &["./proto/"])?;
 
-    Command::new("cp")
-        .args(&[
-            "za.co.agriio.job.rs",
-            format!("{:}/src/job/job_data.rs", manifest_dir).as_str(),
-        ])
-        .current_dir(&Path::new(&out_dir))
-        .status()
-        .unwrap();
+    let src = Path::new(&out_dir).join("za.co.agriio.job.rs");
+    let dst = Path::new(&manifest_dir).join("src/job/job_data.rs");
+    
+    fs::copy(&src, &dst);
+    
     println!("cargo:rerun-if-changed=proto/job.proto");
     Ok(())
 }
