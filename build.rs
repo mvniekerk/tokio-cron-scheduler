@@ -1,8 +1,7 @@
 use std::env;
 use std::error::Error;
-use std::path::Path;
-use std::process::Command;
 use std::fs;
+use std::path::Path;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -15,9 +14,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let src = Path::new(&out_dir).join("za.co.agriio.job.rs");
     let dst = Path::new(&manifest_dir).join("src/job/job_data.rs");
-    
-    fs::copy(&src, &dst);
-    
+
+    fs::copy(&src, &dst).expect("Could not copy Protobuf file over");
+
     println!("cargo:rerun-if-changed=proto/job.proto");
     Ok(())
 }
