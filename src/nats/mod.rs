@@ -3,6 +3,7 @@ mod notification_store;
 
 use nats::jetstream::JetStream;
 use nats::kv::{Config, Store};
+use nats::JetStreamOptions;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -92,6 +93,7 @@ pub struct NatsStoreBuilder {
     pub app_name: Option<String>,
     pub bucket: Option<String>,
     pub bucket_description: Option<String>,
+    pub api_prefix: Option<String>,
 }
 
 impl NatsStoreBuilder {
@@ -134,10 +136,13 @@ impl NatsStoreBuilder {
             app_name,
             bucket,
             bucket_description,
+            api_prefix,
         } = self;
-        let host = host.ok_or(JobSchedulerError::BuilderNeedsField("host".to_string()))?;
-        let bucket = bucket.ok_or(JobSchedulerError::BuilderNeedsField("bucket".to_string()))?;
+        let host = host.ok_or_else(|| JobSchedulerError::BuilderNeedsField("host".to_string()))?;
+        let bucket =
+            bucket.ok_or_else(|| JobSchedulerError::BuilderNeedsField("bucket".to_string()))?;
         let bucket_name = sanitize_nats_bucket(&*bucket);
+        let api_prefix = sanitize_nats_bucket(&*api_prefix.unwrap_or_else(|| "tcs".to_string()));
 
         let connection = {
             let options = {
@@ -164,7 +169,7 @@ impl NatsStoreBuilder {
         }
         .map_err(|e| JobSchedulerError::NatsCouldNotConnect(e.to_string()))?;
 
-        let context = JetStream::new(connection);
+        let context = JetStream::new(connection, JetStreamOptions::new().api_prefix(api_prefix));
         let mut bucket_config = Config {
             bucket: bucket_name.clone(),
             history: 1,
