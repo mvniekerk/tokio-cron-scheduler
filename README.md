@@ -188,16 +188,19 @@ was received.
 
 ### postgres_storage
 Since 0.6
+
 Adds the Postgres metadata store, notification store (PostgresMetadataStore, PostgresNotificationStore). Use a Postgres database to store the metadata and notifications data. 
 
 See [PostgreSQL docs](./postgres.md)
 
 ### postgres_native_tls
 Since 0.6
+
 Uses postgres-native-tls crate as the TLS provider for the PostgreSQL connection.
 
 ### postgres_openssl
 Since 0.6
+
 Uses the postgres-openssl crate as the TLS provider for the PostgreSQL connection.
 
 ### nats_storage
