@@ -1,4 +1,4 @@
-use crate::job::job_data::{CronJob, JobType, NonCronJob};
+use crate::job::job_data_prost::{CronJob, JobType, NonCronJob};
 use crate::postgres::PostgresStore;
 use crate::store::{DataStore, InitStore, MetaDataStorage};
 use crate::{JobAndNextTick, JobSchedulerError, JobStoredData, JobUuid};
@@ -78,8 +78,8 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
         let store = self.store.clone();
         let table = self.table.clone();
         Box::pin(async move {
-            use crate::job::job_data::job_stored_data::Job::CronJob as CronJobType;
-            use crate::job::job_data::job_stored_data::Job::NonCronJob as NonCronJobType;
+            use crate::job::job_data_prost::job_stored_data::Job::CronJob as CronJobType;
+            use crate::job::job_data_prost::job_stored_data::Job::NonCronJob as NonCronJobType;
 
             let store = store.read().await;
             match &*store {
@@ -207,8 +207,8 @@ impl From<Row> for JobStoredData {
         let ran = row.try_get(6).unwrap_or_default();
         let stopped = row.try_get(7).unwrap_or_default();
         let job = {
-            use crate::job::job_data::job_stored_data::Job::CronJob as CronJobType;
-            use crate::job::job_data::job_stored_data::Job::NonCronJob as NonCronJobType;
+            use crate::job::job_data_prost::job_stored_data::Job::CronJob as CronJobType;
+            use crate::job::job_data_prost::job_stored_data::Job::NonCronJob as NonCronJobType;
 
             let job_type = JobType::from_i32(job_type);
             match job_type {

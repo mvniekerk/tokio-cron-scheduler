@@ -2,7 +2,10 @@ mod creator;
 mod deleter;
 mod runner;
 
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::NotificationData;
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::NotificationData;
 use crate::job::{JobId, NotificationId};
 pub use creator::NotificationCreator;
 pub use deleter::NotificationDeleter;

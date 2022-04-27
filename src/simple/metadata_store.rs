@@ -1,4 +1,7 @@
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobAndNextTick, JobStoredData};
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::{JobAndNextTick, JobStoredData};
 use crate::store::{DataStore, InitStore, MetaDataStorage};
 use crate::JobSchedulerError;
 use chrono::{DateTime, Utc};

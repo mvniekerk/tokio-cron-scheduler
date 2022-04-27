@@ -1,4 +1,7 @@
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobState, JobType};
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::{JobState, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::{JobScheduler, JobSchedulerError, JobStoredData};
 use chrono::{DateTime, Utc};
@@ -17,7 +20,10 @@ use uuid::Uuid;
 mod creator;
 mod cron_job;
 mod deleter;
+#[cfg(not(feature = "has_bytes"))]
 pub mod job_data;
+#[cfg(feature = "has_bytes")]
+pub mod job_data_prost;
 mod non_cron_job;
 mod runner;
 pub mod to_code;
@@ -112,6 +118,13 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
+                #[cfg(feature = "has_bytes")]
+                job: Some(job_data_prost::job_stored_data::Job::CronJob(
+                    job_data_prost::CronJob {
+                        schedule: schedule.to_string(),
+                    },
+                )),
+                #[cfg(not(feature = "has_bytes"))]
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                     schedule: schedule.to_string(),
                 })),
@@ -162,6 +175,13 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
+                #[cfg(feature = "has_bytes")]
+                job: Some(job_data_prost::job_stored_data::Job::CronJob(
+                    job_data_prost::CronJob {
+                        schedule: schedule.to_string(),
+                    },
+                )),
+                #[cfg(not(feature = "has_bytes"))]
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                     schedule: schedule.to_string(),
                 })),
@@ -243,6 +263,14 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
+                #[cfg(feature = "has_bytes")]
+                job: Some(job_data_prost::job_stored_data::Job::NonCronJob(
+                    job_data_prost::NonCronJob {
+                        repeating: false,
+                        repeated_every: duration.as_secs(),
+                    },
+                )),
+                #[cfg(not(feature = "has_bytes"))]
                 job: Some(job_data::job_stored_data::Job::NonCronJob(
                     job_data::NonCronJob {
                         repeating: false,
@@ -325,6 +353,14 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
+                #[cfg(feature = "has_bytes")]
+                job: Some(job_data_prost::job_stored_data::Job::NonCronJob(
+                    job_data_prost::NonCronJob {
+                        repeating: false,
+                        repeated_every: instant.duration_since(Instant::now()).as_secs(),
+                    },
+                )),
+                #[cfg(not(feature = "has_bytes"))]
                 job: Some(job_data::job_stored_data::Job::NonCronJob(
                     job_data::NonCronJob {
                         repeating: false,
@@ -413,6 +449,15 @@ impl JobLocked {
                 extra: vec![],
                 ran: false,
                 stopped: false,
+
+                #[cfg(feature = "has_bytes")]
+                job: Some(job_data_prost::job_stored_data::Job::NonCronJob(
+                    job_data_prost::NonCronJob {
+                        repeating: true,
+                        repeated_every: duration.as_secs(),
+                    },
+                )),
+                #[cfg(not(feature = "has_bytes"))]
                 job: Some(job_data::job_stored_data::Job::NonCronJob(
                     job_data::NonCronJob {
                         repeating: true,

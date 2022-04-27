@@ -1,4 +1,4 @@
-use crate::job::job_data::{JobIdAndNotification, JobState, NotificationData};
+use crate::job::job_data_prost::{JobIdAndNotification, JobState, NotificationData};
 use crate::job::{JobId, NotificationId};
 use crate::store::{DataStore, InitStore, NotificationStore};
 use crate::{JobSchedulerError, PostgresStore};

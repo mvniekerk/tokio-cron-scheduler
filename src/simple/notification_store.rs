@@ -1,4 +1,7 @@
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobIdAndNotification, JobState, NotificationData};
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::{JobIdAndNotification, JobState, NotificationData};
 use crate::job::{JobId, NotificationId};
 use crate::store::{DataStore, InitStore, NotificationStore};
 use crate::JobSchedulerError;

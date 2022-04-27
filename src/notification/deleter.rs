@@ -1,5 +1,8 @@
 use crate::context::{Context, NotificationDeletedResult};
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::JobState;
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::JobState;
 use crate::job::{JobId, NotificationId};
 use crate::store::NotificationStore;
 use crate::JobSchedulerError;

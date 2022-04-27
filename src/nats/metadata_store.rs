@@ -1,4 +1,4 @@
-use crate::job::job_data::ListOfUuids;
+use crate::job::job_data_prost::ListOfUuids;
 use crate::nats::{sanitize_nats_key, NatsStore};
 use crate::store::{DataStore, InitStore, MetaDataStorage};
 use crate::{JobAndNextTick, JobSchedulerError, JobStoredData, JobUuid};

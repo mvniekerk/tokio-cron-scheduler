@@ -1,5 +1,8 @@
 use crate::context::Context;
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobState, JobType};
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::{JobState, JobType};
 use crate::JobSchedulerError;
 use chrono::Utc;
 use std::sync::Arc;
@@ -22,7 +25,6 @@ impl Default for Scheduler {
         Self {
             shutdown: Arc::new(RwLock::new(false)),
             inited: false,
-            // Here be breadcrumb
             ticker_tx,
             ticking: false,
         }

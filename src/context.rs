@@ -1,4 +1,7 @@
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobState, NotificationData};
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::{JobState, NotificationData};
 use crate::job::to_code::{JobCode, NotificationCode};
 use crate::job::{JobToRunAsync, NotificationId};
 use crate::store::{MetaDataStorage, NotificationStore};

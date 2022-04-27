@@ -1,4 +1,7 @@
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobStoredData, JobType};
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::{JobStoredData, JobType};
 use crate::job::{Job, JobToRunAsync};
 use crate::{JobScheduler, JobSchedulerError, JobToRun};
 use chrono::{DateTime, Utc};
@@ -23,6 +26,16 @@ impl Job for NonCronJob {
         None
     }
 
+    #[cfg(feature = "has_bytes")]
+    fn repeated_every(&self) -> Option<u64> {
+        self.data.job.as_ref().and_then(|jt| match jt {
+            crate::job::job_data_prost::job_stored_data::Job::CronJob(_) => None,
+            crate::job::job_data_prost::job_stored_data::Job::NonCronJob(ncj) => {
+                Some(ncj.repeated_every)
+            }
+        })
+    }
+    #[cfg(not(feature = "has_bytes"))]
     fn repeated_every(&self) -> Option<u64> {
         self.data.job.as_ref().and_then(|jt| match jt {
             crate::job::job_data::job_stored_data::Job::CronJob(_) => None,

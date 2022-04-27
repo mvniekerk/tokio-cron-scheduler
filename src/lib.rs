@@ -1,3 +1,8 @@
+#[cfg(not(feature = "has_bytes"))]
+#[macro_use]
+extern crate num_derive;
+extern crate core;
+
 mod context;
 mod error;
 mod job;
@@ -15,10 +20,16 @@ use std::ops::Add;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::ListOfUuids;
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::ListOfUuids;
 use chrono::{DateTime, Utc};
 use cron::Schedule;
+#[cfg(not(feature = "has_bytes"))]
 use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
+#[cfg(feature = "has_bytes")]
+use job::job_data_prost::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
 use uuid::Uuid;
 
 #[cfg(feature = "nats_storage")]
@@ -29,7 +40,10 @@ pub use crate::postgres::{PostgresMetadataStore, PostgresNotificationStore, Post
 
 pub use context::Context;
 pub use error::JobSchedulerError;
+#[cfg(not(feature = "has_bytes"))]
 pub use job::job_data::JobState as JobNotification;
+#[cfg(feature = "has_bytes")]
+pub use job::job_data_prost::JobState as JobNotification;
 pub use job::to_code::{JobCode, NotificationCode, PinnedGetFuture, ToCode};
 pub use job::JobLocked as Job;
 pub use job::OnJobNotification;
@@ -100,6 +114,9 @@ impl JobStoredData {
         self.job
             .as_ref()
             .and_then(|j| match j {
+                #[cfg(feature = "has_bytes")]
+                job::job_data_prost::job_stored_data::Job::CronJob(cj) => Some(&*cj.schedule),
+                #[cfg(not(feature = "has_bytes"))]
                 job::job_data::job_stored_data::Job::CronJob(cj) => Some(&*cj.schedule),
                 _ => None,
             })
@@ -119,7 +136,13 @@ impl JobStoredData {
 
     pub fn repeated_every(&self) -> Option<u64> {
         self.job.as_ref().and_then(|jt| match jt {
+            #[cfg(feature = "has_bytes")]
+            job::job_data_prost::job_stored_data::Job::CronJob(_) => None,
+            #[cfg(not(feature = "has_bytes"))]
             job::job_data::job_stored_data::Job::CronJob(_) => None,
+            #[cfg(feature = "has_bytes")]
+            job::job_data_prost::job_stored_data::Job::NonCronJob(ncj) => Some(ncj.repeated_every),
+            #[cfg(not(feature = "has_bytes"))]
             job::job_data::job_stored_data::Job::NonCronJob(ncj) => Some(ncj.repeated_every),
         })
     }

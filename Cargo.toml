@@ -22,9 +22,12 @@ cron = "0.10.0"
 chrono = "0.4"
 time = "0.1.44"
 uuid = { version = "0.8", features = ["v4"] }
-prost = "0.10"
+prost = { version = "0.10", optional = true }
 tracing = "0.1.32"
 tracing-subscriber = { version = "0.3.10", optional = true }
+
+num-traits = "0.2"
+num-derive = "0.3"
 
 [dependencies.nats]
 version = "0.18.1"
@@ -48,14 +51,16 @@ features = ["with-uuid-0_8"]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [build-dependencies]
-prost-build = { version = "0.10" }
+prost-build = { version = "0.10", optional = true }
 
 [features]
 signal = ["tokio/signal"]
-nats_storage = ["nats"]
-postgres_storage = ["tokio-postgres"]
-postgres_native_tls = ["postgres_storage", "postgres-native-tls"]
-postgres_openssl = ["postgres_storage", "postgres-openssl"]
+has_bytes = [ "prost-build", "prost" ]
+nats_storage = ["nats", "has_bytes" ]
+postgres_storage = ["tokio-postgres", "has_bytes" ]
+postgres_native_tls = ["postgres_storage", "postgres-native-tls" ]
+postgres_openssl = ["postgres_storage", "postgres-openssl" ]
+
 default = []
 
 [[example]]

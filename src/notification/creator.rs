@@ -1,5 +1,8 @@
 use crate::context::Context;
+#[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobState, NotificationData};
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost::{JobState, NotificationData};
 use crate::store::NotificationStore;
 use crate::{JobSchedulerError, OnJobNotification};
 use std::future::Future;
@@ -93,6 +96,12 @@ impl NotificationCreator {
     ) -> Result<Uuid, JobSchedulerError> {
         let notification_id = Uuid::new_v4();
         let data = NotificationData {
+            #[cfg(feature = "has_bytes")]
+            job_id: Some(crate::job::job_data_prost::JobIdAndNotification {
+                job_id: Some(job_id.into()),
+                notification_id: Some(notification_id.into()),
+            }),
+            #[cfg(not(feature = "has_bytes"))]
             job_id: Some(crate::job::job_data::JobIdAndNotification {
                 job_id: Some(job_id.into()),
                 notification_id: Some(notification_id.into()),

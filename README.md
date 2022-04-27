@@ -179,12 +179,11 @@ Please see the [CONTRIBUTING](CONTRIBUTING.md) file for more information.
 
 ## Features
 
-### signal
-Since 0.5
+### has_bytes
+Since 0.7
 
-Adds `shutdown_on_signal` and `shutdown_on_ctrl_c` to the scheduler. 
-Both shuts the system down (stops the scheduler, removes all the tasks) when a signal
-was received.
+Enables Prost-generated data structures to be used by stores that need to get the bytes
+of the data structs. The Nats and Postgres stores depend on this feature being enabled.
 
 ### postgres_storage
 Since 0.6
@@ -209,6 +208,13 @@ Since 0.6
 Adds the Nats metadata store, notification store (NatsMetadataStore, NatsNotificationStore). Use a Nats system as a way to store the metadata and notifications.
 
 See [Nats docs](./nats.md)
+
+### signal
+Since 0.5
+
+Adds `shutdown_on_signal` and `shutdown_on_ctrl_c` to the scheduler.
+Both shuts the system down (stops the scheduler, removes all the tasks) when a signal
+was received.
 
 ## Examples
 

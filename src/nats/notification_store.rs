@@ -1,4 +1,4 @@
-use crate::job::job_data::{
+use crate::job::job_data_prost::{
     JobAndNotifications, JobState, ListOfJobsAndNotifications, NotificationData,
 };
 use crate::job::{JobId, NotificationId};
