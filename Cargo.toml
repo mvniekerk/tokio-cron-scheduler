@@ -45,7 +45,7 @@ optional = true
 [dependencies.tokio-postgres]
 version = "0.7"
 optional = true
-features = ["with-uuid-0_8"]
+features = ["with-uuid-1"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
