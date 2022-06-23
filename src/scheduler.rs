@@ -9,8 +9,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
 use tracing::error;
 use uuid::Uuid;
+
+pub type StartResult = Result<JoinHandle<()>, JobSchedulerError>;
 
 pub struct Scheduler {
     pub shutdown: Arc<RwLock<bool>>,
@@ -205,21 +208,25 @@ impl Scheduler {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), JobSchedulerError> {
+    pub fn start(&mut self) -> StartResult {
         if self.ticking {
             Err(JobSchedulerError::TickError)
         } else {
             self.ticking = true;
             let tx = self.ticker_tx.clone();
-            tokio::spawn(async move {
+            let shutdown = self.shutdown.clone();
+            Ok(tokio::spawn(async move {
                 loop {
                     if let Err(e) = tx.send(true) {
+                        let shutdown = { *(shutdown.read().await) };
+                        if shutdown {
+                            return;
+                        }
                         error!("Tick send error {:?}", e);
                     }
                     tokio::time::sleep(Duration::from_millis(500)).await;
                 }
-            });
-            Ok(())
+            }))
         }
     }
 }

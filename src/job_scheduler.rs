@@ -3,7 +3,7 @@ use crate::error::JobSchedulerError;
 use crate::job::to_code::{JobCode, NotificationCode};
 use crate::job::{JobCreator, JobDeleter, JobLocked, JobRunner};
 use crate::notification::{NotificationCreator, NotificationDeleter, NotificationRunner};
-use crate::scheduler::Scheduler;
+use crate::scheduler::{Scheduler, StartResult};
 use crate::simple::{
     SimpleJobCode, SimpleMetadataStore, SimpleNotificationCode, SimpleNotificationStore,
 };
@@ -367,13 +367,13 @@ impl JobsSchedulerLocked {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
-    pub fn start(&self) -> Result<(), JobSchedulerError> {
+    pub fn start(&self) -> StartResult {
         if !self.inited() {
             let mut s = self.clone();
             s.init()?;
         }
         let scheduler = self.scheduler.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::channel::<StartResult>();
         tokio::spawn(async move {
             let mut scheduler = scheduler.write().await;
             let started = scheduler.start();
