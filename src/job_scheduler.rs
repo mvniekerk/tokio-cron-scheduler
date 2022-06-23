@@ -428,30 +428,16 @@ impl JobsSchedulerLocked {
 
     ///
     /// Shut the scheduler down
-    pub fn shutdown(&mut self) -> Result<(), JobSchedulerError> {
+    pub async fn shutdown(&mut self) -> Result<(), JobSchedulerError> {
         let mut notify = None;
         std::mem::swap(&mut self.shutdown_notifier, &mut notify);
 
-        let scheduler = self.scheduler.clone();
-        tokio::spawn(async move {
-            let mut scheduler = scheduler.write().await;
-            scheduler.shutdown().await;
-        });
-        let (tx, rx) = std::sync::mpsc::channel();
-        if let Some(mut notify) = notify {
-            tokio::spawn(async move {
-                let mut notify = notify.write().await;
-                notify();
-                if let Err(e) = tx.send(true) {
-                    error!("Could not send shutdown sequence run {:?}", e);
-                }
-            });
-        } else if let Err(e) = tx.send(false) {
-            error!("Could not send shutdown sequence not run {:?}", e);
-        }
-        let r = rx.recv();
-        if let Err(e) = r {
-            error!("Could not get shutdown sequence run state {:?}", e);
+        let mut scheduler = self.scheduler.write().await;
+        scheduler.shutdown().await;
+
+        if let Some(notify) = notify {
+            let mut notify = notify.write().await;
+            notify().await;
         }
         Ok(())
     }
@@ -467,7 +453,7 @@ impl JobsSchedulerLocked {
                 .recv()
                 .await
             {
-                l.shutdown().expect("Problem shutting down");
+                l.shutdown().await.expect("Problem shutting down");
             }
         });
     }
@@ -482,7 +468,7 @@ impl JobsSchedulerLocked {
                 .await
                 .expect("Could not await ctrl-c");
 
-            if let Err(err) = l.shutdown() {
+            if let Err(err) = l.shutdown().await {
                 error!("{:?}", err);
             }
         });

@@ -139,7 +139,7 @@ pub async fn run_example(mut sched: JobScheduler) -> Result<()> {
     tokio::time::sleep(Duration::from_secs(40)).await;
 
     info!("Goodbye.");
-    sched.shutdown()?;
+    sched.shutdown().await?;
     Ok(())
 }
 
