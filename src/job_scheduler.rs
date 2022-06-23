@@ -31,7 +31,7 @@ pub struct JobsSchedulerLocked {
     pub notification_deleter: Arc<RwLock<NotificationDeleter>>,
     pub notification_runner: Arc<RwLock<NotificationRunner>>,
     pub scheduler: Arc<RwLock<Scheduler>>,
-    pub shutdown_notifier: Option<Box<ShutdownNotification>>,
+    pub shutdown_notifier: Option<Arc<RwLock<Box<ShutdownNotification>>>>,
 }
 
 impl Clone for JobsSchedulerLocked {
@@ -46,7 +46,7 @@ impl Clone for JobsSchedulerLocked {
             notification_deleter: self.notification_deleter.clone(),
             notification_runner: self.notification_runner.clone(),
             scheduler: self.scheduler.clone(),
-            shutdown_notifier: None,
+            shutdown_notifier: self.shutdown_notifier.clone(),
         }
     }
 }
@@ -440,8 +440,8 @@ impl JobsSchedulerLocked {
         let (tx, rx) = std::sync::mpsc::channel();
         if let Some(mut notify) = notify {
             tokio::spawn(async move {
-                let val = notify();
-                val.await;
+                let mut notify = notify.write().await;
+                notify();
                 if let Err(e) = tx.send(true) {
                     error!("Could not send shutdown sequence run {:?}", e);
                 }
@@ -491,7 +491,7 @@ impl JobsSchedulerLocked {
     ///
     /// Code that is run after the shutdown was run
     pub fn set_shutdown_handler(&mut self, job: Box<ShutdownNotification>) {
-        self.shutdown_notifier = Some(job);
+        self.shutdown_notifier = Some(Arc::new(RwLock::new(job)));
     }
 
     ///
