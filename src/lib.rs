@@ -49,6 +49,7 @@ pub use job::JobLocked as Job;
 pub use job::OnJobNotification;
 pub use job::{JobToRun, JobToRunAsync};
 pub use job_scheduler::JobsSchedulerLocked as JobScheduler;
+pub use store::{MetaDataStorage, NotificationStore};
 
 pub use simple::{
     SimpleJobCode, SimpleMetadataStore, SimpleNotificationCode, SimpleNotificationStore,

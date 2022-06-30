@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Debug, Clone)]
 pub enum JobSchedulerError {
@@ -37,7 +37,7 @@ pub enum JobSchedulerError {
 
 impl Display for JobSchedulerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        Debug::fmt(self, f)
     }
 }
 
