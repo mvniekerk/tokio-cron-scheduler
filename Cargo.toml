@@ -69,6 +69,11 @@ path = "examples/simple_job.rs"
 required-features = ["tracing-subscriber"]
 
 [[example]]
+name = "simple-tokio-in-a-thread"
+path = "examples/simple_job_tokio_in_a_thread.rs"
+required-features = ["tracing-subscriber"]
+
+[[example]]
 name = "nats"
 path = "examples/nats_job.rs"
 required-features = ["nats_storage", "tracing-subscriber"]
