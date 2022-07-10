@@ -145,7 +145,7 @@ async fn main() {
       })
     }));
 
-    sched.start().await;
+    sched.start();
 }
 ```
 
