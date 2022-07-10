@@ -363,7 +363,7 @@ impl JobsSchedulerLocked {
     /// any pending jobs.
     ///
     /// ```rust,ignore
-    /// if let Err(e) = sched.start().await {
+    /// if let Err(e) = sched.start() {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
