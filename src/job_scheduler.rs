@@ -3,7 +3,7 @@ use crate::error::JobSchedulerError;
 use crate::job::to_code::{JobCode, NotificationCode};
 use crate::job::{JobCreator, JobDeleter, JobLocked, JobRunner};
 use crate::notification::{NotificationCreator, NotificationDeleter, NotificationRunner};
-use crate::scheduler::Scheduler;
+use crate::scheduler::{Scheduler, StartResult};
 use crate::simple::{
     SimpleJobCode, SimpleMetadataStore, SimpleNotificationCode, SimpleNotificationStore,
 };
@@ -31,7 +31,7 @@ pub struct JobsSchedulerLocked {
     pub notification_deleter: Arc<RwLock<NotificationDeleter>>,
     pub notification_runner: Arc<RwLock<NotificationRunner>>,
     pub scheduler: Arc<RwLock<Scheduler>>,
-    pub shutdown_notifier: Option<Box<ShutdownNotification>>,
+    pub shutdown_notifier: Option<Arc<RwLock<Box<ShutdownNotification>>>>,
 }
 
 impl Clone for JobsSchedulerLocked {
@@ -46,7 +46,7 @@ impl Clone for JobsSchedulerLocked {
             notification_deleter: self.notification_deleter.clone(),
             notification_runner: self.notification_runner.clone(),
             scheduler: self.scheduler.clone(),
-            shutdown_notifier: None,
+            shutdown_notifier: self.shutdown_notifier.clone(),
         }
     }
 }
@@ -367,13 +367,13 @@ impl JobsSchedulerLocked {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
-    pub fn start(&self) -> Result<(), JobSchedulerError> {
+    pub fn start(&self) -> StartResult {
         if !self.inited() {
             let mut s = self.clone();
             s.init()?;
         }
         let scheduler = self.scheduler.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::channel::<StartResult>();
         tokio::spawn(async move {
             let mut scheduler = scheduler.write().await;
             let started = scheduler.start();
@@ -428,30 +428,16 @@ impl JobsSchedulerLocked {
 
     ///
     /// Shut the scheduler down
-    pub fn shutdown(&mut self) -> Result<(), JobSchedulerError> {
+    pub async fn shutdown(&mut self) -> Result<(), JobSchedulerError> {
         let mut notify = None;
         std::mem::swap(&mut self.shutdown_notifier, &mut notify);
 
-        let scheduler = self.scheduler.clone();
-        tokio::spawn(async move {
-            let mut scheduler = scheduler.write().await;
-            scheduler.shutdown().await;
-        });
-        let (tx, rx) = std::sync::mpsc::channel();
-        if let Some(mut notify) = notify {
-            tokio::spawn(async move {
-                let val = notify();
-                val.await;
-                if let Err(e) = tx.send(true) {
-                    error!("Could not send shutdown sequence run {:?}", e);
-                }
-            });
-        } else if let Err(e) = tx.send(false) {
-            error!("Could not send shutdown sequence not run {:?}", e);
-        }
-        let r = rx.recv();
-        if let Err(e) = r {
-            error!("Could not get shutdown sequence run state {:?}", e);
+        let mut scheduler = self.scheduler.write().await;
+        scheduler.shutdown().await;
+
+        if let Some(notify) = notify {
+            let mut notify = notify.write().await;
+            notify().await;
         }
         Ok(())
     }
@@ -467,7 +453,7 @@ impl JobsSchedulerLocked {
                 .recv()
                 .await
             {
-                l.shutdown().expect("Problem shutting down");
+                l.shutdown().await.expect("Problem shutting down");
             }
         });
     }
@@ -482,7 +468,7 @@ impl JobsSchedulerLocked {
                 .await
                 .expect("Could not await ctrl-c");
 
-            if let Err(err) = l.shutdown() {
+            if let Err(err) = l.shutdown().await {
                 error!("{:?}", err);
             }
         });
@@ -491,7 +477,7 @@ impl JobsSchedulerLocked {
     ///
     /// Code that is run after the shutdown was run
     pub fn set_shutdown_handler(&mut self, job: Box<ShutdownNotification>) {
-        self.shutdown_notifier = Some(job);
+        self.shutdown_notifier = Some(Arc::new(RwLock::new(job)));
     }
 
     ///
