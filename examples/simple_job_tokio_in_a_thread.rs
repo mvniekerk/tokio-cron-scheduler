@@ -30,7 +30,7 @@ async fn start() -> Result<(), Box<dyn Error>> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
     info!("Creating scheduler");
-    let sched = JobScheduler::new()?;
+    let sched = JobScheduler::new().await?;
     info!("Run example");
     run_example(sched).await;
     Ok(())

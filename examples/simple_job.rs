@@ -12,7 +12,7 @@ async fn main() {
         .with_max_level(Level::TRACE)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
-    let sched = JobScheduler::new();
+    let sched = JobScheduler::new().await;
     let sched = sched.unwrap();
     run_example(sched).await;
 }

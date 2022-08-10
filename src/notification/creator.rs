@@ -88,7 +88,7 @@ impl NotificationCreator {
         })
     }
 
-    pub fn add(
+    pub async fn add(
         context: &Context,
         run: Box<OnJobNotification>,
         job_states: Vec<JobState>,

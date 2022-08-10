@@ -609,43 +609,44 @@ impl JobLocked {
 
     ///
     /// Add a notification to run on a list of state notifications
-    pub fn on_notifications_add(
+    pub async fn on_notifications_add(
         &self,
         job_scheduler: &JobsSchedulerLocked,
         run: Box<OnJobNotification>,
         states: Vec<JobState>,
     ) -> Result<Uuid, JobSchedulerError> {
-        if !job_scheduler.inited() {
+        if !job_scheduler.inited().await {
             let mut job_scheduler = job_scheduler.clone();
-            job_scheduler.init()?;
+            job_scheduler.init().await?;
         }
         let job_id = self.guid();
         let context = job_scheduler.context();
-        NotificationCreator::add(&context, run, states, &job_id)
+        NotificationCreator::add(&context, run, states, &job_id).await
     }
 
     ///
     /// Run something when the task is started. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_start_notification_remove`.
-    pub fn on_start_notification_add(
+    pub async fn on_start_notification_add(
         &self,
         job_scheduler: &JobsSchedulerLocked,
         on_start: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         self.on_notifications_add(job_scheduler, on_start, vec![JobState::Started])
+            .await
     }
 
     ///
     /// Remove a notification optionally for a certain type of states
-    pub fn on_notification_removal(
+    pub async fn on_notification_removal(
         &self,
         job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
         states: Option<Vec<JobState>>,
     ) -> Result<(NotificationId, bool), JobSchedulerError> {
-        if !job_scheduler.inited() {
+        if !job_scheduler.inited().await {
             let mut job_scheduler = job_scheduler.clone();
-            job_scheduler.init()?;
+            job_scheduler.init().await?;
         }
         let context = job_scheduler.context();
         NotificationDeleter::remove(&context, notification_id, states)
@@ -654,7 +655,7 @@ impl JobLocked {
     ///
     /// Remove the notification when the task was started. Uses the same UUID that was returned by
     /// `on_start_notification_add`
-    pub fn on_start_notification_remove(
+    pub async fn on_start_notification_remove(
         &self,
         job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
@@ -664,47 +665,51 @@ impl JobLocked {
             notification_id,
             Some(vec![JobState::Started]),
         )
+        .await
         .map(|(_, deleted)| deleted)
     }
 
     ///
     /// Run something when the task is stopped. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_stop_notification_remove`.
-    pub fn on_done_notification_add(
+    pub async fn on_done_notification_add(
         &mut self,
         job_scheduler: &JobsSchedulerLocked,
         on_stop: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         self.on_notifications_add(job_scheduler, on_stop, vec![JobState::Done])
+            .await
     }
 
     ///
     /// Remove the notification when the task was stopped. Uses the same UUID that was returned by
     /// `on_done_notification_add`
-    pub fn on_done_notification_remove(
+    pub async fn on_done_notification_remove(
         &mut self,
         job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         self.on_notification_removal(job_scheduler, notification_id, Some(vec![JobState::Done]))
+            .await
             .map(|(_, deleted)| deleted)
     }
 
     ///
     /// Run something when the task was removed. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
-    pub fn on_removed_notification_add(
+    pub async fn on_removed_notification_add(
         &mut self,
         job_scheduler: &JobsSchedulerLocked,
         on_removed: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         self.on_notifications_add(job_scheduler, on_removed, vec![JobState::Removed])
+            .await
     }
 
     ///
     /// Remove the notification when the task was removed. Uses the same UUID that was returned by
     /// `on_removed_notification_add`
-    pub fn on_removed_notification_remove(
+    pub async fn on_removed_notification_remove(
         &mut self,
         job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
@@ -714,29 +719,32 @@ impl JobLocked {
             notification_id,
             Some(vec![JobState::Removed]),
         )
+        .await
         .map(|(_, deleted)| deleted)
     }
 
     ///
     /// Run something when the task was removed. Returns a UUID as handle for this notification. This
     /// UUID needs to be used when you want to remove the notification handle using `on_removed_notification_remove`.
-    pub fn on_stop_notification_add(
+    pub async fn on_stop_notification_add(
         &mut self,
         job_scheduler: &JobsSchedulerLocked,
         on_removed: Box<OnJobNotification>,
     ) -> Result<Uuid, JobSchedulerError> {
         self.on_notifications_add(job_scheduler, on_removed, vec![JobState::Stop])
+            .await
     }
 
     ///
     /// Remove the notification when the task was removed. Uses the same UUID that was returned by
     /// `on_removed_notification_add`
-    pub fn on_stop_notification_remove(
+    pub async fn on_stop_notification_remove(
         &mut self,
         job_scheduler: &JobsSchedulerLocked,
         notification_id: &Uuid,
     ) -> Result<bool, JobSchedulerError> {
         self.on_notification_removal(job_scheduler, notification_id, Some(vec![JobState::Stop]))
+            .await
             .map(|(_, deleted)| deleted)
     }
 

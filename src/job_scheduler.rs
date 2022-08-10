@@ -23,7 +23,7 @@ pub type ShutdownNotification =
 /// The JobScheduler contains and executes the scheduled jobs.
 pub struct JobsSchedulerLocked {
     pub context: Arc<Context>,
-    pub inited: Arc<std::sync::RwLock<bool>>,
+    pub inited: Arc<RwLock<bool>>,
     pub job_creator: Arc<RwLock<JobCreator>>,
     pub job_deleter: Arc<RwLock<JobDeleter>>,
     pub job_runner: Arc<RwLock<JobRunner>>,
@@ -137,45 +137,31 @@ impl JobsSchedulerLocked {
 
     ///
     /// Get whether the scheduler is initialized
-    pub fn inited(&self) -> bool {
-        let r = self.inited.read().unwrap();
+    pub async fn inited(&self) -> bool {
+        let r = self.inited.read().await;
         *r
     }
 
     ///
     /// Initialize the actors
-    pub fn init(&mut self) -> Result<(), JobSchedulerError> {
-        if self.inited() {
+    pub async fn init(&mut self) -> Result<(), JobSchedulerError> {
+        if self.inited().await {
             return Ok(());
         }
         {
-            let mut w = self.inited.write().map_err(|e| {
-                error!("Could not get write lock on inited {:?}", e);
-                JobSchedulerError::CantInit
-            })?;
+            let mut w = self.inited.write().await;
             *w = true;
         }
-        let init = self.clone();
-
-        let (scheduler_init_tx, scheduler_init_rx) = std::sync::mpsc::channel();
-
-        tokio::spawn(async move {
-            let init = init.init_actors().await;
-            if let Err(e) = scheduler_init_tx.send(init) {
-                error!("Error sending error {:?}", e);
-            }
-        });
-
-        scheduler_init_rx
-            .recv()
-            .map_err(|_| JobSchedulerError::CantInit)??;
-        Ok(())
+        self.clone()
+            .init_actors()
+            .await
+            .map_err(|_| JobSchedulerError::CantInit)
     }
 
     ///
     /// Create a new `MetaDataStorage` and `NotificationStore` using the `SimpleMetadataStore`, `SimpleNotificationStore`,
     /// `SimpleJobCode` and `SimpleNotificationCode` implementation
-    pub fn new() -> Result<Self, JobSchedulerError> {
+    pub async fn new() -> Result<Self, JobSchedulerError> {
         let metadata_storage = SimpleMetadataStore::default();
         let metadata_storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>> =
             Arc::new(RwLock::new(Box::new(metadata_storage)));
@@ -192,28 +178,18 @@ impl JobsSchedulerLocked {
         let notify_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>> =
             Arc::new(RwLock::new(Box::new(notify_code)));
 
-        let (storage_init_tx, storage_init_rx) = std::sync::mpsc::channel();
-
-        tokio::spawn(async move {
-            let context = JobsSchedulerLocked::init_context(
-                metadata_storage,
-                notification_storage,
-                job_code,
-                notify_code,
-            )
-            .await;
-            if let Err(e) = storage_init_tx.send(context) {
-                error!("Error sending init success {:?}", e);
-            }
-        });
-
-        let context = storage_init_rx
-            .recv()
-            .map_err(|_| JobSchedulerError::CantInit)??;
+        let context = JobsSchedulerLocked::init_context(
+            metadata_storage,
+            notification_storage,
+            job_code,
+            notify_code,
+        )
+        .await
+        .map_err(|_| JobSchedulerError::CantInit)?;
 
         let val = JobsSchedulerLocked {
             context,
-            inited: Arc::new(std::sync::RwLock::new(false)),
+            inited: Arc::new(RwLock::new(false)),
             job_creator: Arc::new(Default::default()),
             job_deleter: Arc::new(Default::default()),
             job_runner: Arc::new(Default::default()),
@@ -262,7 +238,7 @@ impl JobsSchedulerLocked {
 
         let val = JobsSchedulerLocked {
             context,
-            inited: Arc::new(std::sync::RwLock::new(false)),
+            inited: Arc::new(RwLock::new(false)),
             job_creator: Arc::new(Default::default()),
             job_deleter: Arc::new(Default::default()),
             job_runner: Arc::new(Default::default()),
@@ -283,13 +259,13 @@ impl JobsSchedulerLocked {
     /// let mut sched = JobScheduler::new();
     /// sched.add(Job::new("1/10 * * * * *".parse().unwrap(), || {
     ///     println!("I get executed every 10 seconds!");
-    /// }));
+    /// })).await;
     /// ```
-    pub fn add(&self, job: JobLocked) -> Result<Uuid, JobSchedulerError> {
+    pub async fn add(&self, job: JobLocked) -> Result<Uuid, JobSchedulerError> {
         let guid = job.guid();
-        if !self.inited() {
+        if !self.inited().await {
             let mut s = self.clone();
-            s.init()?;
+            s.init().await?;
         }
 
         let context = self.context.clone();
@@ -305,16 +281,16 @@ impl JobsSchedulerLocked {
     /// let mut sched = JobScheduler::new();
     /// let job_id = sched.add(Job::new("1/10 * * * * *".parse().unwrap(), || {
     ///     println!("I get executed every 10 seconds!");
-    /// }))?;
-    /// sched.remove(job_id);
+    /// }))?.await;
+    /// sched.remove(job_id).await;
     /// ```
     ///
     /// Note, the UUID of the job can be fetched calling .guid() on a Job.
     ///
-    pub fn remove(&self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
-        if !self.inited() {
+    pub async fn remove(&self, to_be_removed: &Uuid) -> Result<(), JobSchedulerError> {
+        if !self.inited().await {
             let mut s = self.clone();
-            s.init()?;
+            s.init().await?;
         }
 
         let context = self.context();
@@ -329,28 +305,19 @@ impl JobsSchedulerLocked {
     ///
     /// ```rust,ignore
     /// loop {
-    ///     sched.tick();
+    ///     sched.tick().await;
     ///     std::thread::sleep(Duration::from_millis(500));
     /// }
     /// ```
-    pub fn tick(&self) -> Result<(), JobSchedulerError> {
-        if !self.inited() {
+    pub async fn tick(&self) -> Result<(), JobSchedulerError> {
+        if !self.inited().await {
             let mut s = self.clone();
-            s.init()?;
+            s.init().await?;
         }
-
-        let scheduler = self.scheduler.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
-        tokio::spawn(async move {
-            let ret = scheduler.write().await;
-            let ret = ret.tick();
-            if let Err(e) = tx.send(ret) {
-                error!("Error sending tick result {:?}", e);
-            }
-        });
-        let rx = rx.recv();
-        match rx {
-            Ok(ret) => ret,
+        let ret = self.scheduler.write().await;
+        let ret = ret.tick();
+        match ret {
+            Ok(ret) => Ok(ret),
             Err(e) => {
                 error!("Error receiving tick result {:?}", e);
                 Err(JobSchedulerError::TickError)
@@ -363,28 +330,20 @@ impl JobsSchedulerLocked {
     /// any pending jobs.
     ///
     /// ```rust,ignore
-    /// if let Err(e) = sched.start() {
+    /// if let Err(e) = sched.start().await {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
-    pub fn start(&self) -> StartResult {
-        if !self.inited() {
+    pub async fn start(&self) -> StartResult {
+        if !self.inited().await {
             let mut s = self.clone();
-            s.init()?;
+            s.init().await?;
         }
-        let scheduler = self.scheduler.clone();
-        let (tx, rx) = std::sync::mpsc::channel::<StartResult>();
-        tokio::spawn(async move {
-            let mut scheduler = scheduler.write().await;
-            let started = scheduler.start();
-            if let Err(e) = tx.send(started) {
-                error!("Error sending start result {:?}", e);
-            }
-        });
+        let mut scheduler = self.scheduler.write().await;
+        let ret = scheduler.start();
 
-        let ret = rx.recv();
         match ret {
-            Ok(ret) => ret,
+            Ok(ret) => Ok(ret),
             Err(e) => {
                 error!("Error receiving start result {:?}", e);
                 Err(JobSchedulerError::StartScheduler)
@@ -398,27 +357,24 @@ impl JobsSchedulerLocked {
     ///
     /// ```rust, ignore
     /// loop {
-    ///     sched.tick();
+    ///     sched.tick().await;
     ///     std::thread::sleep(sched.time_till_next_job());
     /// }
     /// ```
-    pub fn time_till_next_job(&mut self) -> Result<Option<std::time::Duration>, JobSchedulerError> {
-        if !self.inited() {
+    pub async fn time_till_next_job(
+        &mut self,
+    ) -> Result<Option<std::time::Duration>, JobSchedulerError> {
+        if !self.inited().await {
             let mut s = self.clone();
-            s.init()?;
+            s.init().await?;
         }
         let metadata = self.context.metadata_storage.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
-        tokio::spawn(async move {
-            let mut metadata = metadata.write().await;
-            let time = metadata.time_till_next_job().await;
-            if let Err(e) = tx.send(time) {
-                error!("Error sending result of time till next job {:?}", e);
-            }
-        });
-        let ret = rx.recv();
+
+        let mut metadata = metadata.write().await;
+        let ret = metadata.time_till_next_job().await;
+
         match ret {
-            Ok(ret) => ret,
+            Ok(ret) => Ok(ret),
             Err(e) => {
                 error!("Error getting return of time till next job {:?}", e);
                 Err(JobSchedulerError::CantGetTimeUntil)

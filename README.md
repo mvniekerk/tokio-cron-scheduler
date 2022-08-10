@@ -57,21 +57,21 @@ async fn main() {
   
     sched.add(Job::new("1/10 * * * * *", |uuid, l| {
         println!("I run every 10 seconds");
-    }).unwrap());
+    }).await.unwrap());
 
     sched.add(Job::new_async("1/7 * * * * *", |uuid, l| Box::pin( async {
         println!("I run async every 7 seconds");
-    })).unwrap());
+    })).await.unwrap());
 
     sched.add(Job::new("1/30 * * * * *", |uuid, l| {
         println!("I run every 30 seconds");
-    }).unwrap());
+    }).await.unwrap());
   
     sched.add(
       Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
         println!("{:?} I'm only run once", chrono::Utc::now());
       }).unwrap()
-    );
+    ).await;
 
     let mut jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
       println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
@@ -81,60 +81,60 @@ async fn main() {
       Box::pin(async move {
         println!("Job {:?} was started, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
       })
-    }));
+    })).await;
 
     jj.on_stop_notification_add(&sched, Box::new(|job_id, notification_id, type_of_notification| {
       Box::pin(async move {
         println!("Job {:?} was completed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
       })
-    }));
+    })).await;
     
     jj.on_removed_notification_add(&sched, Box::new(|job_id, notification_id, type_of_notification| {
       Box::pin(async move {
         println!("Job {:?} was removed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
       })
-    }));
-    sched.add(jj);
+    })).await;
+    sched.add(jj).await;
 
     let five_s_job = Job::new("1/5 * * * * *", |_uuid, _l| {
       println!("{:?} I run every 5 seconds", chrono::Utc::now());
     })
             .unwrap();
-    sched.add(five_s_job);
+    sched.add(five_s_job).await;
   
     let four_s_job_async = Job::new_async("1/4 * * * * *", |_uuid, _l| Box::pin(async move {
       println!("{:?} I run async every 4 seconds", chrono::Utc::now());
     })).unwrap();
-    sched.add(four_s_job_async);
+    sched.add(four_s_job_async).await;
   
     sched.add(
       Job::new("1/30 * * * * *", |_uuid, _l| {
         println!("{:?} I run every 30 seconds", chrono::Utc::now());
       })
               .unwrap(),
-    );
+    ).await;
   
     sched.add(
       Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
         println!("{:?} I'm only run once", chrono::Utc::now());
       }).unwrap()
-    );
+    ).await;
   
     sched.add(
       Job::new_one_shot_async(Duration::from_secs(16), |_uuid, _l| Box::pin( async move {
         println!("{:?} I'm only run once async", chrono::Utc::now());
       })).unwrap()
-    );
+    ).await;
   
     let jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
       println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
     }).unwrap();
-    sched.add(jj);
+    sched.add(jj).await;
   
     let jja = Job::new_repeated_async(Duration::from_secs(7), |_uuid, _l| Box::pin(async move {
       println!("{:?} I'm repeated async every 7 seconds", chrono::Utc::now());
     })).unwrap();
-    sched.add(jja);
+    sched.add(jja).await;
 
     #[cfg(feature = "signal")]
     sched.shutdown_on_ctrl_c();
@@ -145,7 +145,7 @@ async fn main() {
       })
     }));
 
-    sched.start();
+    sched.start().await;
 }
 ```
 
