@@ -59,8 +59,13 @@ async fn main() {
         println!("I run every 10 seconds");
     }).await.unwrap());
 
-    sched.add(Job::new_async("1/7 * * * * *", |uuid, l| Box::pin( async {
+    sched.add(Job::new_async("1/7 * * * * *", |uuid, mut l| Box::pin( async {
         println!("I run async every 7 seconds");
+        let next_tick = l.next_tick_for_job(uuid).await;
+        match next_tick {
+          Ok(Some(ts)) => info!("Next time for 7s is {:?}", ts),
+          _ => warn!("Could not get next tick for 7s job"),
+        }
     })).await.unwrap());
 
     sched.add(Job::new("1/30 * * * * *", |uuid, l| {
