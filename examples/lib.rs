@@ -40,8 +40,7 @@ pub async fn run_example(mut sched: JobScheduler) -> Result<()> {
     let five_s_job_guid = five_s_job.guid();
     sched.add(five_s_job).await?;
 
-    let mut four_s_job_async = Job::new_async("1/4 * * * * *", |uuid, l| {
-        let mut l = l.clone();
+    let mut four_s_job_async = Job::new_async("1/4 * * * * *", |uuid, mut l| {
         Box::pin(async move {
             info!("I run async every 4 seconds id {:?}", uuid);
             let next_tick = l.next_tick_for_job(uuid).await;

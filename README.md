@@ -151,6 +151,9 @@ async fn main() {
     }));
 
     sched.start().await;
+  
+    // Wait a while so that the jobs actually run
+    tokio::time::sleep(core::time::Duration::from_secs(100)).await;
 }
 ```
 
