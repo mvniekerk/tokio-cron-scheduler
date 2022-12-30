@@ -327,7 +327,7 @@ impl JobLocked {
     }
 
     fn make_new_one_shot_at_an_instant(
-        instant: std::time::Instant,
+        instant: Instant,
         run: Box<JobToRun>,
         run_async: Box<JobToRunAsync>,
         async_job: bool,
@@ -343,7 +343,7 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: chrono::Utc::now()
-                    .checked_add_signed(time::Duration::seconds(
+                    .checked_add_signed(chrono::Duration::seconds(
                         instant.duration_since(Instant::now()).as_secs() as i64,
                     ))
                     .map(|t| t.timestamp() as u64)
@@ -441,7 +441,7 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: chrono::Utc::now()
-                    .checked_add_signed(time::Duration::seconds(duration.as_secs() as i64))
+                    .checked_add_signed(chrono::Duration::seconds(duration.as_secs() as i64))
                     .map(|t| t.timestamp() as u64)
                     .unwrap_or(0),
                 job_type: JobType::Repeated.into(),
@@ -565,7 +565,7 @@ impl JobLocked {
                 JobType::OneShot => None,
                 JobType::Repeated => repeated_every.and_then(|r| {
                     next_tick
-                        .and_then(|nt| nt.checked_add_signed(time::Duration::seconds(r as i64)))
+                        .and_then(|nt| nt.checked_add_signed(chrono::Duration::seconds(r as i64)))
                 }),
             }
         } else {

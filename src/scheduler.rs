@@ -164,7 +164,9 @@ impl Scheduler {
                                     JobType::OneShot => None,
                                     JobType::Repeated => repeated_every.and_then(|r| {
                                         next_tick.and_then(|nt| {
-                                            nt.checked_add_signed(time::Duration::seconds(r as i64))
+                                            nt.checked_add_signed(chrono::Duration::seconds(
+                                                r as i64,
+                                            ))
                                         })
                                     }),
                                 };

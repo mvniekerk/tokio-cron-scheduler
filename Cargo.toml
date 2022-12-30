@@ -1,6 +1,6 @@
 [package]
 name = "tokio-cron-scheduler"
-version = "0.8.1"
+version = "0.8.2"
 authors = ["Michael van Niekerk <mike@agri-io.co.za>"]
 edition = "2018"
 
@@ -18,19 +18,19 @@ categories = ["date-and-time"]
 
 [dependencies]
 tokio = { version = "1", features = ["time", "rt", "sync"] }
-cron = "0.10.0"
+cron = "0.12"
 chrono = "0.4"
-time = "0.1.44"
+time = "0.3"
 uuid = { version = "1", features = ["v4"] }
-prost = { version = "0.10", optional = true }
-tracing = "0.1.32"
-tracing-subscriber = { version = "0.3.10", optional = true }
+prost = { version = "0.11", optional = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", optional = true }
 
 num-traits = "0.2"
 num-derive = "0.3"
 
 [dependencies.nats]
-version = "0.18.1"
+version = "0.23"
 features = ["unstable"]
 optional = true
 
@@ -52,7 +52,7 @@ anyhow = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [build-dependencies]
-prost-build = { version = "0.10", optional = true }
+prost-build = { version = "0.11", optional = true }
 
 [features]
 signal = ["tokio/signal"]

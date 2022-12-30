@@ -93,7 +93,7 @@ pub async fn run_example(mut sched: JobScheduler) -> Result<()> {
     info!(
         "Sched one shot for {:?}",
         chrono::Utc::now()
-            .checked_add_signed(time::Duration::seconds(10))
+            .checked_add_signed(chrono::Duration::seconds(10))
             .unwrap()
     );
     sched
@@ -108,7 +108,7 @@ pub async fn run_example(mut sched: JobScheduler) -> Result<()> {
     info!(
         "Sched one shot async for {:?}",
         chrono::Utc::now()
-            .checked_add_signed(time::Duration::seconds(16))
+            .checked_add_signed(chrono::Duration::seconds(16))
             .unwrap()
     );
     sched

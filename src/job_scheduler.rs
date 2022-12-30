@@ -12,7 +12,6 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
 #[cfg(feature = "signal")]
 use tokio::signal::unix::SignalKind;
 use tokio::sync::RwLock;
@@ -394,16 +393,13 @@ impl JobsSchedulerLocked {
             let mut s = self.clone();
             s.init().await?;
         }
-        let next_tick = {
-            let mut r = self.context.metadata_storage.write().await;
-            r.get(job_id).await.map(|v| {
-                v.map(|vv| vv.next_tick)
-                    .filter(|t| *t != 0)
-                    .map(|ts| NaiveDateTime::from_timestamp(ts as i64, 0))
-                    .map(|ts| DateTime::from_utc(ts, Utc))
-            })
-        };
-        next_tick
+        let mut r = self.context.metadata_storage.write().await;
+        r.get(job_id).await.map(|v| {
+            v.map(|vv| vv.next_tick)
+                .filter(|t| *t != 0)
+                .map(|ts| NaiveDateTime::from_timestamp(ts as i64, 0))
+                .map(|ts| DateTime::from_utc(ts, Utc))
+        })
     }
 
     ///
