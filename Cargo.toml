@@ -1,6 +1,6 @@
 [package]
 name = "tokio-cron-scheduler"
-version = "0.8.2"
+version = "0.8.3"
 authors = ["Michael van Niekerk <mike@agri-io.co.za>"]
 edition = "2018"
 
@@ -19,7 +19,7 @@ categories = ["date-and-time"]
 [dependencies]
 tokio = { version = "1", features = ["time", "rt", "sync"] }
 cron = "0.12"
-chrono = "0.4"
+chrono = { version = "0.4", default-features = false }
 uuid = { version = "1", features = ["v4"] }
 prost = { version = "0.11", optional = true }
 tracing = "0.1"
