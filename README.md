@@ -53,7 +53,7 @@ use tokio_cron_scheduler::{JobScheduler, JobToRun, Job};
 
 #[tokio::main]
 async fn main() {
-    let mut sched = JobScheduler::new();
+    let mut sched = JobScheduler::new().await;
   
     sched.add(Job::new("1/10 * * * * *", |uuid, l| {
         println!("I run every 10 seconds");
