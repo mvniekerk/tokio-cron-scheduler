@@ -249,7 +249,7 @@ POSTGRES_INIT_METADATA=true POSTGRES_INIT_NOTIFICATIONS=true cargo run --example
 
 ### nats
 
-Needs a running Nats instance first with Jetream enabled:
+Needs a running Nats instance first with Jetstream enabled:
 ```shell
 docker run --rm -it -p 4222:4222 -p 6222:6222 -p 7222:7222 -p 8222:8222 nats -js -DV
 ```

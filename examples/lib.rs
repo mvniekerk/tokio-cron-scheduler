@@ -161,3 +161,40 @@ pub async fn run_example(mut sched: JobScheduler) -> Result<()> {
 fn main() {
     eprintln!("Should not be run on its own.");
 }
+
+#[cfg(test)]
+mod test {
+    use tokio_cron_scheduler::{Job, JobScheduler};
+    use tracing::{info, Level};
+    use tracing_subscriber::FmtSubscriber;
+
+    // Needs multi_thread to test, otherwise it hangs on scheduler.add()
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    // #[tokio::test]
+    async fn test_schedule() {
+        let subscriber = FmtSubscriber::builder()
+            .with_max_level(Level::TRACE)
+            .finish();
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("Setting default subscriber failed");
+
+        info!("Create scheduler");
+        let scheduler = JobScheduler::new().await.unwrap();
+        info!("Add job");
+        scheduler
+            .add(
+                Job::new_async("*/1  * * * * *", |_, _| {
+                    Box::pin(async {
+                        info!("Run every seconds");
+                    })
+                })
+                .unwrap(),
+            )
+            .await
+            .expect("Should be able to add a job");
+
+        scheduler.start().await.unwrap();
+
+        tokio::time::sleep(core::time::Duration::from_secs(20)).await;
+    }
+}
