@@ -15,7 +15,7 @@ use std::sync::Arc;
 #[cfg(feature = "signal")]
 use tokio::signal::unix::SignalKind;
 use tokio::sync::RwLock;
-use tracing::error;
+use tracing::{error, info};
 use uuid::Uuid;
 
 pub type ShutdownNotification =
@@ -265,12 +265,14 @@ impl JobsSchedulerLocked {
     pub async fn add(&self, job: JobLocked) -> Result<Uuid, JobSchedulerError> {
         let guid = job.guid();
         if !self.inited().await {
+            info!("Uninited");
             let mut s = self.clone();
             s.init().await?;
         }
 
         let context = self.context.clone();
-        JobCreator::add(&context, job)?;
+        JobCreator::add(&context, job).await?;
+        info!("Job creator created");
 
         Ok(guid)
     }
