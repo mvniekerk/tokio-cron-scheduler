@@ -37,6 +37,7 @@ async fn main() {
         simple_job_code,
         simple_notification_code,
     )
+    .await
     .unwrap();
 
     run_example(sched).await;
