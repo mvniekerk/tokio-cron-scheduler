@@ -7,26 +7,28 @@ use crate::JobSchedulerError;
 use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast::Sender;
+use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::sync::RwLock;
 use tracing::error;
 use uuid::Uuid;
 
 pub struct Scheduler {
     pub shutdown: Arc<RwLock<bool>>,
-    pub ticker_tx: Sender<bool>,
-    pub ticking: bool,
+    pub start_tx: Arc<RwLock<Option<Sender<bool>>>>,
+    pub start_rx: Arc<RwLock<Option<Receiver<bool>>>>,
+    pub ticking: Arc<RwLock<bool>>,
     pub inited: bool,
 }
 
 impl Default for Scheduler {
     fn default() -> Self {
-        let (ticker_tx, _ticker_rx) = tokio::sync::broadcast::channel(200);
+        let (ticker_tx, ticker_rx) = tokio::sync::oneshot::channel();
         Self {
             shutdown: Arc::new(RwLock::new(false)),
             inited: false,
-            ticker_tx,
-            ticking: false,
+            start_tx: Arc::new(RwLock::new(Some(ticker_tx))),
+            start_rx: Arc::new(RwLock::new(Some(ticker_rx))),
+            ticking: Arc::new(RwLock::new(false)),
         }
     }
 }
@@ -45,13 +47,43 @@ impl Scheduler {
 
         self.inited = true;
 
-        let ticker_tx = self.ticker_tx.clone();
+        let start_rx = {
+            let mut w = self.start_rx.write().await;
 
+            let mut start_rx: Option<Receiver<bool>> = None;
+            std::mem::swap(&mut start_rx, &mut *w);
+            start_rx
+        };
+
+        let ticking = self.ticking.clone();
         tokio::spawn(async move {
-            let ticker_rx = ticker_tx.subscribe().recv().await;
-            if let Err(e) = ticker_rx {
-                error!(?e, "Could not subscribe to ticker starter");
-                return;
+            let is_ticking = {
+                let ticking = ticking.read().await;
+                *ticking
+            };
+            if !is_ticking {
+                if let Some(start_rx) = start_rx {
+                    if let Err(e) = start_rx.await {
+                        error!(?e, "Could not subscribe to ticker starter");
+                        return;
+                    }
+                }
+                let is_ticking = {
+                    let ticking = ticking.read().await;
+                    *ticking
+                };
+                if !is_ticking {
+                    loop {
+                        let is_ticking = {
+                            let ticking = ticking.read().await;
+                            *ticking
+                        };
+                        if is_ticking {
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                }
             }
             'next_tick: loop {
                 let shutdown = {
@@ -200,17 +232,31 @@ impl Scheduler {
     }
 
     pub async fn start(&mut self) -> Result<(), JobSchedulerError> {
-        if self.ticking {
+        let is_ticking = {
+            let ticking = self.ticking.read().await;
+            *ticking
+        };
+        if is_ticking {
             Err(JobSchedulerError::TickError)
         } else {
-            self.ticking = true;
-            let tx = self.ticker_tx.clone();
-            if let Err(e) = tx.send(true) {
-                error!(?e, "Tick send error");
-                Err(JobSchedulerError::TickError)
-            } else {
-                Ok(())
+            {
+                let mut w = self.ticking.write().await;
+                *w = true;
             }
+            let tx = {
+                let mut w = self.start_tx.write().await;
+                let mut tx: Option<Sender<bool>> = None;
+                std::mem::swap(&mut tx, &mut *w);
+                tx
+            };
+
+            if let Some(tx) = tx {
+                if let Err(e) = tx.send(true) {
+                    error!(?e, "Start ticker send error");
+                }
+            }
+
+            Ok(())
         }
     }
 }
