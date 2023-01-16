@@ -3,7 +3,7 @@ use crate::error::JobSchedulerError;
 use crate::job::to_code::{JobCode, NotificationCode};
 use crate::job::{JobCreator, JobDeleter, JobLocked, JobRunner};
 use crate::notification::{NotificationCreator, NotificationDeleter, NotificationRunner};
-use crate::scheduler::{Scheduler, StartResult};
+use crate::scheduler::Scheduler;
 use crate::simple::{
     SimpleJobCode, SimpleMetadataStore, SimpleNotificationCode, SimpleNotificationStore,
 };
@@ -130,7 +130,7 @@ impl JobsSchedulerLocked {
 
         {
             let mut scheduler = scheduler.write().await;
-            scheduler.init(&context);
+            scheduler.init(&context).await;
         }
 
         Ok(())
@@ -207,7 +207,7 @@ impl JobsSchedulerLocked {
     ///
     /// Create a new `JobsSchedulerLocked` using custom metadata and notification runners, job and notification
     /// code providers
-    pub fn new_with_storage_and_code(
+    pub async fn new_with_storage_and_code(
         metadata_storage: Box<dyn MetaDataStorage + Send + Sync>,
         notification_storage: Box<dyn NotificationStore + Send + Sync>,
         job_code: Box<dyn JobCode + Send + Sync>,
@@ -218,24 +218,13 @@ impl JobsSchedulerLocked {
         let job_code = Arc::new(RwLock::new(job_code));
         let notification_code = Arc::new(RwLock::new(notification_code));
 
-        let (storage_init_tx, storage_init_rx) = std::sync::mpsc::channel();
-
-        tokio::spawn(async move {
-            let context = JobsSchedulerLocked::init_context(
-                metadata_storage,
-                notification_storage,
-                job_code,
-                notification_code,
-            )
-            .await;
-            if let Err(e) = storage_init_tx.send(context) {
-                error!("Error sending init success {:?}", e);
-            }
-        });
-
-        let context = storage_init_rx
-            .recv()
-            .map_err(|_| JobSchedulerError::CantInit)??;
+        let context = JobsSchedulerLocked::init_context(
+            metadata_storage,
+            notification_storage,
+            job_code,
+            notification_code,
+        )
+        .await?;
 
         let val = JobsSchedulerLocked {
             context,
@@ -300,34 +289,6 @@ impl JobsSchedulerLocked {
         JobDeleter::remove(&context, to_be_removed)
     }
 
-    /// The `tick` method increments time for the JobScheduler and executes
-    /// any pending jobs. It is recommended to sleep for at least 500
-    /// milliseconds between invocations of this method.
-    /// This is kept public if you're running this yourself. It is better to
-    /// call the `start` method if you want all of this automated for you.
-    ///
-    /// ```rust,ignore
-    /// loop {
-    ///     sched.tick().await;
-    ///     std::thread::sleep(Duration::from_millis(500));
-    /// }
-    /// ```
-    pub async fn tick(&self) -> Result<(), JobSchedulerError> {
-        if !self.inited().await {
-            let mut s = self.clone();
-            s.init().await?;
-        }
-        let ret = self.scheduler.write().await;
-        let ret = ret.tick();
-        match ret {
-            Ok(ret) => Ok(ret),
-            Err(e) => {
-                error!("Error receiving tick result {:?}", e);
-                Err(JobSchedulerError::TickError)
-            }
-        }
-    }
-
     /// The `start` spawns a Tokio task where it loops. Every 500ms it
     /// runs the tick method to increment any
     /// any pending jobs.
@@ -337,13 +298,13 @@ impl JobsSchedulerLocked {
     ///         eprintln!("Error on scheduler {:?}", e);
     ///     }
     /// ```
-    pub async fn start(&self) -> StartResult {
+    pub async fn start(&self) -> Result<(), JobSchedulerError> {
         if !self.inited().await {
             let mut s = self.clone();
             s.init().await?;
         }
         let mut scheduler = self.scheduler.write().await;
-        let ret = scheduler.start();
+        let ret = scheduler.start().await;
 
         match ret {
             Ok(ret) => Ok(ret),
@@ -357,12 +318,6 @@ impl JobsSchedulerLocked {
     /// The `time_till_next_job` method returns the duration till the next job
     /// is supposed to run. This can be used to sleep until then without waking
     /// up at a fixed interval.AsMut
-    ///
-    /// ```rust, ignore
-    /// loop {
-    ///     sched.tick().await;
-    ///     std::thread::sleep(sched.time_till_next_job());
-    /// }
     /// ```
     pub async fn time_till_next_job(
         &mut self,

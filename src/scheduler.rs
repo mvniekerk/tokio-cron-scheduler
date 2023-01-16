@@ -9,11 +9,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
 use tracing::error;
 use uuid::Uuid;
-
-pub type StartResult = Result<JoinHandle<()>, JobSchedulerError>;
 
 pub struct Scheduler {
     pub shutdown: Arc<RwLock<bool>>,
@@ -35,7 +32,7 @@ impl Default for Scheduler {
 }
 
 impl Scheduler {
-    pub fn init(&mut self, context: &Context) {
+    pub async fn init(&mut self, context: &Context) {
         if self.inited {
             return;
         }
@@ -48,10 +45,15 @@ impl Scheduler {
 
         self.inited = true;
 
-        let mut ticker_rx = self.ticker_tx.subscribe();
+        let ticker_tx = self.ticker_tx.clone();
 
         tokio::spawn(async move {
-            'next_tick: while let Ok(true) = ticker_rx.recv().await {
+            let ticker_rx = ticker_tx.subscribe().recv().await;
+            if let Err(e) = ticker_rx {
+                error!(?e, "Could not subscribe to ticker starter");
+                return;
+            }
+            'next_tick: loop {
                 let shutdown = {
                     let r = shutdown.read().await;
                     *r
@@ -195,40 +197,20 @@ impl Scheduler {
     pub async fn shutdown(&mut self) {
         let mut w = self.shutdown.write().await;
         *w = true;
-
-        if let Err(e) = self.ticker_tx.send(false) {
-            error!("Error sending tick {:?}", e);
-        }
     }
 
-    pub fn tick(&self) -> Result<(), JobSchedulerError> {
-        if let Err(e) = self.ticker_tx.send(true) {
-            error!("Error sending tick {:?}", e);
-            Err(JobSchedulerError::TickError)
-        } else {
-            Ok(())
-        }
-    }
-
-    pub fn start(&mut self) -> StartResult {
+    pub async fn start(&mut self) -> Result<(), JobSchedulerError> {
         if self.ticking {
             Err(JobSchedulerError::TickError)
         } else {
             self.ticking = true;
             let tx = self.ticker_tx.clone();
-            let shutdown = self.shutdown.clone();
-            Ok(tokio::spawn(async move {
-                loop {
-                    if let Err(e) = tx.send(true) {
-                        let shutdown = { *(shutdown.read().await) };
-                        if shutdown {
-                            return;
-                        }
-                        error!("Tick send error {:?}", e);
-                    }
-                    tokio::time::sleep(Duration::from_millis(500)).await;
-                }
-            }))
+            if let Err(e) = tx.send(true) {
+                error!(?e, "Tick send error");
+                Err(JobSchedulerError::TickError)
+            } else {
+                Ok(())
+            }
         }
     }
 }
