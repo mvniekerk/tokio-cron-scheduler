@@ -56,49 +56,35 @@ impl JobDeleter {
         })
     }
 
-    pub fn remove(context: &Context, job_id: &Uuid) -> Result<(), JobSchedulerError> {
+    pub async fn remove(context: &Context, job_id: &Uuid) -> Result<(), JobSchedulerError> {
         let delete = context.job_delete_tx.clone();
         let mut deleted = context.job_deleted_tx.subscribe();
-        let (tx, rx) = std::sync::mpsc::channel();
 
         let job_id = *job_id;
         tokio::spawn(async move {
-            tokio::spawn(async move {
-                if let Err(e) = delete.send(job_id) {
-                    error!("Error sending delete id {:?}", e);
-                }
-            });
-            while let Ok(deleted) = deleted.recv().await {
-                let ret = match deleted {
-                    Ok(uuid) => {
-                        if uuid == job_id {
-                            Ok(())
-                        } else {
-                            continue;
-                        }
-                    }
-                    Err((e, Some(uuid))) => {
-                        if uuid == job_id {
-                            Err(e)
-                        } else {
-                            continue;
-                        }
-                    }
-                    _ => continue,
-                };
-                if let Err(e) = tx.send(ret) {
-                    error!("Error sending removal result {:?}", e);
-                }
+            if let Err(e) = delete.send(job_id) {
+                error!("Error sending delete id {:?}", e);
             }
         });
-
-        let ret = rx.recv();
-        match ret {
-            Ok(ret) => ret,
-            Err(e) => {
-                error!("Error receiving result from job deletion {:?}", e);
-                Err(JobSchedulerError::CantRemove)
+        while let Ok(deleted) = deleted.recv().await {
+            match deleted {
+                Ok(uuid) => {
+                    if uuid == job_id {
+                        return Ok(());
+                    } else {
+                        continue;
+                    }
+                }
+                Err((e, Some(uuid))) => {
+                    if uuid == job_id {
+                        return Err(e);
+                    } else {
+                        continue;
+                    }
+                }
+                _ => continue,
             }
         }
+        Err(JobSchedulerError::RemoveShutdownNotifier)
     }
 }
