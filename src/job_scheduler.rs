@@ -286,7 +286,7 @@ impl JobsSchedulerLocked {
         }
 
         let context = self.context();
-        JobDeleter::remove(&context, to_be_removed)
+        JobDeleter::remove(&context, to_be_removed).await
     }
 
     /// The `start` spawns a Tokio task where it loops. Every 500ms it
