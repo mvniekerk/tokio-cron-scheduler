@@ -389,7 +389,7 @@ impl MetaDataStorage for PostgresMetadataStore {
                         + &*table
                         + " \
                         SET \
-                         next_tick=$1, last_tick=$2\
+                         next_tick=$1, last_tick=$2 \
                         WHERE \
                             id = $3";
                     let resp = store.query(&sql, &[&next_tick, &last_tick, &guid]).await;
