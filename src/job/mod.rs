@@ -4,7 +4,7 @@ use crate::job::job_data::{JobState, JobType};
 use crate::job::job_data_prost::{JobState, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::{JobScheduler, JobSchedulerError, JobStoredData};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, FixedOffset, Utc};
 use cron::Schedule;
 use cron_job::CronJob;
 use non_cron_job::NonCronJob;
@@ -130,6 +130,7 @@ impl JobLocked {
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                     schedule: schedule.to_string(),
                 })),
+                time_offset_seconds: 0,
             },
             run: Box::new(run),
             run_async: Box::new(nop_async),
@@ -187,6 +188,7 @@ impl JobLocked {
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                     schedule: schedule.to_string(),
                 })),
+                time_offset_seconds: 0,
             },
             run: Box::new(nop),
             run_async: Box::new(run),
@@ -279,6 +281,7 @@ impl JobLocked {
                         repeated_every: duration.as_secs(),
                     },
                 )),
+                time_offset_seconds: 0,
             },
         };
 
@@ -369,6 +372,7 @@ impl JobLocked {
                         repeated_every: instant.duration_since(Instant::now()).as_secs(),
                     },
                 )),
+                time_offset_seconds: 0,
             },
         };
 
@@ -466,6 +470,7 @@ impl JobLocked {
                         repeated_every: duration.as_secs(),
                     },
                 )),
+                time_offset_seconds: 0,
             },
         };
 
@@ -520,6 +525,7 @@ impl JobLocked {
     /// This method will also change the last tick on itself
     pub fn tick(&mut self) -> Result<bool, JobSchedulerError> {
         let now = Utc::now();
+        let offset = FixedOffset::west(200);
         let (job_type, last_tick, next_tick, schedule, repeated_every, ran, count) = {
             let r = self.0.read().map_err(|_| JobSchedulerError::TickError)?;
             (

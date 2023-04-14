@@ -27,6 +27,9 @@ pub enum JobSchedulerError {
     CantListNextTicks,
     NotifyOnStateError,
     ParseSchedule,
+    JobTypeNotSet,
+    RunOrRunAsyncNotSet,
+    ScheduleNotSet,
     #[cfg(feature = "nats_storage")]
     BuilderNeedsField(String),
     #[cfg(feature = "nats_storage")]

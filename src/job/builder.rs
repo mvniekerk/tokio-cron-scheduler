@@ -1,19 +1,30 @@
+use crate::job::cron_job::CronJob;
 #[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobType, Uuid};
+use crate::job::job_data_prost::JobStoredData;
 #[cfg(feature = "has_bytes")]
 use crate::job::job_data_prost::{JobType, Uuid};
+use crate::job::{nop, nop_async, JobLocked};
 use crate::{JobSchedulerError, JobToRun, JobToRunAsync};
-use chrono::TimeZone;
+use chrono::{FixedOffset, TimeZone, Utc};
 use core::time::Duration;
 use cron::Schedule;
 use std::convert::TryInto;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
+
+#[cfg(not(feature = "has_bytes"))]
+use crate::job::job_data;
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost;
+
+use uuid::Uuid as UuidUuid;
 
 pub struct JobBuilder<T: TimeZone> {
     pub job_id: Option<Uuid>,
     pub timezone: Option<T>,
     pub job_type: Option<JobType>,
-    pub schedule: Option<String>,
+    pub schedule: Option<Schedule>,
     pub run: Option<Box<JobToRun>>,
     pub run_async: Option<Box<JobToRunAsync>>,
     pub duration: Option<Duration>,
@@ -73,7 +84,7 @@ impl<T: TimeZone> JobBuilder<T> {
             .try_into()
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
         Ok(Self {
-            schedule: Some(schedule.to_string()),
+            schedule: Some(schedule),
             ..self
         })
     }
@@ -112,6 +123,72 @@ impl<T: TimeZone> JobBuilder<T> {
         Self {
             instant: Some(instant),
             ..self
+        }
+    }
+
+    pub fn build(self) -> Result<JobLocked, JobSchedulerError> {
+        if self.job_type.is_none() {
+            return Err(JobSchedulerError::JobTypeNotSet);
+        }
+        let job_type = self.job_type.unwrap();
+        let (run, run_async) = (self.run, self.run_async);
+        if run.is_none() && run_async.is_none() {
+            return Err(JobSchedulerError::RunOrRunAsyncNotSet);
+        }
+        let async_job = run_async.is_some();
+
+        match job_type {
+            JobType::Cron => {
+                if self.schedule.is_none() {
+                    return Err(JobSchedulerError::ScheduleNotSet);
+                }
+                let schedule = self.schedule.unwrap();
+                // TODO continue here
+                // let offset = self
+                //     .timezone
+                //     .map(|tz| tz.);
+
+                Ok(JobLocked(Arc::new(RwLock::new(Box::new(CronJob {
+                    data: JobStoredData {
+                        id: self.job_id.or(Some(UuidUuid::new_v4().into())),
+                        last_updated: None,
+                        last_tick: None,
+                        next_tick: match self.timezone {
+                            Some(timezone) => schedule
+                                .upcoming(timezone)
+                                .next()
+                                .map(|t| t.timestamp() as u64)
+                                .unwrap_or(0),
+                            None => schedule
+                                .upcoming(Utc)
+                                .next()
+                                .map(|t| t.timestamp() as u64)
+                                .unwrap_or(0),
+                        },
+                        job_type: JobType::Cron.into(),
+                        count: 0,
+                        extra: vec![],
+                        ran: false,
+                        stopped: false,
+                        #[cfg(feature = "has_bytes")]
+                        job: Some(job_data_prost::job_stored_data::Job::CronJob(
+                            job_data_prost::CronJob {
+                                schedule: schedule.to_string(),
+                            },
+                        )),
+                        #[cfg(not(feature = "has_bytes"))]
+                        job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
+                            schedule: self.schedule.to_string(),
+                        })),
+                        time_offset_seconds: 0,
+                    },
+                    run: run.unwrap_or(Box::new(nop)),
+                    run_async: run_async.unwrap_or(Box::new(nop_async)),
+                    async_job,
+                })))))
+            }
+            JobType::Repeated => Err(JobSchedulerError::NoNextTick),
+            JobType::OneShot => Err(JobSchedulerError::NoNextTick),
         }
     }
 }
