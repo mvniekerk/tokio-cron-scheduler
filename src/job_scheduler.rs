@@ -12,7 +12,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-#[cfg(feature = "signal")]
+#[cfg(all(unix, feature = "signal"))]
 use tokio::signal::unix::SignalKind;
 use tokio::sync::RwLock;
 use tracing::{error, info};
@@ -354,7 +354,8 @@ impl JobsSchedulerLocked {
         r.get(job_id).await.map(|v| {
             v.map(|vv| vv.next_tick)
                 .filter(|t| *t != 0)
-                .map(|ts| NaiveDateTime::from_timestamp(ts as i64, 0))
+                .map(|ts| NaiveDateTime::from_timestamp_opt(ts as i64, 0)
+                    .expect("invalid or out-of-range datetime"))
                 .map(|ts| DateTime::from_utc(ts, Utc))
         })
     }
@@ -377,7 +378,7 @@ impl JobsSchedulerLocked {
 
     ///
     /// Wait for a signal to shut the runtime down with
-    #[cfg(feature = "signal")]
+    #[cfg(all(unix, feature = "signal"))]
     pub fn shutdown_on_signal(&self, signal: SignalKind) {
         let mut l = self.clone();
         tokio::spawn(async move {
