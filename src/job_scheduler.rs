@@ -354,7 +354,8 @@ impl JobsSchedulerLocked {
         r.get(job_id).await.map(|v| {
             v.map(|vv| vv.next_tick)
                 .filter(|t| *t != 0)
-                .map(|ts| NaiveDateTime::from_timestamp(ts as i64, 0))
+                .map(|ts| NaiveDateTime::from_timestamp_opt(ts as i64, 0)
+                    .expect("invalid or out-of-range datetime"))
                 .map(|ts| DateTime::from_utc(ts, Utc))
         })
     }
