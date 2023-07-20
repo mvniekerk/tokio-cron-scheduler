@@ -79,6 +79,11 @@ pub trait Job {
     fn run(&mut self, jobs: JobScheduler) -> Receiver<bool>;
 }
 
+#[cfg(feature = "cron_local")]
+const TIME_ZONE: chrono::Local = chrono::Local;
+#[cfg(not(feature = "cron_local"))]
+const TIME_ZONE: chrono::Utc = chrono::Utc;
+
 impl JobLocked {
     /// Create a new cron job.
     ///
@@ -109,7 +114,7 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .upcoming(Utc)
+                    .upcoming(TIME_ZONE)
                     .next()
                     .map(|t| t.timestamp() as u64)
                     .unwrap_or(0),
@@ -166,7 +171,7 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .upcoming(Utc)
+                    .upcoming(TIME_ZONE)
                     .next()
                     .map(|t| t.timestamp() as u64)
                     .unwrap_or(0),
