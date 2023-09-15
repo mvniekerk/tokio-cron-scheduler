@@ -1,12 +1,11 @@
 use crate::job::cron_job::CronJob;
 #[cfg(not(feature = "has_bytes"))]
-use crate::job::job_data::{JobType, Uuid};
-use crate::job::job_data_prost::JobStoredData;
+use crate::job::job_data::{JobStoredData, JobType, Uuid};
 #[cfg(feature = "has_bytes")]
-use crate::job::job_data_prost::{JobType, Uuid};
+use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
 use crate::job::{nop, nop_async, JobLocked};
 use crate::{JobSchedulerError, JobToRun, JobToRunAsync};
-use chrono::{FixedOffset, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 use core::time::Duration;
 use cron::Schedule;
 use std::convert::TryInto;
@@ -143,10 +142,6 @@ impl<T: TimeZone> JobBuilder<T> {
                     return Err(JobSchedulerError::ScheduleNotSet);
                 }
                 let schedule = self.schedule.unwrap();
-                // TODO continue here
-                // let offset = self
-                //     .timezone
-                //     .map(|tz| tz.);
 
                 Ok(JobLocked(Arc::new(RwLock::new(Box::new(CronJob {
                     data: JobStoredData {
@@ -178,7 +173,7 @@ impl<T: TimeZone> JobBuilder<T> {
                         )),
                         #[cfg(not(feature = "has_bytes"))]
                         job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
-                            schedule: self.schedule.to_string(),
+                            schedule: schedule.to_string(),
                         })),
                         time_offset_seconds: 0,
                     },
