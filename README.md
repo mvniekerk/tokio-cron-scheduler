@@ -31,7 +31,8 @@ sec   min   hour   day of month   month   day of week   year
 ```
 
 Time is specified for `UTC` and not your local timezone. Note that the year may
-be omitted.
+be omitted. If you want for your timezone, append `_tz` to the job creation calls (for instance 
+Job::new_async vs Job::new_async_tz). 
 
 Comma separated values such as `5,8,10` represent more than one time value. So
 for example, a schedule of `0 2,14,26 * * * *` would execute on the 2nd, 14th,

@@ -5,7 +5,7 @@ use crate::job::job_data::{JobStoredData, JobType, Uuid};
 use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
 use crate::job::{nop, nop_async, JobLocked};
 use crate::{JobSchedulerError, JobToRun, JobToRunAsync};
-use chrono::{TimeZone, Utc};
+use chrono::{Offset, TimeZone, Utc};
 use core::time::Duration;
 use cron::Schedule;
 use std::convert::TryInto;
@@ -143,12 +143,20 @@ impl<T: TimeZone> JobBuilder<T> {
                 }
                 let schedule = self.schedule.unwrap();
 
+                let time_offset_seconds = if let Some(tz) = self.timezone.as_ref() {
+                    tz.offset_from_utc_datetime(&Utc::now().naive_local())
+                        .fix()
+                        .local_minus_utc()
+                } else {
+                    0
+                };
+
                 Ok(JobLocked(Arc::new(RwLock::new(Box::new(CronJob {
                     data: JobStoredData {
                         id: self.job_id.or(Some(UuidUuid::new_v4().into())),
                         last_updated: None,
                         last_tick: None,
-                        next_tick: match self.timezone {
+                        next_tick: match &self.timezone {
                             Some(timezone) => schedule
                                 .upcoming(timezone)
                                 .next()
@@ -175,7 +183,7 @@ impl<T: TimeZone> JobBuilder<T> {
                         job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                             schedule: schedule.to_string(),
                         })),
-                        time_offset_seconds: 0,
+                        time_offset_seconds,
                     },
                     run: run.unwrap_or(Box::new(nop)),
                     run_async: run_async.unwrap_or(Box::new(nop_async)),
