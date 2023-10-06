@@ -1,8 +1,6 @@
 use crate::lib::run_example;
-use std::time::Duration;
 use tokio_cron_scheduler::{
-    Job, JobScheduler, NatsMetadataStore, NatsNotificationStore, SimpleJobCode,
-    SimpleNotificationCode,
+    JobScheduler, NatsMetadataStore, NatsNotificationStore, SimpleJobCode, SimpleNotificationCode,
 };
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -33,5 +31,5 @@ async fn main() {
     .await
     .unwrap();
 
-    run_example(sched).await;
+    run_example(sched).await.expect("Could not run example");
 }

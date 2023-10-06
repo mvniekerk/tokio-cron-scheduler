@@ -40,5 +40,5 @@ async fn main() {
     .await
     .unwrap();
 
-    run_example(sched).await;
+    run_example(sched).await.expect("Could not run example");
 }

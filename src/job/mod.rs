@@ -4,7 +4,7 @@ use crate::job::job_data::{JobState, JobType};
 use crate::job::job_data_prost::{JobState, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::{JobScheduler, JobSchedulerError, JobStoredData};
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset, Offset, TimeZone, Utc};
 use cron::Schedule;
 use cron_job::CronJob;
 use non_cron_job::NonCronJob;
@@ -17,7 +17,7 @@ use tokio::sync::oneshot::Receiver;
 use tracing::error;
 use uuid::Uuid;
 
-pub mod builder;
+mod builder;
 mod creator;
 mod cron_job;
 mod deleter;
@@ -30,6 +30,7 @@ mod runner;
 pub mod to_code;
 
 use crate::notification::{NotificationCreator, NotificationDeleter};
+pub use builder::JobBuilder;
 pub use creator::JobCreator;
 pub use deleter::JobDeleter;
 pub use runner::JobRunner;
@@ -79,6 +80,7 @@ pub trait Job {
     fn job_data_from_job(&mut self) -> Result<Option<JobStoredData>, JobSchedulerError>;
     fn set_job_data(&mut self, job_data: JobStoredData) -> Result<(), JobSchedulerError>;
     fn run(&mut self, jobs: JobScheduler) -> Receiver<bool>;
+    fn fixed_offset_west(&self) -> i32;
 }
 
 impl JobLocked {
@@ -101,6 +103,33 @@ impl JobLocked {
         S: TryInto<Schedule, Error = E>,
         E: std::error::Error + 'static,
     {
+        Self::new_tz(schedule, Utc, run)
+    }
+
+    /// Create a new cron job at a timezone.
+    ///
+    /// ```rust,ignore
+    /// let mut sched = JobScheduler::new();
+    /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
+    /// // of any day in March and June that is a Friday of the year 2017.
+    /// let job = Job::new("0 15 6,8,10 * Mar,Jun Fri 2017", |_uuid, _lock| {
+    ///             println!("{:?} Hi I ran", chrono::Utc::now());
+    ///         });
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
+    /// ```
+    pub fn new_tz<S, T, E, TZ>(schedule: S, timezone: TZ, run: T) -> Result<Self, JobSchedulerError>
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+        S: TryInto<Schedule, Error = E>,
+        TZ: TimeZone,
+        E: std::error::Error + 'static,
+    {
+        let time_offset_seconds = timezone
+            .offset_from_utc_datetime(&Utc::now().naive_local())
+            .fix()
+            .local_minus_utc();
         let schedule: Schedule = schedule
             .try_into()
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
@@ -111,7 +140,7 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .upcoming(Utc)
+                    .upcoming(timezone)
                     .next()
                     .map(|t| t.timestamp() as u64)
                     .unwrap_or(0),
@@ -130,7 +159,7 @@ impl JobLocked {
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                     schedule: schedule.to_string(),
                 })),
-                time_offset_seconds: 0,
+                time_offset_seconds,
             },
             run: Box::new(run),
             run_async: Box::new(nop_async),
@@ -144,7 +173,7 @@ impl JobLocked {
     /// let mut sched = JobScheduler::new();
     /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
     /// // of any day in March and June that is a Friday of the year 2017.
-    /// let job = Job::new("0 15 6,8,10 * Mar,Jun Fri 2017", |_uuid, _lock| Box::pin( async move {
+    /// let job = Job::new_async("0 15 6,8,10 * Mar,Jun Fri 2017", |_uuid, _lock| Box::pin( async move {
     ///             println!("{:?} Hi I ran", chrono::Utc::now());
     ///         }));
     /// sched.add(job)
@@ -159,6 +188,39 @@ impl JobLocked {
         S: TryInto<Schedule, Error = E>,
         E: std::error::Error + 'static,
     {
+        Self::new_async_tz(schedule, Utc, run)
+    }
+
+    /// Create a new async cron job at a timezone.
+    ///
+    /// ```rust,ignore
+    /// let mut sched = JobScheduler::new();
+    /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
+    /// // of any day in March and June that is a Friday of the year 2017.
+    /// let job = Job::new_async_tz("0 15 6,8,10 * Mar,Jun Fri 2017", Utc, |_uuid, _lock| Box::pin( async move {
+    ///             println!("{:?} Hi I ran", chrono::Utc::now());
+    ///         }));
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
+    /// ```
+    pub fn new_async_tz<S, T, E, TZ>(
+        schedule: S,
+        timezone: TZ,
+        run: T,
+    ) -> Result<Self, JobSchedulerError>
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
+            + Send
+            + Sync,
+        S: TryInto<Schedule, Error = E>,
+        TZ: TimeZone,
+        E: std::error::Error + 'static,
+    {
+        let time_offset_seconds = timezone
+            .offset_from_utc_datetime(&Utc::now().naive_local())
+            .fix()
+            .local_minus_utc();
         let schedule: Schedule = schedule
             .try_into()
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
@@ -169,7 +231,7 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .upcoming(Utc)
+                    .upcoming(timezone)
                     .next()
                     .map(|t| t.timestamp() as u64)
                     .unwrap_or(0),
@@ -188,7 +250,7 @@ impl JobLocked {
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                     schedule: schedule.to_string(),
                 })),
-                time_offset_seconds: 0,
+                time_offset_seconds,
             },
             run: Box::new(nop),
             run_async: Box::new(run),
@@ -218,7 +280,7 @@ impl JobLocked {
         JobLocked::new(schedule, run)
     }
 
-    /// Create a new async cron job.
+    /// Create a new async cron job using UTC as timezone.
     ///
     /// ```rust,ignore
     /// let mut sched = JobScheduler::new();
@@ -239,7 +301,36 @@ impl JobLocked {
         S: TryInto<Schedule, Error = E>,
         E: std::error::Error + 'static,
     {
-        JobLocked::new_async(schedule, run)
+        JobLocked::new_async_tz(schedule, Utc, run)
+    }
+
+    /// Create a new async cron job using a specified timezone.
+    ///
+    /// ```rust,ignore
+    /// let mut sched = JobScheduler::new();
+    /// // Run at second 0 of the 15th minute of the 6th, 8th, and 10th hour
+    /// // of any day in March and June that is a Friday of the year 2017.
+    /// let job = Job::new("0 15 6,8,10 * Mar,Jun Fri 2017", Utc, |_uuid, _lock| Box::pin( async move {
+    ///             println!("{:?} Hi I ran", chrono::Utc::now());
+    ///         }));
+    /// sched.add(job)
+    /// tokio::spawn(sched.start());
+    /// ```
+    pub fn new_cron_job_async_tz<S, T, E, TZ>(
+        schedule: S,
+        timezone: TZ,
+        run: T,
+    ) -> Result<Self, JobSchedulerError>
+    where
+        T: 'static,
+        T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
+            + Send
+            + Sync,
+        S: TryInto<Schedule, Error = E>,
+        TZ: TimeZone,
+        E: std::error::Error + 'static,
+    {
+        JobLocked::new_async_tz(schedule, timezone, run)
     }
 
     fn make_one_shot_job(
@@ -525,8 +616,7 @@ impl JobLocked {
     /// This method will also change the last tick on itself
     pub fn tick(&mut self) -> Result<bool, JobSchedulerError> {
         let now = Utc::now();
-        let offset = FixedOffset::west(200);
-        let (job_type, last_tick, next_tick, schedule, repeated_every, ran, count) = {
+        let (job_type, last_tick, next_tick, schedule, repeated_every, ran, count, offset) = {
             let r = self.0.read().map_err(|_| JobSchedulerError::TickError)?;
             (
                 r.job_type(),
@@ -536,8 +626,10 @@ impl JobLocked {
                 r.repeated_every(),
                 r.ran(),
                 r.count(),
+                r.fixed_offset_west(),
             )
         };
+        let offset = FixedOffset::west_opt(offset).ok_or(JobSchedulerError::TickError)?;
 
         // Don't bother processing a cancelled job
         if next_tick.is_none() {

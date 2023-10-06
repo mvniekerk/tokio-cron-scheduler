@@ -1,12 +1,10 @@
 use crate::lib::run_example;
 use std::error::Error;
-use std::time::Duration;
-use tokio_cron_scheduler::{Job, JobScheduler};
+use tokio_cron_scheduler::JobScheduler;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 mod lib;
-use tokio_cron_scheduler::JobToRun;
 
 fn main() {
     let handle = std::thread::Builder::new()
@@ -32,6 +30,6 @@ async fn start() -> Result<(), Box<dyn Error>> {
     info!("Creating scheduler");
     let sched = JobScheduler::new().await?;
     info!("Run example");
-    run_example(sched).await;
+    run_example(sched).await.expect("Could not run example");
     Ok(())
 }
