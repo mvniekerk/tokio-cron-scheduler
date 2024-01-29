@@ -61,6 +61,7 @@ nats_storage = ["nats", "has_bytes" ]
 postgres_storage = ["tokio-postgres", "has_bytes" ]
 postgres_native_tls = ["postgres_storage", "postgres-native-tls" ]
 postgres_openssl = ["postgres_storage", "postgres-openssl" ]
+log = ["tracing/log", "tracing/log-always"]
 
 default = []
 

@@ -50,112 +50,87 @@ are scheduled using tokio::spawn, the order of these are not guaranteed if the t
 A simple usage example:
 
 ```rust
-use tokio_cron_scheduler::{JobScheduler, JobToRun, Job};
+use std::time::Duration;
+use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
 
 #[tokio::main]
-async fn main() {
-    let mut sched = JobScheduler::new().await;
-  
-    sched.add(Job::new("1/10 * * * * *", |uuid, l| {
-        println!("I run every 10 seconds");
-    }).await.unwrap());
+async fn main() -> Result<(), JobSchedulerError> {
+    let mut sched = JobScheduler::new().await?;
 
-    sched.add(Job::new_async("1/7 * * * * *", |uuid, mut l| Box::pin( async {
-        println!("I run async every 7 seconds");
-        let next_tick = l.next_tick_for_job(uuid).await;
-        match next_tick {
-          Ok(Some(ts)) => info!("Next time for 7s is {:?}", ts),
-          _ => warn!("Could not get next tick for 7s job"),
-        }
-    })).await.unwrap());
-
-    sched.add(Job::new("1/30 * * * * *", |uuid, l| {
-        println!("I run every 30 seconds");
-    }).await.unwrap());
-  
+    // Add basic cron job
     sched.add(
-      Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
-        println!("{:?} I'm only run once", chrono::Utc::now());
-      }).unwrap()
-    ).await;
+        Job::new("1/10 * * * * *", |_uuid, _l| {
+            println!("I run every 10 seconds");
+        })?
+    ).await?;
 
+    // Add async job
+    sched.add(
+        Job::new_async("1/7 * * * * *", |uuid, mut l| {
+            Box::pin(async move {
+                println!("I run async every 7 seconds");
+
+                // Query the next execution time for this job
+                let next_tick = l.next_tick_for_job(uuid).await;
+                match next_tick {
+                    Ok(Some(ts)) => println!("Next time for 7s job is {:?}", ts),
+                    _ => println!("Could not get next tick for 7s job"),
+                }
+            })
+        })?
+    ).await?;
+
+    // Add one-shot job with given duration
+    sched.add(
+        Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
+            println!("I only run once");
+        })?
+    ).await?;
+
+    // Create repeated job with given duration, make it mutable to edit it afterwards
     let mut jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
-      println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
-    }).unwrap();
-  
+        println!("I run repeatedly every 8 seconds");
+    })?;
+
+    // Add actions to be executed when the jobs starts/stop etc.
     jj.on_start_notification_add(&sched, Box::new(|job_id, notification_id, type_of_notification| {
-      Box::pin(async move {
-        println!("Job {:?} was started, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
-      })
-    })).await;
+        Box::pin(async move {
+            println!("Job {:?} was started, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
+        })
+    })).await?;
 
     jj.on_stop_notification_add(&sched, Box::new(|job_id, notification_id, type_of_notification| {
-      Box::pin(async move {
-        println!("Job {:?} was completed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
-      })
-    })).await;
-    
+        Box::pin(async move {
+            println!("Job {:?} was completed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
+        })
+    })).await?;
+
     jj.on_removed_notification_add(&sched, Box::new(|job_id, notification_id, type_of_notification| {
-      Box::pin(async move {
-        println!("Job {:?} was removed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
-      })
-    })).await;
-    sched.add(jj).await;
+        Box::pin(async move {
+            println!("Job {:?} was removed, notification {:?} ran ({:?})", job_id, notification_id, type_of_notification);
+        })
+    })).await?;
+    sched.add(jj).await?;
 
-    let five_s_job = Job::new("1/5 * * * * *", |_uuid, _l| {
-      println!("{:?} I run every 5 seconds", chrono::Utc::now());
-    })
-            .unwrap();
-    sched.add(five_s_job).await;
-  
-    let four_s_job_async = Job::new_async("1/4 * * * * *", |_uuid, _l| Box::pin(async move {
-      println!("{:?} I run async every 4 seconds", chrono::Utc::now());
-    })).unwrap();
-    sched.add(four_s_job_async).await;
-  
-    sched.add(
-      Job::new("1/30 * * * * *", |_uuid, _l| {
-        println!("{:?} I run every 30 seconds", chrono::Utc::now());
-      })
-              .unwrap(),
-    ).await;
-  
-    sched.add(
-      Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
-        println!("{:?} I'm only run once", chrono::Utc::now());
-      }).unwrap()
-    ).await;
-  
-    sched.add(
-      Job::new_one_shot_async(Duration::from_secs(16), |_uuid, _l| Box::pin( async move {
-        println!("{:?} I'm only run once async", chrono::Utc::now());
-      })).unwrap()
-    ).await;
-  
-    let jj = Job::new_repeated(Duration::from_secs(8), |_uuid, _l| {
-      println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
-    }).unwrap();
-    sched.add(jj).await;
-  
-    let jja = Job::new_repeated_async(Duration::from_secs(7), |_uuid, _l| Box::pin(async move {
-      println!("{:?} I'm repeated async every 7 seconds", chrono::Utc::now());
-    })).unwrap();
-    sched.add(jja).await;
-
-    #[cfg(feature = "signal")]
+    // Feature 'signal' must be enabled
     sched.shutdown_on_ctrl_c();
 
+    // Add code to be run during/after shutdown
     sched.set_shutdown_handler(Box::new(|| {
-      Box::pin(async move {
-        println!("Shut down done");
-      })
+        Box::pin(async move {
+            println!("Shut down done");
+        })
     }));
 
-    sched.start().await;
-  
-    // Wait a while so that the jobs actually run
-    tokio::time::sleep(core::time::Duration::from_secs(100)).await;
+    // Start the scheduler
+    sched.start().await?;
+
+    // Wait while the jobs run
+    tokio::time::sleep(Duration::from_secs(100)).await;
+
+    Ok(())
 }
+
 ```
 
 ### Timezone changes
