@@ -158,6 +158,31 @@ async fn main() {
 }
 ```
 
+### Timezone changes
+You can create a job using a specific timezone using the `JobBuilder` API.
+chrono-tz is not included into the dependencies, so you need to add it to your Cargo.toml if you 
+would like to have easy creation of a `Timezone` struct.
+
+```rust 
+    let job = JobBuilder::new()
+        .with_timezone(chrono_tz::Africa::Johannesburg)
+        .with_cron_job_type()
+        .with_schedule("*/2 * * * * *")
+        .unwrap()
+        .with_run_async(Box::new(|uuid, mut l| {
+            Box::pin(async move {
+                info!("JHB run async every 2 seconds id {:?}", uuid);
+                let next_tick = l.next_tick_for_job(uuid).await;
+                match next_tick {
+                    Ok(Some(ts)) => info!("Next time for JHB 2s is {:?}", ts),
+                    _ => warn!("Could not get next tick for 2s job"),
+                }
+            })
+        }))
+        .build()
+        .unwrap();
+```
+
 ## Similar Libraries
 
 * [job_scheduler](https://github.com/lholden/job_scheduler) The crate that inspired this one

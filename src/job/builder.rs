@@ -1,8 +1,8 @@
 use crate::job::cron_job::CronJob;
 #[cfg(not(feature = "has_bytes"))]
-use crate::job::job_data::{JobStoredData, JobType, Uuid};
+pub use crate::job::job_data::{JobStoredData, JobType, Uuid};
 #[cfg(feature = "has_bytes")]
-use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
+pub use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
 use crate::job::{nop, nop_async, JobLocked};
 use crate::{JobSchedulerError, JobToRun, JobToRunAsync};
 use chrono::{Offset, TimeZone, Utc};
@@ -19,7 +19,7 @@ use crate::job::job_data_prost;
 
 use uuid::Uuid as UuidUuid;
 
-pub struct JobBuilder<T: TimeZone> {
+pub struct JobBuilder<T> {
     pub job_id: Option<Uuid>,
     pub timezone: Option<T>,
     pub job_type: Option<JobType>,
@@ -31,7 +31,7 @@ pub struct JobBuilder<T: TimeZone> {
     pub instant: Option<Instant>,
 }
 
-impl<T: TimeZone> JobBuilder<T> {
+impl JobBuilder<Utc> {
     pub fn new() -> Self {
         Self {
             job_id: None,
@@ -45,7 +45,9 @@ impl<T: TimeZone> JobBuilder<T> {
             instant: None,
         }
     }
+}
 
+impl<T: TimeZone> JobBuilder<T> {
     pub fn with_timezone<U: TimeZone>(self, timezone: U) -> JobBuilder<U> {
         JobBuilder {
             timezone: Some(timezone),
@@ -70,6 +72,27 @@ impl<T: TimeZone> JobBuilder<T> {
     pub fn with_job_type(self, job_type: JobType) -> Self {
         Self {
             job_type: Some(job_type),
+            ..self
+        }
+    }
+
+    pub fn with_cron_job_type(self) -> Self {
+        Self {
+            job_type: Some(JobType::Cron),
+            ..self
+        }
+    }
+
+    pub fn with_repeated_job_type(self) -> Self {
+        Self {
+            job_type: Some(JobType::Repeated),
+            ..self
+        }
+    }
+
+    pub fn with_one_shot_job_type(self) -> Self {
+        Self {
+            job_type: Some(JobType::OneShot),
             ..self
         }
     }

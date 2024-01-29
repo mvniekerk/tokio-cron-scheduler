@@ -49,6 +49,7 @@ features = ["with-uuid-1"]
 [dev-dependencies]
 anyhow = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+chrono-tz = { version = "0.8.5" }
 
 [build-dependencies]
 prost-build = { version = "0.11", optional = true }
@@ -83,7 +84,3 @@ name = "postgres"
 path = "examples/postgres_job.rs"
 required-features = ["postgres_storage", "tracing-subscriber"]
 
-[[example]]
-name = "tz_with_builder_simple_job"
-path = "examples/tz_with_builder_simple_job.rs"
-required-features = ["tracing-subscriber"]
