@@ -158,7 +158,7 @@ impl<T: TimeZone> JobBuilder<T> {
                         last_tick: None,
                         next_tick: match &self.timezone {
                             Some(timezone) => schedule
-                                .upcoming(timezone)
+                                .upcoming(timezone.clone())
                                 .next()
                                 .map(|t| t.timestamp() as u64)
                                 .unwrap_or(0),

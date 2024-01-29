@@ -4,7 +4,7 @@ use crate::job::job_data::{JobState, JobType};
 use crate::job::job_data_prost::{JobState, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::{JobScheduler, JobSchedulerError, JobStoredData};
-use chrono::{DateTime, FixedOffset, Offset, TimeZone, Utc};
+use chrono::{DateTime, Offset, TimeZone, Utc};
 use cron::Schedule;
 use cron_job::CronJob;
 use non_cron_job::NonCronJob;
@@ -616,7 +616,7 @@ impl JobLocked {
     /// This method will also change the last tick on itself
     pub fn tick(&mut self) -> Result<bool, JobSchedulerError> {
         let now = Utc::now();
-        let (job_type, last_tick, next_tick, schedule, repeated_every, ran, count, offset) = {
+        let (job_type, last_tick, next_tick, schedule, repeated_every, ran, count) = {
             let r = self.0.read().map_err(|_| JobSchedulerError::TickError)?;
             (
                 r.job_type(),
@@ -626,10 +626,8 @@ impl JobLocked {
                 r.repeated_every(),
                 r.ran(),
                 r.count(),
-                r.fixed_offset_west(),
             )
         };
-        let offset = FixedOffset::west_opt(offset).ok_or(JobSchedulerError::TickError)?;
 
         // Don't bother processing a cancelled job
         if next_tick.is_none() {
