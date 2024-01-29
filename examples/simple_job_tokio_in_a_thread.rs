@@ -1,4 +1,4 @@
-use crate::lib::run_example;
+use crate::lib::{run_example, stop_example};
 use std::error::Error;
 use tokio_cron_scheduler::JobScheduler;
 use tracing::{info, Level};
@@ -28,8 +28,13 @@ async fn start() -> Result<(), Box<dyn Error>> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
     info!("Creating scheduler");
-    let sched = JobScheduler::new().await?;
+    let mut sched = JobScheduler::new().await?;
     info!("Run example");
-    run_example(sched).await.expect("Could not run example");
+    let jobs = run_example(&mut sched)
+        .await
+        .expect("Could not run example");
+    stop_example(&mut sched, jobs)
+        .await
+        .expect("Could not stop example");
     Ok(())
 }

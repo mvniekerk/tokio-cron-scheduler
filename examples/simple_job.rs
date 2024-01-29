@@ -1,4 +1,4 @@
-use crate::lib::run_example;
+use crate::lib::{run_example, stop_example};
 use tokio_cron_scheduler::JobScheduler;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
@@ -12,6 +12,11 @@ async fn main() {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
     let sched = JobScheduler::new().await;
-    let sched = sched.unwrap();
-    run_example(sched).await.expect("Could not run example");
+    let mut sched = sched.unwrap();
+    let jobs = run_example(&mut sched)
+        .await
+        .expect("Could not run example");
+    stop_example(&mut sched, jobs)
+        .await
+        .expect("Could not stop example");
 }
