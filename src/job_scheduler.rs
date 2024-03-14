@@ -290,8 +290,7 @@ impl JobsSchedulerLocked {
     }
 
     /// The `start` spawns a Tokio task where it loops. Every 500ms it
-    /// runs the tick method to increment any
-    /// any pending jobs.
+    /// runs the tick method to increment any pending jobs.
     ///
     /// ```rust,ignore
     /// if let Err(e) = sched.start().await {
