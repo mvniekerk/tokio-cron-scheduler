@@ -54,7 +54,7 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                     let sql = "select \
                         id, last_updated, next_tick, last_tick, job_type, count, \
                         ran, stopped, schedule, repeating, repeated_every, \
-                        extra \
+                        extra, time_offset_seconds \
                      from "
                         .to_string()
                         + &*table
@@ -92,12 +92,12 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                         + " (\
                         id, last_updated, next_tick, job_type, count, \
                         ran, stopped, schedule, repeating, repeated_every, \
-                        extra, last_tick \
+                        extra, last_tick, time_offset_seconds \
                     )\
                     VALUES (\
                         $1, $2, $3, $4, $5, \
                         $6, $7, $8, $9, $10,\
-                        $11, $12 \
+                        $11, $12, $13 \
                     )\
                     ON CONFLICT (id) \
                     DO \
@@ -105,7 +105,7 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                         SET \
                             last_updated=$2, next_tick=$3, job_type=$4, count=$5, \
                             ran=$6, stopped=$7, schedule=$8, repeating=$9, repeated_every=$10, \
-                            extra=$11, last_tick=$12
+                            extra=$11, last_tick=$12, time_offset_seconds=$13
                     ";
                     let last_updated = data.last_updated.as_ref().map(|i| *i as i64);
                     let next_tick = data.next_tick as i64;
@@ -127,6 +127,7 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                     };
                     let extra = data.extra;
                     let last_tick = data.last_tick.as_ref().map(|i| *i as i64);
+                    let time_offset_seconds = data.time_offset_seconds;
 
                     let val = store
                         .query(
@@ -144,6 +145,7 @@ impl DataStore<JobStoredData> for PostgresMetadataStore {
                                 &repeated_every,
                                 &extra,
                                 &last_tick,
+                                &time_offset_seconds,
                             ],
                         )
                         .await;
@@ -191,7 +193,7 @@ impl From<Row> for JobStoredData {
         /*
         id, last_updated, next_tick, last_tick, job_type, count, \
                         ran, stopped, schedule, repeating, repeated_every, \
-                        extra
+                        extra, time_offset_seconds
          */
         let id: Uuid = row.get(0);
         let last_updated = row.try_get(1).ok().map(|i: i64| i as u64);
@@ -232,6 +234,7 @@ impl From<Row> for JobStoredData {
             }
         };
         let extra = row.try_get(11).unwrap_or_default();
+        let time_offset_seconds = row.try_get(12).unwrap_or_default();
 
         Self {
             id: Some(id.into()),
@@ -244,6 +247,7 @@ impl From<Row> for JobStoredData {
             ran,
             stopped,
             job,
+            time_offset_seconds,
         }
     }
 }
@@ -279,8 +283,9 @@ impl InitStore for PostgresMetadataStore {
                                             schedule TEXT,\
                                             repeating BOOL,\
                                             repeated_every BIGINT,\
-                                            extra BYTEA,
-                                            CONSTRAINT pk_metadata PRIMARY KEY (id)
+                                            time_offset_seconds INTEGER, \
+                                            extra BYTEA, \
+                                            CONSTRAINT pk_metadata PRIMARY KEY (id) \
                                         )";
                                 let create = v.execute(&*sql, &[]).await;
                                 if let Err(e) = create {

@@ -45,6 +45,7 @@ message JobStoredData {
   bytes extra = 9;
   bool ran = 10;
   bool stopped = 11;
+  int32 time_offset_seconds = 12;
 }
 
 message JobIdAndNotification {

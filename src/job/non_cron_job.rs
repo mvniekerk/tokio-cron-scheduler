@@ -132,4 +132,8 @@ impl Job for NonCronJob {
         }
         rx
     }
+
+    fn fixed_offset_west(&self) -> i32 {
+        self.data.time_offset_seconds
+    }
 }

@@ -4,7 +4,7 @@ use crate::job::job_data::{JobState, JobType};
 #[cfg(feature = "has_bytes")]
 use crate::job::job_data_prost::{JobState, JobType};
 use crate::JobSchedulerError;
-use chrono::Utc;
+use chrono::{FixedOffset, Utc};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::oneshot::{Receiver, Sender};
@@ -191,8 +191,14 @@ impl Scheduler {
                             Ok(Some(job)) => {
                                 let job_type: JobType = JobType::from_i32(job.job_type).unwrap();
                                 let schedule = job.schedule();
+                                // TODO continue from here
+                                let fixed_offset = FixedOffset::east_opt(job.time_offset_seconds)
+                                    .unwrap_or(FixedOffset::east_opt(0).unwrap());
+                                let now = now.with_timezone(&fixed_offset);
                                 let repeated_every = job.repeated_every();
-                                let next_tick = job.next_tick_utc();
+                                let next_tick = job
+                                    .next_tick_utc()
+                                    .map(|nt| nt.with_timezone(&fixed_offset));
                                 let next_tick = match job_type {
                                     JobType::Cron => schedule.and_then(|s| s.after(&now).next()),
                                     JobType::OneShot => None,
@@ -205,7 +211,10 @@ impl Scheduler {
                                     }),
                                 };
                                 let last_tick = Some(now);
-                                Some((next_tick, last_tick))
+                                Some((
+                                    next_tick.map(|nt| nt.with_timezone(&Utc)),
+                                    last_tick.map(|nt| nt.with_timezone(&Utc)),
+                                ))
                             }
                             _ => {
                                 error!("Could not get job metadata");

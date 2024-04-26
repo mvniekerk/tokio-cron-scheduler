@@ -24,6 +24,7 @@ pub struct JobStoredData {
     pub ran: bool,
     pub stopped: bool,
     pub job: ::core::option::Option<job_stored_data::Job>,
+    pub time_offset_seconds: i32,
 }
 
 /// Nested message and enum types in `JobStoredData`.

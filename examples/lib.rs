@@ -1,9 +1,10 @@
-use anyhow::Result;
+use chrono::Utc;
 use std::time::Duration;
-use tokio_cron_scheduler::{Job, JobScheduler};
+use tokio_cron_scheduler::{Job, JobBuilder, JobScheduler, JobSchedulerError};
 use tracing::{error, info, warn};
+use uuid::Uuid;
 
-pub async fn run_example(mut sched: JobScheduler) -> Result<()> {
+pub async fn run_example(sched: &mut JobScheduler) -> Result<Vec<Uuid>, JobSchedulerError> {
     #[cfg(feature = "signal")]
     sched.shutdown_on_ctrl_c();
 
@@ -40,7 +41,7 @@ pub async fn run_example(mut sched: JobScheduler) -> Result<()> {
     let five_s_job_guid = five_s_job.guid();
     sched.add(five_s_job).await?;
 
-    let mut four_s_job_async = Job::new_async("1/4 * * * * *", |uuid, mut l| {
+    let mut four_s_job_async = Job::new_async_tz("1/4 * * * * *", Utc, |uuid, mut l| {
         Box::pin(async move {
             info!("I run async every 4 seconds id {:?}", uuid);
             let next_tick = l.next_tick_for_job(uuid).await;
@@ -138,18 +139,74 @@ pub async fn run_example(mut sched: JobScheduler) -> Result<()> {
     let jja_guid = jja.guid();
     sched.add(jja).await?;
 
+    let utc_job = JobBuilder::new()
+        .with_timezone(Utc)
+        .with_cron_job_type()
+        .with_schedule("*/2 * * * * *")
+        .unwrap()
+        .with_run_async(Box::new(|uuid, mut l| {
+            Box::pin(async move {
+                info!("UTC run async every 2 seconds id {:?}", uuid);
+                let next_tick = l.next_tick_for_job(uuid).await;
+                match next_tick {
+                    Ok(Some(ts)) => info!("Next time for UTC 2s is {:?}", ts),
+                    _ => warn!("Could not get next tick for 2s job"),
+                }
+            })
+        }))
+        .build()
+        .unwrap();
+
+    let utc_job_guid = utc_job.guid();
+    sched.add(utc_job).await.unwrap();
+
+    let jhb_job = JobBuilder::new()
+        .with_timezone(chrono_tz::Africa::Johannesburg)
+        .with_cron_job_type()
+        .with_schedule("*/2 * * * * *")
+        .unwrap()
+        .with_run_async(Box::new(|uuid, mut l| {
+            Box::pin(async move {
+                info!("JHB run async every 2 seconds id {:?}", uuid);
+                let next_tick = l.next_tick_for_job(uuid).await;
+                match next_tick {
+                    Ok(Some(ts)) => info!("Next time for JHB 2s is {:?}", ts),
+                    _ => warn!("Could not get next tick for 2s job"),
+                }
+            })
+        }))
+        .build()
+        .unwrap();
+
+    let jhb_job_guid = jhb_job.guid();
+    sched.add(jhb_job).await.unwrap();
+
     let start = sched.start().await;
-    if start.is_err() {
-        error!("Error starting scheduler");
-        return Ok(());
+    if let Err(e) = start {
+        error!("Error starting scheduler {}", e);
+        return Err(e);
     }
+
+    let ret = vec![
+        five_s_job_guid,
+        four_s_job_guid,
+        jj_guid,
+        jja_guid,
+        utc_job_guid,
+        jhb_job_guid,
+    ];
+    return Ok(ret);
+}
+
+pub async fn stop_example(
+    sched: &mut JobScheduler,
+    jobs: Vec<Uuid>,
+) -> Result<(), JobSchedulerError> {
     tokio::time::sleep(Duration::from_secs(20)).await;
 
-    info!("Remove 4, 5, 7 and 8 sec jobs");
-    sched.remove(&five_s_job_guid).await?;
-    sched.remove(&four_s_job_guid).await?;
-    sched.remove(&jj_guid).await?;
-    sched.remove(&jja_guid).await?;
+    for i in jobs {
+        sched.remove(&i).await?;
+    }
 
     tokio::time::sleep(Duration::from_secs(40)).await;
 

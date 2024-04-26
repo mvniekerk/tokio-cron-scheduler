@@ -47,7 +47,7 @@ pub use job::job_data_prost::JobState as JobNotification;
 pub use job::to_code::{JobCode, NotificationCode, PinnedGetFuture, ToCode};
 pub use job::JobLocked as Job;
 pub use job::OnJobNotification;
-pub use job::{JobToRun, JobToRunAsync};
+pub use job::{JobBuilder, JobToRun, JobToRunAsync};
 pub use job_scheduler::JobsSchedulerLocked as JobScheduler;
 pub use store::{MetaDataStorage, NotificationStore};
 

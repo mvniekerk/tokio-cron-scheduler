@@ -1,6 +1,6 @@
 [package]
 name = "tokio-cron-scheduler"
-version = "0.9.4"
+version = "0.10.1"
 authors = ["Michael van Niekerk <mike@agri-io.co.za>"]
 edition = "2018"
 
@@ -29,7 +29,7 @@ num-traits = "0.2"
 num-derive = "0.3"
 
 [dependencies.nats]
-version = "0.23"
+version = "0.24.1"
 features = ["unstable"]
 optional = true
 
@@ -49,6 +49,7 @@ features = ["with-uuid-1"]
 [dev-dependencies]
 anyhow = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+chrono-tz = { version = "0.8.5" }
 
 [build-dependencies]
 prost-build = { version = "0.11", optional = true }
@@ -60,6 +61,7 @@ nats_storage = ["nats", "has_bytes" ]
 postgres_storage = ["tokio-postgres", "has_bytes" ]
 postgres_native_tls = ["postgres_storage", "postgres-native-tls" ]
 postgres_openssl = ["postgres_storage", "postgres-openssl" ]
+log = ["tracing/log", "tracing/log-always"]
 
 default = []
 

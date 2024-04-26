@@ -1,8 +1,6 @@
-use crate::lib::run_example;
-use std::time::Duration;
+use crate::lib::{run_example, stop_example};
 use tokio_cron_scheduler::{
-    Job, JobScheduler, NatsMetadataStore, NatsNotificationStore, SimpleJobCode,
-    SimpleNotificationCode,
+    JobScheduler, NatsMetadataStore, NatsNotificationStore, SimpleJobCode, SimpleNotificationCode,
 };
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -24,7 +22,7 @@ async fn main() {
     let simple_job_code = Box::new(SimpleJobCode::default());
     let simple_notification_code = Box::new(SimpleNotificationCode::default());
 
-    let sched = JobScheduler::new_with_storage_and_code(
+    let mut sched = JobScheduler::new_with_storage_and_code(
         metadata_storage,
         notification_storage,
         simple_job_code,
@@ -33,5 +31,10 @@ async fn main() {
     .await
     .unwrap();
 
-    run_example(sched).await;
+    let jobs = run_example(&mut sched)
+        .await
+        .expect("Could not run example");
+    stop_example(&mut sched, jobs)
+        .await
+        .expect("Could not stop example");
 }

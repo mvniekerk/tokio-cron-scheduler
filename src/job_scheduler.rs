@@ -290,8 +290,7 @@ impl JobsSchedulerLocked {
     }
 
     /// The `start` spawns a Tokio task where it loops. Every 500ms it
-    /// runs the tick method to increment any
-    /// any pending jobs.
+    /// runs the tick method to increment any pending jobs.
     ///
     /// ```rust,ignore
     /// if let Err(e) = sched.start().await {
@@ -352,11 +351,17 @@ impl JobsSchedulerLocked {
         }
         let mut r = self.context.metadata_storage.write().await;
         r.get(job_id).await.map(|v| {
-            v.map(|vv| vv.next_tick)
-                .filter(|t| *t != 0)
-                .map(|ts| NaiveDateTime::from_timestamp_opt(ts as i64, 0)
-                    .expect("invalid or out-of-range datetime"))
-                .map(|ts| DateTime::from_utc(ts, Utc))
+            if let Some(vv) = v {
+                if vv.next_tick == 0 {
+                    return None;
+                }
+                match NaiveDateTime::from_timestamp_opt(vv.next_tick as i64, 0) {
+                    None => None,
+                    Some(ts) => Some(DateTime::from_naive_utc_and_offset(ts, Utc)),
+                }
+            } else {
+                None
+            }
         })
     }
 
