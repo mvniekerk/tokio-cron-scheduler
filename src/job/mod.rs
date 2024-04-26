@@ -595,7 +595,7 @@ impl JobLocked {
     /// This is checked if it is running only after 500ms in 500ms intervals.
     /// ```rust,ignore
     /// let mut sched = JobScheduler::new();
-    /// let job = Job::new_repeated(Duration::from_secs(8), |_uuid, _lock| Box::pin(async move {
+    /// let job = Job::new_repeated_async(Duration::from_secs(8), |_uuid, _lock| Box::pin(async move {
     ///     println!("{:?} I'm repeated every 8 seconds", chrono::Utc::now());
     /// }));
     /// sched.add(job)

@@ -12,7 +12,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-#[cfg(feature = "signal")]
+#[cfg(all(unix, feature = "signal"))]
 use tokio::signal::unix::SignalKind;
 use tokio::sync::RwLock;
 use tracing::{error, info};
@@ -383,7 +383,7 @@ impl JobsSchedulerLocked {
 
     ///
     /// Wait for a signal to shut the runtime down with
-    #[cfg(feature = "signal")]
+    #[cfg(all(unix, feature = "signal"))]
     pub fn shutdown_on_signal(&self, signal: SignalKind) {
         let mut l = self.clone();
         tokio::spawn(async move {
