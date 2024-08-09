@@ -11,7 +11,7 @@ async fn main() {
         .with_max_level(Level::TRACE)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
-    let sched = JobScheduler::new().await;
+    let sched = JobScheduler::new_with_channel_size(1000).await;
     let mut sched = sched.unwrap();
     let jobs = run_example(&mut sched)
         .await

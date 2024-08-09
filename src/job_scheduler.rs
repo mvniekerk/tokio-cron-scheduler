@@ -59,6 +59,7 @@ impl JobsSchedulerLocked {
         notification_storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
         job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
         notify_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>,
+        channel_size: usize,
     ) -> Result<Arc<Context>, JobSchedulerError> {
         {
             let mut metadata_storage = metadata_storage.write().await;
@@ -68,11 +69,12 @@ impl JobsSchedulerLocked {
             let mut notification_storage = notification_storage.write().await;
             notification_storage.init().await?;
         }
-        let context = Context::new(
+        let context = Context::new_with_channel_size(
             metadata_storage,
             notification_storage,
             job_code.clone(),
             notify_code.clone(),
+            channel_size,
         );
         {
             let mut job_code = job_code.write().await;
@@ -158,8 +160,19 @@ impl JobsSchedulerLocked {
 
     ///
     /// Create a new `MetaDataStorage` and `NotificationStore` using the `SimpleMetadataStore`, `SimpleNotificationStore`,
-    /// `SimpleJobCode` and `SimpleNotificationCode` implementation
+    /// `SimpleJobCode` and `SimpleNotificationCode` implementation with channel size of 200
     pub async fn new() -> Result<Self, JobSchedulerError> {
+        Self::new_with_channel_size(200).await
+    }
+
+    ///
+    /// Create a new `MetaDataStorage` and `NotificationStore` using the `SimpleMetadataStore`, `SimpleNotificationStore`,
+    /// `SimpleJobCode` and `SimpleNotificationCode` implementation
+    ///
+    /// The channel_size parameter is used to set the size of the channels used to communicate between the actors.
+    /// The amount in short affects how many messages can be buffered before the sender is blocked.
+    /// When the sender is blocked, the processing is lagged.
+    pub async fn new_with_channel_size(channel_size: usize) -> Result<Self, JobSchedulerError> {
         let metadata_storage = SimpleMetadataStore::default();
         let metadata_storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>> =
             Arc::new(RwLock::new(Box::new(metadata_storage)));
@@ -181,6 +194,7 @@ impl JobsSchedulerLocked {
             notification_storage,
             job_code,
             notify_code,
+            channel_size,
         )
         .await
         .map_err(|_| JobSchedulerError::CantInit)?;
@@ -209,6 +223,7 @@ impl JobsSchedulerLocked {
         notification_storage: Box<dyn NotificationStore + Send + Sync>,
         job_code: Box<dyn JobCode + Send + Sync>,
         notification_code: Box<dyn NotificationCode + Send + Sync>,
+        channel_size: usize,
     ) -> Result<Self, JobSchedulerError> {
         let metadata_storage = Arc::new(RwLock::new(metadata_storage));
         let notification_storage = Arc::new(RwLock::new(notification_storage));
@@ -220,6 +235,7 @@ impl JobsSchedulerLocked {
             notification_storage,
             job_code,
             notification_code,
+            channel_size,
         )
         .await?;
 

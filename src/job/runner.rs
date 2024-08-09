@@ -9,6 +9,7 @@ use crate::JobSchedulerError;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
 use tracing::error;
@@ -28,7 +29,10 @@ impl JobRunner {
             let val = rx.recv().await;
             if let Err(e) = val {
                 error!("Error receiving {:?}", e);
-                break;
+                if matches!(e, RecvError::Closed) {
+                    break;
+                }
+                continue;
             }
             let uuid = val.unwrap();
             {
