@@ -384,7 +384,8 @@ impl JobLocked {
 
     /// Create a new one shot job.
     ///
-    /// This is checked if it is running only after 500ms in 500ms intervals.
+    /// This will schedule a job that is only run once after the duration has passed.
+    ///
     /// ```rust,ignore
     /// let mut sched = JobScheduler::new();
     /// let job = Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
@@ -393,6 +394,7 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
+    /// Above will run the code after 18 seconds, only once
     pub fn new_one_shot<T>(duration: Duration, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
@@ -403,15 +405,21 @@ impl JobLocked {
 
     /// Create a new async one shot job.
     ///
-    /// This is checked if it is running only after 500ms in 500ms intervals.
+    /// This will schedule a job that is only run once after the duration has passed.
+    ///
     /// ```rust,ignore
     /// let mut sched = JobScheduler::new();
-    /// let job = Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| Box::pin(async move {
-    ///            println!("{:?} I'm only run once", chrono::Utc::now());
-    ///        }));
+    ///
+    ///  let job = Job::new_one_shot_async(Duration::from_secs(16), |_uuid, _l| {
+    ///             Box::pin(async move {
+    ///                 info!("I'm only run once async");
+    ///             })
+    ///         })
+    ///         .unwrap();
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
+    /// Above will run the code after 18 seconds, only once
     pub fn new_one_shot_async<T>(duration: Duration, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,

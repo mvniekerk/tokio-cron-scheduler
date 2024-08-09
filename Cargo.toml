@@ -1,6 +1,6 @@
 [package]
 name = "tokio-cron-scheduler"
-version = "0.10.3"
+version = "0.11.0"
 authors = ["Michael van Niekerk <mike@agri-io.co.za>"]
 edition = "2018"
 
@@ -84,4 +84,6 @@ required-features = ["nats_storage", "tracing-subscriber"]
 name = "postgres"
 path = "examples/postgres_job.rs"
 required-features = ["postgres_storage", "tracing-subscriber"]
+
+
 

@@ -9,6 +9,7 @@ use crate::JobSchedulerError;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::RwLock;
 use tracing::error;
@@ -27,7 +28,10 @@ impl NotificationRunner {
             let val = rx.recv().await;
             if let Err(e) = val {
                 error!("Error receiving value {:?}", e);
-                break;
+                if matches!(e, RecvError::Closed) {
+                    break;
+                }
+                continue;
             }
             let (job_id, state) = val.unwrap();
             let mut storage = storage.write().await;
