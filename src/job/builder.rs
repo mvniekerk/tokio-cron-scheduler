@@ -6,9 +6,8 @@ pub use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
 use crate::job::{nop, nop_async, JobLocked};
 use crate::{JobSchedulerError, JobToRun, JobToRunAsync};
 use chrono::{Offset, TimeZone, Utc};
+use croner::Cron;
 use core::time::Duration;
-use cron::Schedule;
-use std::convert::TryInto;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -23,7 +22,7 @@ pub struct JobBuilder<T> {
     pub job_id: Option<Uuid>,
     pub timezone: Option<T>,
     pub job_type: Option<JobType>,
-    pub schedule: Option<Schedule>,
+    pub schedule: Option<Cron>,
     pub run: Option<Box<JobToRun>>,
     pub run_async: Option<Box<JobToRunAsync>>,
     pub duration: Option<Duration>,
@@ -97,13 +96,9 @@ impl<T: TimeZone> JobBuilder<T> {
         }
     }
 
-    pub fn with_schedule<U, E>(self, schedule: U) -> Result<Self, JobSchedulerError>
-    where
-        U: TryInto<Schedule, Error = E>,
-        E: std::error::Error + 'static,
+    pub fn with_schedule(self, schedule: &str) -> Result<Self, JobSchedulerError>
     {
-        let schedule: Schedule = schedule
-            .try_into()
+        let schedule = Cron::new(schedule).with_seconds_required().with_dom_and_dow().parse()
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
         Ok(Self {
             schedule: Some(schedule),
@@ -181,12 +176,12 @@ impl<T: TimeZone> JobBuilder<T> {
                         last_tick: None,
                         next_tick: match &self.timezone {
                             Some(timezone) => schedule
-                                .upcoming(timezone.clone())
+                                .iter_from(Utc::now().with_timezone(&timezone.clone()))
                                 .next()
                                 .map(|t| t.timestamp() as u64)
                                 .unwrap_or(0),
                             None => schedule
-                                .upcoming(Utc)
+                                .iter_from(Utc::now())
                                 .next()
                                 .map(|t| t.timestamp() as u64)
                                 .unwrap_or(0),
@@ -199,12 +194,12 @@ impl<T: TimeZone> JobBuilder<T> {
                         #[cfg(feature = "has_bytes")]
                         job: Some(job_data_prost::job_stored_data::Job::CronJob(
                             job_data_prost::CronJob {
-                                schedule: schedule.to_string(),
+                                schedule: schedule.pattern.to_string(),
                             },
                         )),
                         #[cfg(not(feature = "has_bytes"))]
                         job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
-                            schedule: schedule.to_string(),
+                            schedule: schedule.pattern.to_string(),
                         })),
                         time_offset_seconds,
                     },

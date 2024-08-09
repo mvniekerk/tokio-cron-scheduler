@@ -19,8 +19,8 @@ Be sure to add the job_scheduler crate to your `Cargo.toml`:
 tokio-cron-scheduler = "*"
 ```
 
-Creating a schedule for a job is done using the `FromStr` impl for the
-`Schedule` type of the [cron](https://github.com/zslayton/cron) library.
+Creating a schedule for a job is done using the `new` impl for the
+`Cron` type of the [croner](https://github.com/https://github.com/Hexagon/croner-rust/cron) library.
 
 The scheduling format is as follows:
 
@@ -161,7 +161,7 @@ _ => warn !("Could not get next tick for 2s job"),
 ## Similar Libraries
 
 * [job_scheduler](https://github.com/lholden/job_scheduler) The crate that inspired this one
-* [cron](https://github.com/zslayton/cron) the cron expression parser we use.
+* [croner-rust](https://github.com/Hexagon/croner-rust) the cron expression parser we use.
 * [schedule-rs](https://github.com/mehcode/schedule-rs) is a similar rust library that implements its own cron
   expression parser.
 

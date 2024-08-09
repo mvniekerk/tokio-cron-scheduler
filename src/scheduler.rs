@@ -200,7 +200,7 @@ impl Scheduler {
                                     .next_tick_utc()
                                     .map(|nt| nt.with_timezone(&fixed_offset));
                                 let next_tick = match job_type {
-                                    JobType::Cron => schedule.and_then(|s| s.after(&now).next()),
+                                    JobType::Cron => schedule.and_then(|s| s.iter_after(now).next()),
                                     JobType::OneShot => None,
                                     JobType::Repeated => repeated_every.and_then(|r| {
                                         next_tick.and_then(|nt| {
