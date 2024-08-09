@@ -191,7 +191,6 @@ impl Scheduler {
                             Ok(Some(job)) => {
                                 let job_type: JobType = JobType::from_i32(job.job_type).unwrap();
                                 let schedule = job.schedule();
-                                // TODO continue from here
                                 let fixed_offset = FixedOffset::east_opt(job.time_offset_seconds)
                                     .unwrap_or(FixedOffset::east_opt(0).unwrap());
                                 let now = now.with_timezone(&fixed_offset);
