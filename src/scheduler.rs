@@ -5,6 +5,7 @@ use crate::job::job_data::{JobState, JobType};
 use crate::job::job_data_prost::{JobState, JobType};
 use crate::JobSchedulerError;
 use chrono::{FixedOffset, Utc};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::oneshot::{Receiver, Sender};
@@ -13,10 +14,10 @@ use tracing::error;
 use uuid::Uuid;
 
 pub struct Scheduler {
-    pub shutdown: Arc<RwLock<bool>>,
+    pub shutdown: Arc<AtomicBool>,
     pub start_tx: Arc<RwLock<Option<Sender<bool>>>>,
     pub start_rx: Arc<RwLock<Option<Receiver<bool>>>>,
-    pub ticking: Arc<RwLock<bool>>,
+    pub ticking: Arc<AtomicBool>,
     pub inited: bool,
 }
 
@@ -24,11 +25,11 @@ impl Default for Scheduler {
     fn default() -> Self {
         let (ticker_tx, ticker_rx) = tokio::sync::oneshot::channel();
         Self {
-            shutdown: Arc::new(RwLock::new(false)),
+            shutdown: Arc::new(AtomicBool::new(false)),
             inited: false,
             start_tx: Arc::new(RwLock::new(Some(ticker_tx))),
             start_rx: Arc::new(RwLock::new(Some(ticker_rx))),
-            ticking: Arc::new(RwLock::new(false)),
+            ticking: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -49,18 +50,12 @@ impl Scheduler {
 
         let start_rx = {
             let mut w = self.start_rx.write().await;
-
-            let mut start_rx: Option<Receiver<bool>> = None;
-            std::mem::swap(&mut start_rx, &mut *w);
-            start_rx
+            w.take()
         };
 
         let ticking = self.ticking.clone();
         tokio::spawn(async move {
-            let is_ticking = {
-                let ticking = ticking.read().await;
-                *ticking
-            };
+            let is_ticking = ticking.load(Ordering::Relaxed);
             if !is_ticking {
                 if let Some(start_rx) = start_rx {
                     if let Err(e) = start_rx.await {
@@ -68,16 +63,10 @@ impl Scheduler {
                         return;
                     }
                 }
-                let is_ticking = {
-                    let ticking = ticking.read().await;
-                    *ticking
-                };
+                let is_ticking = ticking.load(Ordering::Relaxed);
                 if !is_ticking {
                     loop {
-                        let is_ticking = {
-                            let ticking = ticking.read().await;
-                            *ticking
-                        };
+                        let is_ticking = ticking.load(Ordering::Relaxed);
                         if is_ticking {
                             break;
                         }
@@ -87,8 +76,8 @@ impl Scheduler {
             }
             'next_tick: loop {
                 let shutdown = {
-                    let r = shutdown.read().await;
-                    *r
+                    let r = shutdown.load(Ordering::Relaxed);
+                    r
                 };
                 if shutdown {
                     break 'next_tick;
@@ -191,7 +180,6 @@ impl Scheduler {
                             Ok(Some(job)) => {
                                 let job_type: JobType = JobType::from_i32(job.job_type).unwrap();
                                 let schedule = job.schedule();
-                                // TODO continue from here
                                 let fixed_offset = FixedOffset::east_opt(job.time_offset_seconds)
                                     .unwrap_or(FixedOffset::east_opt(0).unwrap());
                                 let now = now.with_timezone(&fixed_offset);
@@ -236,22 +224,15 @@ impl Scheduler {
     }
 
     pub async fn shutdown(&mut self) {
-        let mut w = self.shutdown.write().await;
-        *w = true;
+        self.shutdown.swap(true, Ordering::Relaxed);
     }
 
     pub async fn start(&mut self) -> Result<(), JobSchedulerError> {
-        let is_ticking = {
-            let ticking = self.ticking.read().await;
-            *ticking
-        };
+        let is_ticking = self.ticking.load(Ordering::Relaxed);
         if is_ticking {
             Err(JobSchedulerError::TickError)
         } else {
-            {
-                let mut w = self.ticking.write().await;
-                *w = true;
-            }
+            self.ticking.swap(true, Ordering::Relaxed);
             let tx = {
                 let mut w = self.start_tx.write().await;
                 let mut tx: Option<Sender<bool>> = None;

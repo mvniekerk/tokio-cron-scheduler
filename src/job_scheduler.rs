@@ -11,6 +11,7 @@ use crate::store::{MetaDataStorage, NotificationStore};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 #[cfg(all(unix, feature = "signal"))]
 use tokio::signal::unix::SignalKind;
@@ -24,7 +25,7 @@ pub type ShutdownNotification =
 /// The JobScheduler contains and executes the scheduled jobs.
 pub struct JobsSchedulerLocked {
     pub context: Arc<Context>,
-    pub inited: Arc<RwLock<bool>>,
+    pub inited: Arc<AtomicBool>,
     pub job_creator: Arc<RwLock<JobCreator>>,
     pub job_deleter: Arc<RwLock<JobDeleter>>,
     pub job_runner: Arc<RwLock<JobRunner>>,
@@ -139,8 +140,7 @@ impl JobsSchedulerLocked {
     ///
     /// Get whether the scheduler is initialized
     pub async fn inited(&self) -> bool {
-        let r = self.inited.read().await;
-        *r
+        self.inited.load(Ordering::Relaxed)
     }
 
     ///
@@ -149,10 +149,7 @@ impl JobsSchedulerLocked {
         if self.inited().await {
             return Ok(());
         }
-        {
-            let mut w = self.inited.write().await;
-            *w = true;
-        }
+        self.inited.swap(true, Ordering::Relaxed);
         self.clone()
             .init_actors()
             .await
@@ -190,7 +187,7 @@ impl JobsSchedulerLocked {
 
         let val = JobsSchedulerLocked {
             context,
-            inited: Arc::new(RwLock::new(false)),
+            inited: Arc::new(AtomicBool::new(false)),
             job_creator: Arc::new(Default::default()),
             job_deleter: Arc::new(Default::default()),
             job_runner: Arc::new(Default::default()),
@@ -228,7 +225,7 @@ impl JobsSchedulerLocked {
 
         let val = JobsSchedulerLocked {
             context,
-            inited: Arc::new(RwLock::new(false)),
+            inited: Arc::new(AtomicBool::new(false)),
             job_creator: Arc::new(Default::default()),
             job_deleter: Arc::new(Default::default()),
             job_runner: Arc::new(Default::default()),
