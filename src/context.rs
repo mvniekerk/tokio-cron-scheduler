@@ -67,6 +67,42 @@ impl Context {
             notification_code,
         }
     }
+
+    pub fn new_with_channel_size(
+        metadata_storage: Arc<RwLock<Box<dyn MetaDataStorage + Send + Sync>>>,
+        notification_storage: Arc<RwLock<Box<dyn NotificationStore + Send + Sync>>>,
+        job_code: Arc<RwLock<Box<dyn JobCode + Send + Sync>>>,
+        notification_code: Arc<RwLock<Box<dyn NotificationCode + Send + Sync>>>,
+        channel_size: usize,
+    ) -> Self {
+        let (job_activation_tx, _job_activation_rx) = tokio::sync::broadcast::channel(channel_size);
+        let (notify_tx, _notify_rx) = tokio::sync::broadcast::channel(channel_size);
+        let (job_create_tx, _job_create_rx) = tokio::sync::broadcast::channel(channel_size);
+        let (job_created_tx, _job_created_rx) = tokio::sync::broadcast::channel(channel_size);
+        let (job_delete_tx, _job_delete_rx) = tokio::sync::broadcast::channel(channel_size);
+        let (job_deleted_tx, _job_deleted_rx) = tokio::sync::broadcast::channel(channel_size);
+        let (notify_create_tx, _notify_create_rx) = tokio::sync::broadcast::channel(channel_size);
+        let (notify_created_tx, _notify_created_rx) = tokio::sync::broadcast::channel(channel_size);
+        let (notify_delete_tx, _notify_delete_rx) = tokio::sync::broadcast::channel(channel_size);
+        let (notify_deleted_tx, _notify_deleted_rx) = tokio::sync::broadcast::channel(channel_size);
+
+        Self {
+            job_activation_tx,
+            notify_tx,
+            job_create_tx,
+            job_created_tx,
+            job_delete_tx,
+            job_deleted_tx,
+            notify_create_tx,
+            notify_created_tx,
+            notify_delete_tx,
+            notify_deleted_tx,
+            metadata_storage,
+            notification_storage,
+            job_code,
+            notification_code,
+        }
+    }
 }
 
 impl Clone for Context {
