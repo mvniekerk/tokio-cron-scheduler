@@ -20,7 +20,7 @@ tokio-cron-scheduler = "*"
 ```
 
 Creating a schedule for a job is done using the `new` impl for the
-`Cron` type of the [croner](https://github.com/https://github.com/Hexagon/croner-rust/cron) library.
+`Cron` type of the [croner](https://github.com/Hexagon/croner-rust) library.
 
 The scheduling format is as follows:
 
