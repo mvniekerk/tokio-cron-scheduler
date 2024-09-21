@@ -1,6 +1,10 @@
 use crate::job::cron_job::CronJob;
 #[cfg(not(feature = "has_bytes"))]
+use crate::job::job_data;
+#[cfg(not(feature = "has_bytes"))]
 pub use crate::job::job_data::{JobStoredData, JobType, Uuid};
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost;
 #[cfg(feature = "has_bytes")]
 pub use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
 use crate::job::{nop, nop_async, JobLocked};
@@ -10,11 +14,7 @@ use core::time::Duration;
 use croner::Cron;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-
-#[cfg(not(feature = "has_bytes"))]
-use crate::job::job_data;
-#[cfg(feature = "has_bytes")]
-use crate::job::job_data_prost;
+use tracing::warn;
 
 use uuid::Uuid as UuidUuid;
 
@@ -103,11 +103,16 @@ impl<T: TimeZone> JobBuilder<T> {
         let schedule = schedule.to_string();
         #[cfg(feature = "english")]
         let schedule = {
-            match Cron::new(&schedule).parse() {
+            match Cron::new(&schedule)
+                .with_seconds_required()
+                .with_dom_and_dow()
+                .parse()
+            {
                 Ok(_) => schedule,
                 Err(_) => match english_to_cron::str_cron_syntax(&schedule) {
                     Ok(english_to_cron) => {
                         if english_to_cron != schedule {
+                            warn!("Changing schedule [{schedule}] to [{english_to_cron}]");
                             english_to_cron
                         } else {
                             schedule

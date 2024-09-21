@@ -182,26 +182,29 @@ pub async fn run_example(sched: &mut JobScheduler) -> Result<Vec<Uuid>, JobSched
     sched.add(jhb_job).await.unwrap();
 
     #[cfg(feature = "english")]
-    let english_job = JobBuilder::new()
-        .with_timezone(Utc)
-        .with_cron_job_type()
-        .with_schedule("every 10 seconds")
-        .unwrap()
-        .with_run_async(Box::new(|uuid, mut l| {
-            Box::pin(async move {
-                info!("English parsed job every 10 seconds id {:?}", uuid);
-                let next_tick = l.next_tick_for_job(uuid).await;
-                match next_tick {
-                    Ok(Some(ts)) => info!("Next time for English parsed job is is {:?}", ts),
-                    _ => warn!("Could not get next tick for English parsed job"),
-                }
-            })
-        }))
-        .build()
-        .unwrap();
+    let english_job_guid = {
+        let english_job = JobBuilder::new()
+            .with_timezone(Utc)
+            .with_cron_job_type()
+            .with_schedule("every 10 seconds")
+            .unwrap()
+            .with_run_async(Box::new(|uuid, mut l| {
+                Box::pin(async move {
+                    info!("English parsed job every 10 seconds id {:?}", uuid);
+                    let next_tick = l.next_tick_for_job(uuid).await;
+                    match next_tick {
+                        Ok(Some(ts)) => info!("Next time for English parsed job is is {:?}", ts),
+                        _ => warn!("Could not get next tick for English parsed job"),
+                    }
+                })
+            }))
+            .build()
+            .unwrap();
 
-    let english_job_guid = english_job.guid();
-    sched.add(english_job).await.unwrap();
+        let english_job_guid = english_job.guid();
+        sched.add(english_job).await.unwrap();
+        english_job_guid
+    };
 
     let start = sched.start().await;
     if let Err(e) = start {
@@ -216,6 +219,7 @@ pub async fn run_example(sched: &mut JobScheduler) -> Result<Vec<Uuid>, JobSched
         jja_guid,
         utc_job_guid,
         jhb_job_guid,
+        #[cfg(feature = "english")]
         english_job_guid,
     ];
     Ok(ret)
