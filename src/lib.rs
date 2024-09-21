@@ -120,7 +120,13 @@ impl JobStoredData {
                 job::job_data::job_stored_data::Job::CronJob(cj) => Some(&*cj.schedule),
                 _ => None,
             })
-            .and_then(|s| Cron::new(s).with_seconds_required().with_dom_and_dow().parse().ok())
+            .and_then(|s| {
+                Cron::new(s)
+                    .with_seconds_required()
+                    .with_dom_and_dow()
+                    .parse()
+                    .ok()
+            })
     }
 
     pub fn next_tick_utc(&self) -> Option<DateTime<Utc>> {
