@@ -179,12 +179,13 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_async<T>(schedule: &str, run: T) -> Result<Self, JobSchedulerError>
+    pub fn new_async<S, T>(schedule: S, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
+        S: ToString,
     {
         Self::new_async_tz(schedule, Utc, run)
     }
@@ -215,6 +216,22 @@ impl JobLocked {
         TZ: TimeZone,
     {
         let schedule = schedule.to_string();
+        #[cfg(feature = "english")]
+        let schedule = {
+            match Cron::new(&schedule).parse() {
+                Ok(_) => schedule,
+                Err(_) => match english_to_cron::str_cron_syntax(&schedule) {
+                    Ok(english_to_cron) => {
+                        if english_to_cron != schedule {
+                            english_to_cron
+                        } else {
+                            schedule
+                        }
+                    }
+                    Err(_) => schedule,
+                },
+            }
+        };
         let time_offset_seconds = timezone
             .offset_from_utc_datetime(&Utc::now().naive_local())
             .fix()
@@ -315,7 +332,7 @@ impl JobLocked {
     /// tokio::spawn(sched.start());
     /// ```
     pub fn new_cron_job_async_tz<S, T, TZ>(
-        schedule: &str,
+        schedule: S,
         timezone: TZ,
         run: T,
     ) -> Result<Self, JobSchedulerError>
@@ -488,10 +505,7 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_one_shot_at_instant<T>(
-        instant: std::time::Instant,
-        run: T,
-    ) -> Result<Self, JobSchedulerError>
+    pub fn new_one_shot_at_instant<T>(instant: Instant, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
@@ -515,7 +529,7 @@ impl JobLocked {
     /// tokio::spawn(sched.start());
     /// ```
     pub fn new_one_shot_at_instant_async<T>(
-        instant: std::time::Instant,
+        instant: Instant,
         run: T,
     ) -> Result<Self, JobSchedulerError>
     where

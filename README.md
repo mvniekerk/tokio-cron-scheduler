@@ -79,6 +79,22 @@ async fn main() -> Result<(), JobSchedulerError> {
         })?
     ).await?;
 
+    // Needs the `english` feature enabled
+    sched.add(
+        Job::new_async("every 4 seconds", |uuid, mut l| {
+            Box::pin(async move {
+                println!("I run async every 4 seconds");
+
+                // Query the next execution time for this job
+                let next_tick = l.next_tick_for_job(uuid).await;
+                match next_tick {
+                    Ok(Some(ts)) => println!("Next time for 4s job is {:?}", ts),
+                    _ => println!("Could not get next tick for 4s job"),
+                }
+            })
+        })?
+    );
+
     // Add one-shot job with given duration
     sched.add(
         Job::new_one_shot(Duration::from_secs(18), |_uuid, _l| {
@@ -139,23 +155,25 @@ chrono-tz is not included into the dependencies, so you need to add it to your C
 would like to have easy creation of a `Timezone` struct.
 
 ```rust 
-let job = JobBuilder::new()
-.with_timezone(chrono_tz::Africa::Johannesburg)
-.with_cron_job_type()
-.with_schedule("*/2 * * * *")
-.unwrap()
-.with_run_async(Box::new( | uuid, mut l| {
-Box::pin(async move {
-info ! ("JHB run async every 2 seconds id {:?}", uuid);
-let next_tick = l.next_tick_for_job(uuid).await;
-match next_tick {
-Ok(Some(ts)) => info !("Next time for JHB 2s is {:?}", ts),
-_ => warn !("Could not get next tick for 2s job"),
+async fn tz_job() {
+    let job = JobBuilder::new()
+        .with_timezone(chrono_tz::Africa::Johannesburg)
+        .with_cron_job_type()
+        .with_schedule("*/2 * * * *")
+        .unwrap()
+        .with_run_async(Box::new(|uuid, mut l| {
+            Box::pin(async move {
+                info!("JHB run async every 2 seconds id {:?}", uuid);
+                let next_tick = l.next_tick_for_job(uuid).await;
+                match next_tick {
+                    Ok(Some(ts)) => info!("Next time for JHB 2s is {:?}", ts),
+                    _ => warn!("Could not get next tick for 2s job"),
+                }
+            })
+        }))
+        .build()
+        .unwrap();
 }
-})
-}))
-.build()
-.unwrap();
 ```
 
 ## Similar Libraries
@@ -190,6 +208,14 @@ be dual licensed as above, without any additional terms or conditions.
 Please see the [CONTRIBUTING](CONTRIBUTING.md) file for more information.
 
 ## Features
+
+### english
+
+Since 0.13.0
+
+Enables the schedule text to be interpreted in English. This is done using
+the [english-to-cron](https://crates.io/crates/english-to-cron) crate.
+For instance "every 15 seconds" will be converted in the background to "0/15 * * * * ? *".
 
 ### has_bytes
 

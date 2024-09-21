@@ -20,6 +20,7 @@ categories = ["date-and-time"]
 tokio = { version = "1", features = ["time", "rt", "sync"] }
 croner = "2.0.5"
 chrono = { version = "0.4", default-features = false }
+english-to-cron = { version = "0.1", optional = true }
 uuid = { version = "1", features = ["v4"] }
 prost = { version = "0.13", optional = true }
 tracing = "0.1"
@@ -58,6 +59,7 @@ prost-build = { version = "0.13", optional = true }
 signal = ["tokio/signal"]
 has_bytes = ["prost-build", "prost"]
 nats_storage = ["nats", "has_bytes"]
+english = ["english-to-cron"]
 postgres_storage = ["tokio-postgres", "has_bytes"]
 postgres_native_tls = ["postgres_storage", "postgres-native-tls"]
 postgres_openssl = ["postgres_storage", "postgres-openssl"]

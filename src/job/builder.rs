@@ -101,6 +101,22 @@ impl<T: TimeZone> JobBuilder<T> {
         TS: ToString,
     {
         let schedule = schedule.to_string();
+        #[cfg(feature = "english")]
+        let schedule = {
+            match Cron::new(&schedule).parse() {
+                Ok(_) => schedule,
+                Err(_) => match english_to_cron::str_cron_syntax(&schedule) {
+                    Ok(english_to_cron) => {
+                        if english_to_cron != schedule {
+                            english_to_cron
+                        } else {
+                            schedule
+                        }
+                    }
+                    Err(_) => schedule,
+                },
+            }
+        };
         let schedule = Cron::new(&schedule)
             .with_seconds_required()
             .with_dom_and_dow()
