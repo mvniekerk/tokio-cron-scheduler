@@ -5,8 +5,8 @@ use crate::job::job_data_prost::{JobState, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::{JobScheduler, JobSchedulerError, JobStoredData};
 use chrono::{DateTime, Offset, TimeZone, Utc};
-use croner::Cron;
 use cron_job::CronJob;
+use croner::Cron;
 use non_cron_job::NonCronJob;
 use std::future::Future;
 use std::pin::Pin;
@@ -95,10 +95,11 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new<T>(schedule: &str, run: T) -> Result<Self, JobSchedulerError>
+    pub fn new<S, T>(schedule: S, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+        S: ToString,
     {
         Self::new_tz(schedule, Utc, run)
     }
@@ -115,17 +116,21 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_tz<T, TZ>(schedule: &str, timezone: TZ, run: T) -> Result<Self, JobSchedulerError>
+    pub fn new_tz<S, T, TZ>(schedule: S, timezone: TZ, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+        S: ToString,
         TZ: TimeZone,
     {
+        let schedule = schedule.to_string();
         let time_offset_seconds = timezone
             .offset_from_utc_datetime(&Utc::now().naive_local())
             .fix()
             .local_minus_utc();
-        let schedule = Cron::new(schedule).with_seconds_required().with_dom_and_dow()
+        let schedule = Cron::new(&schedule)
+            .with_seconds_required()
+            .with_dom_and_dow()
             .parse()
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
         let job_id = Uuid::new_v4();
@@ -196,8 +201,8 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_async_tz<T, TZ>(
-        schedule: &str,
+    pub fn new_async_tz<S, T, TZ>(
+        schedule: S,
         timezone: TZ,
         run: T,
     ) -> Result<Self, JobSchedulerError>
@@ -206,13 +211,17 @@ impl JobLocked {
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
+        S: ToString,
         TZ: TimeZone,
     {
+        let schedule = schedule.to_string();
         let time_offset_seconds = timezone
             .offset_from_utc_datetime(&Utc::now().naive_local())
             .fix()
             .local_minus_utc();
-        let schedule = Cron::new(schedule).with_seconds_required().with_dom_and_dow()
+        let schedule = Cron::new(&schedule)
+            .with_seconds_required()
+            .with_dom_and_dow()
             .parse()
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
         let job_id = Uuid::new_v4();
@@ -261,10 +270,11 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_cron_job<T, E>(schedule: &str, run: T) -> Result<Self, JobSchedulerError>
+    pub fn new_cron_job<S, T, E>(schedule: S, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
+        S: ToString,
     {
         JobLocked::new(schedule, run)
     }
@@ -281,12 +291,13 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_cron_job_async<T>(schedule: &str, run: T) -> Result<Self, JobSchedulerError>
+    pub fn new_cron_job_async<S, T>(schedule: S, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
+        S: ToString,
     {
         JobLocked::new_async_tz(schedule, Utc, run)
     }
@@ -303,7 +314,7 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_cron_job_async_tz<S, T, E, TZ>(
+    pub fn new_cron_job_async_tz<S, T, TZ>(
         schedule: &str,
         timezone: TZ,
         run: T,
@@ -313,6 +324,7 @@ impl JobLocked {
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
+        S: ToString,
         TZ: TimeZone,
     {
         JobLocked::new_async_tz(schedule, timezone, run)

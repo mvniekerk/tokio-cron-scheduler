@@ -19,7 +19,7 @@ Be sure to add the job_scheduler crate to your `Cargo.toml`:
 tokio-cron-scheduler = "*"
 ```
 
-Creating a schedule for a job is done using the `new` impl for the
+Creating a schedule for a job is done using any `ToString` impl, leveraging the
 `Cron` type of the [croner](https://github.com/Hexagon/croner-rust) library.
 
 The scheduling format is as follows:
@@ -140,22 +140,22 @@ would like to have easy creation of a `Timezone` struct.
 
 ```rust 
 let job = JobBuilder::new()
-    .with_timezone(chrono_tz::Africa::Johannesburg)
-    .with_cron_job_type()
-    .with_schedule("*/2 * * * *")
-    .unwrap()
-    .with_run_async(Box::new(|uuid, mut l| {
-        Box::pin(async move {
-            info!("JHB run async every 2 seconds id {:?}", uuid);
-            let next_tick = l.next_tick_for_job(uuid).await;
-            match next_tick {
-                Ok(Some(ts)) => info!("Next time for JHB 2s is {:?}", ts),
-                _ => warn!("Could not get next tick for 2s job"),
-            }
-        })
-    }))
-    .build()
-    .unwrap();
+.with_timezone(chrono_tz::Africa::Johannesburg)
+.with_cron_job_type()
+.with_schedule("*/2 * * * *")
+.unwrap()
+.with_run_async(Box::new( | uuid, mut l| {
+Box::pin(async move {
+info ! ("JHB run async every 2 seconds id {:?}", uuid);
+let next_tick = l.next_tick_for_job(uuid).await;
+match next_tick {
+Ok(Some(ts)) => info !("Next time for JHB 2s is {:?}", ts),
+_ => warn !("Could not get next tick for 2s job"),
+}
+})
+}))
+.build()
+.unwrap();
 ```
 
 ## Similar Libraries
@@ -202,7 +202,8 @@ of the data structs. The Nats and Postgres stores depend on this feature being e
 
 Since 0.6
 
-Adds the Postgres metadata store and notification store (PostgresMetadataStore, PostgresNotificationStore). Use a Postgres
+Adds the Postgres metadata store and notification store (PostgresMetadataStore, PostgresNotificationStore). Use a
+Postgres
 database to store the metadata and notification data.
 
 See [PostgreSQL docs](./postgres.md)
@@ -223,7 +224,8 @@ Uses the postgres-openssl crate as the TLS provider for the PostgreSQL connectio
 
 Since 0.6
 
-Adds the Nats metadata store and notification store (NatsMetadataStore, NatsNotificationStore). Use a Nats system as a way
+Adds the Nats metadata store and notification store (NatsMetadataStore, NatsNotificationStore). Use a Nats system as a
+way
 to store the metadata and notifications.
 
 See [Nats docs](./nats.md)

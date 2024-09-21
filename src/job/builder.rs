@@ -6,8 +6,8 @@ pub use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
 use crate::job::{nop, nop_async, JobLocked};
 use crate::{JobSchedulerError, JobToRun, JobToRunAsync};
 use chrono::{Offset, TimeZone, Utc};
-use croner::Cron;
 use core::time::Duration;
+use croner::Cron;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -96,9 +96,15 @@ impl<T: TimeZone> JobBuilder<T> {
         }
     }
 
-    pub fn with_schedule(self, schedule: &str) -> Result<Self, JobSchedulerError>
+    pub fn with_schedule<TS>(self, schedule: TS) -> Result<Self, JobSchedulerError>
+    where
+        TS: ToString,
     {
-        let schedule = Cron::new(schedule).with_seconds_required().with_dom_and_dow().parse()
+        let schedule = schedule.to_string();
+        let schedule = Cron::new(&schedule)
+            .with_seconds_required()
+            .with_dom_and_dow()
+            .parse()
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
         Ok(Self {
             schedule: Some(schedule),
