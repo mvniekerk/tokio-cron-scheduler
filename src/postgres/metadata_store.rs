@@ -428,8 +428,8 @@ impl MetaDataStorage for PostgresMetadataStore {
                         + &*table
                         + " \
                         WHERE \
-                              next_tick > 0\
-                          AND next_tick > $2 \
+                              next_tick > 0 \
+                          AND next_tick > $1 \
                         ORDER BY next_tick ASC \
                         LIMIT 1";
                     let row = store.query(&*sql, &[&now]).await;
