@@ -17,7 +17,6 @@ mod simple;
 mod store;
 
 use std::ops::Add;
-use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 #[cfg(not(feature = "has_bytes"))]
@@ -25,7 +24,7 @@ use crate::job::job_data::ListOfUuids;
 #[cfg(feature = "has_bytes")]
 use crate::job::job_data_prost::ListOfUuids;
 use chrono::{DateTime, Utc};
-use cron::Schedule;
+use croner::Cron;
 #[cfg(not(feature = "has_bytes"))]
 use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
 #[cfg(feature = "has_bytes")]
@@ -111,7 +110,7 @@ impl JobAndNextTick {
 }
 
 impl JobStoredData {
-    pub fn schedule(&self) -> Option<Schedule> {
+    pub fn schedule(&self) -> Option<Cron> {
         self.job
             .as_ref()
             .and_then(|j| match j {
@@ -121,7 +120,13 @@ impl JobStoredData {
                 job::job_data::job_stored_data::Job::CronJob(cj) => Some(&*cj.schedule),
                 _ => None,
             })
-            .and_then(|s| Schedule::from_str(s).ok())
+            .and_then(|s| {
+                Cron::new(s)
+                    .with_seconds_required()
+                    .with_dom_and_dow()
+                    .parse()
+                    .ok()
+            })
     }
 
     pub fn next_tick_utc(&self) -> Option<DateTime<Utc>> {

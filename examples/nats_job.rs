@@ -27,6 +27,7 @@ async fn main() {
         notification_storage,
         simple_job_code,
         simple_notification_code,
+        200,
     )
     .await
     .unwrap();

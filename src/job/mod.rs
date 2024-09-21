@@ -5,10 +5,9 @@ use crate::job::job_data_prost::{JobState, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::{JobScheduler, JobSchedulerError, JobStoredData};
 use chrono::{DateTime, Offset, TimeZone, Utc};
-use cron::Schedule;
 use cron_job::CronJob;
+use croner::Cron;
 use non_cron_job::NonCronJob;
-use std::convert::TryInto;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
@@ -61,7 +60,7 @@ pub struct JobLocked(pub(crate) Arc<RwLock<Box<dyn Job + Send + Sync>>>);
 
 pub trait Job {
     fn is_cron_job(&self) -> bool;
-    fn schedule(&self) -> Option<Schedule>;
+    fn schedule(&self) -> Option<Cron>;
     fn repeated_every(&self) -> Option<u64>;
     fn last_tick(&self) -> Option<DateTime<Utc>>;
     fn set_last_tick(&mut self, tick: Option<DateTime<Utc>>);
@@ -96,12 +95,11 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new<S, T, E>(schedule: S, run: T) -> Result<Self, JobSchedulerError>
+    pub fn new<S, T>(schedule: S, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
-        S: TryInto<Schedule, Error = E>,
-        E: std::error::Error + 'static,
+        S: ToString,
     {
         Self::new_tz(schedule, Utc, run)
     }
@@ -118,20 +116,22 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_tz<S, T, E, TZ>(schedule: S, timezone: TZ, run: T) -> Result<Self, JobSchedulerError>
+    pub fn new_tz<S, T, TZ>(schedule: S, timezone: TZ, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
-        S: TryInto<Schedule, Error = E>,
+        S: ToString,
         TZ: TimeZone,
-        E: std::error::Error + 'static,
     {
+        let schedule = schedule.to_string();
         let time_offset_seconds = timezone
             .offset_from_utc_datetime(&Utc::now().naive_local())
             .fix()
             .local_minus_utc();
-        let schedule: Schedule = schedule
-            .try_into()
+        let schedule = Cron::new(&schedule)
+            .with_seconds_required()
+            .with_dom_and_dow()
+            .parse()
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
         let job_id = Uuid::new_v4();
         Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
@@ -140,7 +140,7 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .upcoming(timezone)
+                    .iter_from(Utc::now().with_timezone(&timezone))
                     .next()
                     .map(|t| t.timestamp() as u64)
                     .unwrap_or(0),
@@ -152,12 +152,12 @@ impl JobLocked {
                 #[cfg(feature = "has_bytes")]
                 job: Some(job_data_prost::job_stored_data::Job::CronJob(
                     job_data_prost::CronJob {
-                        schedule: schedule.to_string(),
+                        schedule: schedule.pattern.to_string(),
                     },
                 )),
                 #[cfg(not(feature = "has_bytes"))]
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
-                    schedule: schedule.to_string(),
+                    schedule: schedule.pattern.to_string(),
                 })),
                 time_offset_seconds,
             },
@@ -179,14 +179,12 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_async<S, T, E>(schedule: S, run: T) -> Result<Self, JobSchedulerError>
+    pub fn new_async<T>(schedule: &str, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
-        S: TryInto<Schedule, Error = E>,
-        E: std::error::Error + 'static,
     {
         Self::new_async_tz(schedule, Utc, run)
     }
@@ -203,7 +201,7 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_async_tz<S, T, E, TZ>(
+    pub fn new_async_tz<S, T, TZ>(
         schedule: S,
         timezone: TZ,
         run: T,
@@ -213,16 +211,18 @@ impl JobLocked {
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
-        S: TryInto<Schedule, Error = E>,
+        S: ToString,
         TZ: TimeZone,
-        E: std::error::Error + 'static,
     {
+        let schedule = schedule.to_string();
         let time_offset_seconds = timezone
             .offset_from_utc_datetime(&Utc::now().naive_local())
             .fix()
             .local_minus_utc();
-        let schedule: Schedule = schedule
-            .try_into()
+        let schedule = Cron::new(&schedule)
+            .with_seconds_required()
+            .with_dom_and_dow()
+            .parse()
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
         let job_id = Uuid::new_v4();
         Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
@@ -231,7 +231,7 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .upcoming(timezone)
+                    .iter_from(Utc::now().with_timezone(&timezone))
                     .next()
                     .map(|t| t.timestamp() as u64)
                     .unwrap_or(0),
@@ -243,12 +243,12 @@ impl JobLocked {
                 #[cfg(feature = "has_bytes")]
                 job: Some(job_data_prost::job_stored_data::Job::CronJob(
                     job_data_prost::CronJob {
-                        schedule: schedule.to_string(),
+                        schedule: schedule.pattern.to_string(),
                     },
                 )),
                 #[cfg(not(feature = "has_bytes"))]
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
-                    schedule: schedule.to_string(),
+                    schedule: schedule.pattern.to_string(),
                 })),
                 time_offset_seconds,
             },
@@ -274,8 +274,7 @@ impl JobLocked {
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
-        S: TryInto<Schedule, Error = E>,
-        E: std::error::Error + 'static,
+        S: ToString,
     {
         JobLocked::new(schedule, run)
     }
@@ -292,14 +291,13 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_cron_job_async<S, T, E>(schedule: S, run: T) -> Result<Self, JobSchedulerError>
+    pub fn new_cron_job_async<S, T>(schedule: S, run: T) -> Result<Self, JobSchedulerError>
     where
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
-        S: TryInto<Schedule, Error = E>,
-        E: std::error::Error + 'static,
+        S: ToString,
     {
         JobLocked::new_async_tz(schedule, Utc, run)
     }
@@ -316,8 +314,8 @@ impl JobLocked {
     /// sched.add(job)
     /// tokio::spawn(sched.start());
     /// ```
-    pub fn new_cron_job_async_tz<S, T, E, TZ>(
-        schedule: S,
+    pub fn new_cron_job_async_tz<S, T, TZ>(
+        schedule: &str,
         timezone: TZ,
         run: T,
     ) -> Result<Self, JobSchedulerError>
@@ -326,9 +324,8 @@ impl JobLocked {
         T: FnMut(Uuid, JobsSchedulerLocked) -> Pin<Box<dyn Future<Output = ()> + Send>>
             + Send
             + Sync,
-        S: TryInto<Schedule, Error = E>,
+        S: ToString,
         TZ: TimeZone,
-        E: std::error::Error + 'static,
     {
         JobLocked::new_async_tz(schedule, timezone, run)
     }
@@ -667,7 +664,7 @@ impl JobLocked {
 
         let next_tick = if must_run {
             match job_type {
-                JobType::Cron => schedule.and_then(|s| s.after(&now).next()),
+                JobType::Cron => schedule.and_then(|s| s.iter_after(now).next()),
                 JobType::OneShot => None,
                 JobType::Repeated => repeated_every.and_then(|r| {
                     next_tick

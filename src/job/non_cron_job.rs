@@ -5,7 +5,7 @@ use crate::job::job_data_prost::{JobStoredData, JobType};
 use crate::job::{Job, JobToRunAsync};
 use crate::{JobScheduler, JobSchedulerError, JobToRun};
 use chrono::{DateTime, Utc};
-use cron::Schedule;
+use croner::Cron;
 use tokio::sync::oneshot::Receiver;
 use tracing::error;
 use uuid::Uuid;
@@ -22,7 +22,7 @@ impl Job for NonCronJob {
         false
     }
 
-    fn schedule(&self) -> Option<Schedule> {
+    fn schedule(&self) -> Option<Cron> {
         None
     }
 

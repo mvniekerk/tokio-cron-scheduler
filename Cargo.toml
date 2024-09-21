@@ -18,7 +18,7 @@ categories = ["date-and-time"]
 
 [dependencies]
 tokio = { version = "1", features = ["time", "rt", "sync"] }
-cron = "0.12"
+croner = "2.0.5"
 chrono = { version = "0.4", default-features = false }
 uuid = { version = "1", features = ["v4"] }
 prost = { version = "0.13", optional = true }
