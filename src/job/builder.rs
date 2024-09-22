@@ -1,6 +1,10 @@
 use crate::job::cron_job::CronJob;
 #[cfg(not(feature = "has_bytes"))]
+use crate::job::job_data;
+#[cfg(not(feature = "has_bytes"))]
 pub use crate::job::job_data::{JobStoredData, JobType, Uuid};
+#[cfg(feature = "has_bytes")]
+use crate::job::job_data_prost;
 #[cfg(feature = "has_bytes")]
 pub use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
 use crate::job::{nop, nop_async, JobLocked};
@@ -10,11 +14,6 @@ use core::time::Duration;
 use croner::Cron;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-
-#[cfg(not(feature = "has_bytes"))]
-use crate::job::job_data;
-#[cfg(feature = "has_bytes")]
-use crate::job::job_data_prost;
 
 use uuid::Uuid as UuidUuid;
 
@@ -100,7 +99,7 @@ impl<T: TimeZone> JobBuilder<T> {
     where
         TS: ToString,
     {
-        let schedule = schedule.to_string();
+        let schedule = JobLocked::schedule_to_cron(schedule)?;
         let schedule = Cron::new(&schedule)
             .with_seconds_required()
             .with_dom_and_dow()
