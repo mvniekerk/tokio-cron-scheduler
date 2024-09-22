@@ -29,6 +29,7 @@ mod runner;
 pub mod to_code;
 
 use crate::notification::{NotificationCreator, NotificationDeleter};
+use crate::JobSchedulerError::ParseSchedule;
 pub use builder::JobBuilder;
 pub use creator::JobCreator;
 pub use deleter::JobDeleter;
@@ -123,27 +124,7 @@ impl JobLocked {
         S: ToString,
         TZ: TimeZone,
     {
-        let schedule = schedule.to_string();
-        #[cfg(feature = "english")]
-        let schedule = {
-            match Cron::new(&schedule)
-                .with_seconds_required()
-                .with_dom_and_dow()
-                .parse()
-            {
-                Ok(_) => schedule,
-                Err(_) => match english_to_cron::str_cron_syntax(&schedule) {
-                    Ok(english_to_cron) => {
-                        if english_to_cron != schedule {
-                            english_to_cron
-                        } else {
-                            schedule
-                        }
-                    }
-                    Err(_) => schedule,
-                },
-            }
-        };
+        let schedule = Self::schedule_to_cron(schedule)?;
         let time_offset_seconds = timezone
             .offset_from_utc_datetime(&Utc::now().naive_local())
             .fix()
@@ -152,7 +133,7 @@ impl JobLocked {
             .with_seconds_required()
             .with_dom_and_dow()
             .parse()
-            .map_err(|_| JobSchedulerError::ParseSchedule)?;
+            .map_err(|_| ParseSchedule)?;
         let job_id = Uuid::new_v4();
         Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
             data: JobStoredData {
@@ -235,27 +216,7 @@ impl JobLocked {
         S: ToString,
         TZ: TimeZone,
     {
-        let schedule = schedule.to_string();
-        #[cfg(feature = "english")]
-        let schedule = {
-            match Cron::new(&schedule)
-                .with_seconds_required()
-                .with_dom_and_dow()
-                .parse()
-            {
-                Ok(_) => schedule,
-                Err(_) => match english_to_cron::str_cron_syntax(&schedule) {
-                    Ok(english_to_cron) => {
-                        if english_to_cron != schedule {
-                            english_to_cron
-                        } else {
-                            schedule
-                        }
-                    }
-                    Err(_) => schedule,
-                },
-            }
-        };
+        let schedule = Self::schedule_to_cron(schedule)?;
         let time_offset_seconds = timezone
             .offset_from_utc_datetime(&Utc::now().naive_local())
             .fix()
@@ -264,7 +225,7 @@ impl JobLocked {
             .with_seconds_required()
             .with_dom_and_dow()
             .parse()
-            .map_err(|_| JobSchedulerError::ParseSchedule)?;
+            .map_err(|_| ParseSchedule)?;
         let job_id = Uuid::new_v4();
         Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
             data: JobStoredData {
@@ -921,6 +882,43 @@ impl JobLocked {
         match w.job_data_from_job() {
             Ok(Some(job_data)) => Ok(job_data),
             _ => Err(JobSchedulerError::GetJobData),
+        }
+    }
+
+    #[cfg(not(feature = "english"))]
+    pub fn schedule_to_cron<T: ToString>(schedule: T) -> Result<String, JobSchedulerError> {
+        Ok(schedule.to_string())
+    }
+
+    #[cfg(feature = "english")]
+    pub fn schedule_to_cron<T: ToString>(schedule: T) -> Result<String, JobSchedulerError> {
+        let schedule = schedule.to_string();
+        match Cron::new(&schedule)
+            .with_seconds_required()
+            .with_dom_and_dow()
+            .parse()
+        {
+            Ok(_) => Ok(schedule),
+            Err(_) => match english_to_cron::str_cron_syntax(&schedule) {
+                Ok(english_to_cron) => {
+                    if english_to_cron != schedule {
+                        if english_to_cron == "0 * * * * ? *" {
+                            Err(ParseSchedule)
+                        } else {
+                            // english-to-cron adds the year field which we can't put off (currently)
+                            let cron = english_to_cron
+                                .split(' ')
+                                .take(6)
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            Ok(cron)
+                        }
+                    } else {
+                        Ok(schedule)
+                    }
+                }
+                Err(_) => Err(ParseSchedule),
+            },
         }
     }
 }

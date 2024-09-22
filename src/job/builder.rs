@@ -14,7 +14,6 @@ use core::time::Duration;
 use croner::Cron;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use tracing::warn;
 
 use uuid::Uuid as UuidUuid;
 
@@ -100,28 +99,7 @@ impl<T: TimeZone> JobBuilder<T> {
     where
         TS: ToString,
     {
-        let schedule = schedule.to_string();
-        #[cfg(feature = "english")]
-        let schedule = {
-            match Cron::new(&schedule)
-                .with_seconds_required()
-                .with_dom_and_dow()
-                .parse()
-            {
-                Ok(_) => schedule,
-                Err(_) => match english_to_cron::str_cron_syntax(&schedule) {
-                    Ok(english_to_cron) => {
-                        if english_to_cron != schedule {
-                            warn!("Changing schedule [{schedule}] to [{english_to_cron}]");
-                            english_to_cron
-                        } else {
-                            schedule
-                        }
-                    }
-                    Err(_) => schedule,
-                },
-            }
-        };
+        let schedule = JobLocked::schedule_to_cron(schedule)?;
         let schedule = Cron::new(&schedule)
             .with_seconds_required()
             .with_dom_and_dow()

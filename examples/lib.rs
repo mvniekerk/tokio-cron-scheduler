@@ -186,6 +186,7 @@ pub async fn run_example(sched: &mut JobScheduler) -> Result<Vec<Uuid>, JobSched
         let english_job = JobBuilder::new()
             .with_timezone(Utc)
             .with_cron_job_type()
+            // .with_schedule("every 10 seconds")
             .with_schedule("every 10 seconds")
             .unwrap()
             .with_run_async(Box::new(|uuid, mut l| {
