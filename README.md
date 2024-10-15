@@ -25,8 +25,8 @@ Creating a schedule for a job is done using any `ToString` impl, leveraging the
 The scheduling format is as follows:
 
 ```text
-sec   min   hour   day of month   month   day of week   year
-*     *     *      *              *       *             *
+sec   min   hour   day of month   month   day of week
+*     *     *      *              *       *
 ```
 
 Time is specified for `UTC` and not your local timezone. Note that the year may
