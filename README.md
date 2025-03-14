@@ -93,7 +93,7 @@ async fn main() -> Result<(), JobSchedulerError> {
                 }
             })
         })?
-    );
+    ).await?;
 
     // Add one-shot job with given duration
     sched.add(
