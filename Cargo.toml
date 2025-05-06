@@ -26,6 +26,8 @@ prost = { version = "0.13", optional = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", optional = true }
 bytes = { version = "1", optional = true }
+
+num-traits = "0.2"
 num-derive = "0.4"
 
 [dependencies.async-nats]
