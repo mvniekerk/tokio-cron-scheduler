@@ -5,7 +5,7 @@ extern crate core;
 
 mod context;
 mod error;
-mod job;
+pub mod job;
 mod job_scheduler;
 #[cfg(feature = "nats_storage")]
 mod nats;
@@ -14,7 +14,7 @@ mod notification;
 mod postgres;
 mod scheduler;
 mod simple;
-mod store;
+pub mod store;
 
 use std::ops::Add;
 use std::time::{Duration, SystemTime};
