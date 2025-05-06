@@ -5,7 +5,8 @@ use crate::job::{JobId, NotificationId};
 use crate::nats::{sanitize_nats_key, NatsStore};
 use crate::store::{DataStore, InitStore, NotificationStore};
 use crate::{JobSchedulerError, JobUuid};
-use nats::kv::Store;
+use async_nats::jetstream::kv::Store;
+use bytes::Bytes;
 use prost::Message;
 use std::future::Future;
 use std::pin::Pin;
@@ -16,7 +17,7 @@ use uuid::Uuid;
 const LIST_NAME: &str = "TCS_NOTIFICATION_LIST";
 const NOTIFICATION_PRE: &str = "NOTIF_";
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct NatsNotificationStore {
     pub store: NatsStore,
 }
@@ -37,11 +38,12 @@ impl DataStore<NotificationData> for NatsNotificationStore {
             let r = bucket.read().await;
             let id = uuid_to_nats_id(id);
             r.get(&*id)
+                .await
                 .map_err(|e| {
                     error!("Error getting data {:?}", e);
                     JobSchedulerError::GetJobData
                 })
-                .map(|v| v.and_then(|v| NotificationData::decode(v.as_slice()).ok()))
+                .map(|v| v.and_then(|v| NotificationData::decode(v).ok()))
         })
     }
 
@@ -72,11 +74,17 @@ impl DataStore<NotificationData> for NatsNotificationStore {
             let prev = get.await;
             let uuid = uuid_to_nats_id(notification_id);
             let done = match prev {
-                Ok(Some(_)) => bucket.put(&*uuid, bytes),
-                Ok(None) => bucket.create(&*uuid, bytes),
+                Ok(Some(_)) => bucket.put(&*uuid, Bytes::from(bytes)).await.map_err(|_| ()),
+                Ok(None) => bucket
+                    .create(&*uuid, Bytes::from(bytes))
+                    .await
+                    .map_err(|_| ()),
                 Err(e) => {
                     error!("Error getting existing value {:?}, assuming does not exist and hope for the best", e);
-                    bucket.create(&*uuid, bytes)
+                    bucket
+                        .create(&*uuid, Bytes::from(bytes))
+                        .await
+                        .map_err(|_| ())
                 }
             };
             let added = add_to_list.await;
@@ -97,7 +105,7 @@ impl DataStore<NotificationData> for NatsNotificationStore {
             let bucket = bucket.read().await;
             let guid = uuid_to_nats_id(guid);
 
-            let deleted = bucket.delete(&*guid);
+            let deleted = bucket.delete(&*guid).await;
             let removed_from_list = removed_from_list.await;
 
             match (deleted, removed_from_list) {
@@ -140,19 +148,20 @@ impl NotificationStore for NatsNotificationStore {
             }
             let list_of_notification_guids = list_of_notification_guids.unwrap();
             let bucket = bucket.read().await;
-            let notification_ids = list_of_notification_guids
-                .iter()
-                .filter_map(|s| {
-                    let notification_id = *s;
-                    bucket
-                        .get(&*uuid_to_nats_id(notification_id))
-                        .ok()
-                        .flatten()
-                        .and_then(|b| NotificationData::decode(b.as_slice()).ok())
-                        .filter(|nd| nd.job_states.contains(&state))
-                        .map(|_| notification_id)
-                })
-                .collect::<Vec<_>>();
+            let mut notification_ids = vec![];
+            for notification_id in list_of_notification_guids {
+                let id = bucket
+                    .get(&*uuid_to_nats_id(notification_id))
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|b| NotificationData::decode(b).ok())
+                    .filter(|nd| nd.job_states.contains(&state))
+                    .map(|_| notification_id);
+                if let Some(id) = id {
+                    notification_ids.push(id);
+                }
+            }
             Ok(notification_ids)
         })
     }
@@ -288,6 +297,11 @@ impl NotificationStore for NatsNotificationStore {
 }
 
 impl NatsNotificationStore {
+    pub async fn default() -> Self {
+        let store = NatsStore::default().await;
+        Self { store }
+    }
+
     fn list_guids(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<ListOfJobsAndNotifications, JobSchedulerError>> + Send>>
@@ -295,15 +309,12 @@ impl NatsNotificationStore {
         let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let r = bucket.read().await;
-            let list = r.get(&*sanitize_nats_key(LIST_NAME));
+            let list = r.get(&*sanitize_nats_key(LIST_NAME)).await;
             match list {
-                Ok(Some(list)) => {
-                    let list = list.as_slice();
-                    ListOfJobsAndNotifications::decode(list).map_err(|e| {
-                        error!("Error decoding list value {:?}", e);
-                        JobSchedulerError::CantListGuids
-                    })
-                }
+                Ok(Some(list)) => ListOfJobsAndNotifications::decode(list).map_err(|e| {
+                    error!("Error decoding list value {:?}", e);
+                    JobSchedulerError::CantListGuids
+                }),
                 Ok(None) => Ok(ListOfJobsAndNotifications::default()),
                 Err(e) => {
                     error!("Error getting list of guids {:?}", e);
@@ -367,29 +378,44 @@ impl NatsNotificationStore {
             }
 
             let bucket = bucket.read().await;
-            NatsNotificationStore::update_list(bucket, list)
+            NatsNotificationStore::update_list(bucket, list).await
         })
     }
 
-    fn update_list(
-        bucket: RwLockReadGuard<Store>,
+    async fn update_list(
+        bucket: RwLockReadGuard<'_, Store>,
         list: ListOfJobsAndNotifications,
     ) -> Result<(), JobSchedulerError> {
         let has_list_already = bucket
             .get(&*sanitize_nats_key(LIST_NAME))
+            .await
             .ok()
             .flatten()
             .is_some();
         if has_list_already {
-            bucket.put(&*sanitize_nats_key(LIST_NAME), list.encode_to_vec())
+            bucket
+                .put(
+                    &*sanitize_nats_key(LIST_NAME),
+                    Bytes::from(list.encode_to_vec()),
+                )
+                .await
+                .map_err(|e| {
+                    error!("Error saving list of guids {:?}", e);
+                    JobSchedulerError::CantAdd
+                })
         } else {
-            bucket.create(&*sanitize_nats_key(LIST_NAME), list.encode_to_vec())
+            bucket
+                .create(
+                    &*sanitize_nats_key(LIST_NAME),
+                    Bytes::from(list.encode_to_vec()),
+                )
+                .await
+                .map_err(|e| {
+                    error!("Error saving list of guids {:?}", e);
+                    JobSchedulerError::CantAdd
+                })
         }
         .map(|_| ())
-        .map_err(|e| {
-            error!("Error saving list of guids {:?}", e);
-            JobSchedulerError::CantAdd
-        })
     }
 
     fn remove_from_list(
@@ -418,7 +444,7 @@ impl NatsNotificationStore {
                 return Ok(());
             }
             let bucket = bucket.read().await;
-            NatsNotificationStore::update_list(bucket, list)
+            NatsNotificationStore::update_list(bucket, list).await
         })
     }
 }

@@ -1,9 +1,9 @@
 mod metadata_store;
 mod notification_store;
 
-use nats::jetstream::JetStream;
-use nats::kv::{Config, Store};
-use nats::JetStreamOptions;
+use async_nats::jetstream::kv::{Config, Store};
+use async_nats::jetstream::Context as JetStream;
+use async_nats::ConnectOptions;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -30,8 +30,8 @@ pub struct NatsStore {
     pub bucket: Arc<RwLock<Store>>,
 }
 
-impl Default for NatsStore {
-    fn default() -> Self {
+impl NatsStore {
+    pub async fn default() -> Self {
         let nats_host =
             std::env::var("NATS_HOST").unwrap_or_else(|_| "nats://localhost".to_string());
         let nats_app = std::env::var("NATS_APP").unwrap_or_else(|_| "Unknown Nats app".to_string());
@@ -40,16 +40,20 @@ impl Default for NatsStore {
             let password = std::env::var("NATS_PASSWORD");
             match (username, password) {
                 (Ok(username), Ok(password)) => {
-                    let mut options =
-                        nats::Options::with_user_pass(&*username, &*password).with_name(&*nats_app);
+                    let mut options = ConnectOptions::new()
+                        .user_and_password(username, password)
+                        .name(&*nats_app);
                     if std::path::Path::new("/etc/runtime-certs/").exists() {
                         options = options
-                            .add_root_certificate("/etc/runtime-certs/ca.crt")
-                            .client_cert("/etc/runtime-certs/tls.crt", "/etc/runtime-certs/tls.key")
+                            .add_root_certificates("/etc/runtime-certs/ca.crt".into())
+                            .add_client_certificate(
+                                "/etc/runtime-certs/tls.crt".into(),
+                                "/etc/runtime-certs/tls.key".into(),
+                            )
                     }
-                    options.connect(&*nats_host)
+                    options.connect(&*nats_host).await
                 }
-                _ => nats::connect(&*nats_host),
+                _ => async_nats::connect(&*nats_host).await,
             }
         }
         .unwrap();
@@ -58,14 +62,15 @@ impl Default for NatsStore {
         let bucket_name = sanitize_nats_bucket(&bucket_name);
         let bucket_description = std::env::var("NATS_BUCKET_DESCRIPTION")
             .unwrap_or_else(|_| "Tokio Cron Scheduler".to_string());
-        let context = nats::jetstream::new(connection);
+        let context = async_nats::jetstream::new(connection);
         let bucket = context
-            .create_key_value(&Config {
+            .create_key_value(Config {
                 bucket: bucket_name.clone(),
                 description: bucket_description,
                 history: 1,
                 ..Default::default()
             })
+            .await
             .unwrap();
         let context = Arc::new(RwLock::new(context));
         let bucket = Arc::new(RwLock::new(bucket));
@@ -93,7 +98,6 @@ pub struct NatsStoreBuilder {
     pub app_name: Option<String>,
     pub bucket: Option<String>,
     pub bucket_description: Option<String>,
-    pub api_prefix: Option<String>,
 }
 
 impl NatsStoreBuilder {
@@ -128,7 +132,7 @@ impl NatsStoreBuilder {
     }
 
     /// Build a NatsStore
-    pub fn build(self) -> Result<NatsStore, JobSchedulerError> {
+    pub async fn build(self) -> Result<NatsStore, JobSchedulerError> {
         let NatsStoreBuilder {
             username,
             password,
@@ -136,40 +140,41 @@ impl NatsStoreBuilder {
             app_name,
             bucket,
             bucket_description,
-            api_prefix,
         } = self;
         let host = host.ok_or_else(|| JobSchedulerError::BuilderNeedsField("host".to_string()))?;
         let bucket =
             bucket.ok_or_else(|| JobSchedulerError::BuilderNeedsField("bucket".to_string()))?;
         let bucket_name = sanitize_nats_bucket(&*bucket);
-        let api_prefix = sanitize_nats_bucket(&*api_prefix.unwrap_or_else(|| "tcs".to_string()));
 
         let connection = {
             let options = {
                 let mut options = match (username, password) {
                     (Some(username), Some(password)) => {
-                        Ok(nats::Options::with_user_pass(&*username, &*password))
+                        Ok(ConnectOptions::new().user_and_password(username, password))
                     }
-                    (None, None) => Ok(nats::Options::new()),
+                    (None, None) => Ok(ConnectOptions::new()),
                     _ => Err(JobSchedulerError::BuilderNeedsField(
                         "username and password both be set".to_string(),
                     )),
                 }?;
                 if std::path::Path::new("/etc/runtime-certs/").exists() {
                     options = options
-                        .add_root_certificate("/etc/runtime-certs/ca.crt")
-                        .client_cert("/etc/runtime-certs/tls.crt", "/etc/runtime-certs/tls.key")
+                        .add_root_certificates("/etc/runtime-certs/ca.crt".into())
+                        .add_client_certificate(
+                            "/etc/runtime-certs/tls.crt".into(),
+                            "/etc/runtime-certs/tls.key".into(),
+                        )
                 }
                 if let Some(app_name) = app_name {
-                    options = options.with_name(&*app_name);
+                    options = options.name(&*app_name);
                 }
                 options
             };
-            options.connect(&*host)
+            options.connect(&*host).await
         }
         .map_err(|e| JobSchedulerError::NatsCouldNotConnect(e.to_string()))?;
 
-        let context = JetStream::new(connection, JetStreamOptions::new().api_prefix(api_prefix));
+        let mut context = async_nats::jetstream::new(connection);
         let mut bucket_config = Config {
             bucket: bucket_name.clone(),
             history: 1,
@@ -182,7 +187,8 @@ impl NatsStoreBuilder {
             };
         }
         let bucket = context
-            .create_key_value(&bucket_config)
+            .create_key_value(bucket_config)
+            .await
             .map_err(|e| JobSchedulerError::NatsCouldNotCreateKvStore(e.to_string()))?;
         let context = Arc::new(RwLock::new(context));
         let bucket = Arc::new(RwLock::new(bucket));

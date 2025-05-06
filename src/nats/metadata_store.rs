@@ -2,8 +2,9 @@ use crate::job::job_data_prost::ListOfUuids;
 use crate::nats::{sanitize_nats_key, NatsStore};
 use crate::store::{DataStore, InitStore, MetaDataStorage};
 use crate::{JobAndNextTick, JobSchedulerError, JobStoredData, JobUuid};
+use async_nats::jetstream::kv::Store;
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use nats::kv::Store;
 use prost::Message;
 use std::future::Future;
 use std::pin::Pin;
@@ -17,7 +18,7 @@ const METADATA_PRE: &str = "META_";
 
 ///
 /// A Nats KV store backed metadata store
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct NatsMetadataStore {
     pub store: NatsStore,
 }
@@ -38,11 +39,12 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
             let r = bucket.read().await;
             let id = uuid_to_nats_id(id);
             r.get(&*id)
+                .await
                 .map_err(|e| {
                     error!("Error getting data {:?}", e);
                     JobSchedulerError::GetJobData
                 })
-                .map(|v| v.and_then(|v| JobStoredData::decode(v.as_slice()).ok()))
+                .map(|v| v.and_then(|v| JobStoredData::decode(v).ok()))
         })
     }
 
@@ -60,11 +62,17 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
             let prev = get.await;
             let uuid = uuid_to_nats_id(uuid);
             let done = match prev {
-                Ok(Some(_)) => bucket.put(&*uuid, bytes),
-                Ok(None) => bucket.create(&*uuid, bytes),
+                Ok(Some(_)) => bucket.put(&*uuid, Bytes::from(bytes)).await.map_err(|_| ()),
+                Ok(None) => bucket
+                    .create(&*uuid, Bytes::from(bytes))
+                    .await
+                    .map_err(|_| ()),
                 Err(e) => {
                     error!("Error getting existing value {:?}, assuming does not exist and hope for the best", e);
-                    bucket.create(&*uuid, bytes)
+                    bucket
+                        .create(&*uuid, Bytes::from(bytes))
+                        .await
+                        .map_err(|_| ())
                 }
             };
             let added = add_to_list.await;
@@ -85,7 +93,7 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
             let bucket = bucket.read().await;
             let guid = uuid_to_nats_id(guid);
 
-            let deleted = bucket.delete(&*guid);
+            let deleted = bucket.delete(&*guid).await;
             let removed_from_list = removed_from_list.await;
 
             match (deleted, removed_from_list) {
@@ -125,24 +133,26 @@ impl MetaDataStorage for NatsMetadataStore {
             }
             let list = list.unwrap();
             let bucket = bucket.read().await;
-            let list = list
-                .uuids
-                .iter()
-                .map(|uuid| {
-                    let uuid: Uuid = uuid.into();
-                    uuid
-                })
-                .flat_map(|uuid| bucket.get(&*uuid_to_nats_id(uuid)))
-                .flatten()
-                .flat_map(|buf| JobStoredData::decode(buf.as_slice()))
-                .map(|jd| JobAndNextTick {
-                    id: jd.id,
-                    job_type: jd.job_type,
-                    next_tick: jd.next_tick,
-                    last_tick: jd.last_tick,
-                })
-                .collect::<Vec<_>>();
-            Ok(list)
+            let mut ret = vec![];
+            for uuid in list.uuids {
+                let uuid: Uuid = uuid.into();
+                let jd = bucket
+                    .get(&*uuid_to_nats_id(uuid))
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|buf| JobStoredData::decode(buf).ok())
+                    .flatten();
+                if let Some(jd) = jd {
+                    ret.push(JobAndNextTick {
+                        id: jd.id,
+                        job_type: jd.job_type,
+                        next_tick: jd.next_tick,
+                        last_tick: jd.last_tick,
+                    });
+                }
+            }
+            Ok(ret)
         })
     }
 
@@ -166,7 +176,8 @@ impl MetaDataStorage for NatsMetadataStore {
                     let bytes = val.encode_to_vec();
                     let bucket = bucket.read().await;
                     bucket
-                        .put(&*uuid_to_nats_id(guid), bytes)
+                        .put(&*uuid_to_nats_id(guid), Bytes::from(bytes))
+                        .await
                         .map(|_| ())
                         .map_err(|e| {
                             error!("Error updating value {:?}", e);
@@ -200,16 +211,22 @@ impl MetaDataStorage for NatsMetadataStore {
             let bucket = bucket.read().await;
             let now = Utc::now();
             let now = now.timestamp() as u64;
-            let ret = list
-                .uuids
+            let mut jd_list = vec![];
+            for uuid in list.uuids {
+                let uuid: Uuid = uuid.into();
+                let jd = bucket
+                    .get(&*uuid_to_nats_id(uuid))
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|b| JobStoredData::decode(b).ok())
+                    .flatten();
+                if let Some(jd) = jd {
+                    jd_list.push(jd);
+                }
+            }
+            let ret = jd_list
                 .iter()
-                .map(|uuid| {
-                    let uuid: Uuid = uuid.into();
-                    uuid
-                })
-                .flat_map(|uuid| bucket.get(&*uuid_to_nats_id(uuid)))
-                .flatten()
-                .flat_map(|b| JobStoredData::decode(b.as_slice()))
                 .filter_map(|jd| match jd.next_tick {
                     0 => None,
                     i => {
@@ -229,15 +246,20 @@ impl MetaDataStorage for NatsMetadataStore {
 }
 
 impl NatsMetadataStore {
+    pub async fn default() -> Self {
+        let store = NatsStore::default().await;
+        Self { store }
+    }
+
     fn list_guids(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<ListOfUuids, JobSchedulerError>> + Send>> {
         let bucket = self.store.bucket.clone();
         Box::pin(async move {
             let r = bucket.read().await;
-            let list = r.get(&*sanitize_nats_key(LIST_NAME));
+            let list = r.get(&*sanitize_nats_key(LIST_NAME)).await;
             match list {
-                Ok(Some(list)) => ListOfUuids::decode(list.as_slice()).map_err(|e| {
+                Ok(Some(list)) => ListOfUuids::decode(list).map_err(|e| {
                     error!("Error decoding list value {:?}", e);
                     JobSchedulerError::CantListGuids
                 }),
@@ -272,29 +294,44 @@ impl NatsMetadataStore {
             list.uuids.push(uuid);
 
             let bucket = bucket.read().await;
-            NatsMetadataStore::update_list(bucket, list)
+            NatsMetadataStore::update_list(bucket, list).await
         })
     }
 
-    fn update_list(
-        bucket: RwLockReadGuard<Store>,
+    async fn update_list(
+        bucket: RwLockReadGuard<'_, Store>,
         list: ListOfUuids,
     ) -> Result<(), JobSchedulerError> {
         let has_list_already = bucket
             .get(&*sanitize_nats_key(LIST_NAME))
+            .await
             .ok()
             .flatten()
             .is_some();
         if has_list_already {
-            bucket.put(&*sanitize_nats_key(LIST_NAME), list.encode_to_vec())
+            bucket
+                .put(
+                    &*sanitize_nats_key(LIST_NAME),
+                    Bytes::from(list.encode_to_vec()),
+                )
+                .await
+                .map_err(|e| {
+                    error!("Error saving list of guids {:?}", e);
+                    JobSchedulerError::CantAdd
+                })
         } else {
-            bucket.create(&*sanitize_nats_key(LIST_NAME), list.encode_to_vec())
+            bucket
+                .create(
+                    &*sanitize_nats_key(LIST_NAME),
+                    Bytes::from(list.encode_to_vec()),
+                )
+                .await
+                .map_err(|e| {
+                    error!("Error saving list of guids {:?}", e);
+                    JobSchedulerError::CantAdd
+                })
         }
         .map(|_| ())
-        .map_err(|e| {
-            error!("Error saving list of guids {:?}", e);
-            JobSchedulerError::CantAdd
-        })
     }
 
     fn remove_from_list(
@@ -319,7 +356,7 @@ impl NatsMetadataStore {
                 v != uuid
             });
             let bucket = bucket.read().await;
-            NatsMetadataStore::update_list(bucket, list)
+            NatsMetadataStore::update_list(bucket, list).await
         })
     }
 }

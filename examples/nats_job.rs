@@ -16,8 +16,8 @@ async fn main() {
 
     info!("Remember to have a running Nats instance to connect to. For example:\n");
     info!("docker run --rm -it -p 4222:4222 -p 6222:6222 -p 7222:7222 -p 8222:8222 nats -js -DV");
-    let metadata_storage = Box::new(NatsMetadataStore::default());
-    let notification_storage = Box::new(NatsNotificationStore::default());
+    let metadata_storage = Box::new(NatsMetadataStore::default().await);
+    let notification_storage = Box::new(NatsNotificationStore::default().await);
 
     let simple_job_code = Box::new(SimpleJobCode::default());
     let simple_notification_code = Box::new(SimpleNotificationCode::default());
