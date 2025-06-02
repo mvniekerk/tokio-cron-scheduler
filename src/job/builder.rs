@@ -166,14 +166,6 @@ impl<T: TimeZone> JobBuilder<T> {
                 }
                 let schedule = self.schedule.unwrap();
 
-                let time_offset_seconds = if let Some(tz) = self.timezone.as_ref() {
-                    tz.offset_from_utc_datetime(&Utc::now().naive_local())
-                        .fix()
-                        .local_minus_utc()
-                } else {
-                    0
-                };
-
                 Ok(JobLocked(Arc::new(RwLock::new(Box::new(CronJob {
                     data: JobStoredData {
                         id: self.job_id.or(Some(UuidUuid::new_v4().into())),
@@ -206,7 +198,7 @@ impl<T: TimeZone> JobBuilder<T> {
                         job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                             schedule: schedule.pattern.to_string(),
                         })),
-                        time_offset_seconds,
+                        timezone: chrono_tz::Tz::UTC,
                     },
                     run: run.unwrap_or(Box::new(nop)),
                     run_async: run_async.unwrap_or(Box::new(nop_async)),

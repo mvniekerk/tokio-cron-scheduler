@@ -20,6 +20,7 @@ categories = ["date-and-time"]
 tokio = { version = "1", features = ["time", "rt", "sync"] }
 croner = "2.0.5"
 chrono = { version = "0.4", default-features = false }
+chrono-tz = { version = "0.10" }
 english-to-cron = { version = "0.1", optional = true }
 uuid = { version = "1", features = ["v4"] }
 prost = { version = "0.13", optional = true }
@@ -51,7 +52,6 @@ features = ["with-uuid-1"]
 [dev-dependencies]
 anyhow = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-chrono-tz = { version = "0.8.5" }
 
 [build-dependencies]
 prost-build = { version = "0.13", optional = true }

@@ -1,3 +1,6 @@
+use chrono::{TimeZone, Utc, Offset};
+use chrono_tz::OffsetComponents;
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct CronJob {
     pub schedule: String,
@@ -24,7 +27,8 @@ pub struct JobStoredData {
     pub ran: bool,
     pub stopped: bool,
     pub job: ::core::option::Option<job_stored_data::Job>,
-    pub time_offset_seconds: i32,
+    /// Default is UTC
+    pub timezone: chrono_tz::Tz,
 }
 
 /// Nested message and enum types in `JobStoredData`.
@@ -128,5 +132,12 @@ impl From<JobType> for i32 {
 impl JobStoredData {
     pub fn job_type(&self) -> JobType {
         JobType::from_i32(self.job_type).unwrap()
+    }
+
+    pub fn time_offset_seconds(&self) -> i32 {
+        self.timezone
+            .offset_from_utc_datetime(&Utc::now().naive_local())
+            .dst_offset()
+            .num_seconds() as i32
     }
 }

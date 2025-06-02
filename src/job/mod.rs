@@ -122,13 +122,9 @@ impl JobLocked {
         T: 'static,
         T: FnMut(Uuid, JobsSchedulerLocked) + Send + Sync,
         S: ToString,
-        TZ: TimeZone,
+        TZ: TimeZone + ToString,
     {
         let schedule = Self::schedule_to_cron(schedule)?;
-        let time_offset_seconds = timezone
-            .offset_from_utc_datetime(&Utc::now().naive_local())
-            .fix()
-            .local_minus_utc();
         let schedule = Cron::new(&schedule)
             .with_seconds_required()
             .with_dom_and_dow()
@@ -160,7 +156,7 @@ impl JobLocked {
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                     schedule: schedule.pattern.to_string(),
                 })),
-                time_offset_seconds,
+                timezone: timezone_to_tz(&timezone),
             },
             run: Box::new(run),
             run_async: Box::new(nop_async),
@@ -214,13 +210,9 @@ impl JobLocked {
             + Send
             + Sync,
         S: ToString,
-        TZ: TimeZone,
+        TZ: TimeZone + ToString,
     {
         let schedule = Self::schedule_to_cron(schedule)?;
-        let time_offset_seconds = timezone
-            .offset_from_utc_datetime(&Utc::now().naive_local())
-            .fix()
-            .local_minus_utc();
         let schedule = Cron::new(&schedule)
             .with_seconds_required()
             .with_dom_and_dow()
@@ -252,7 +244,7 @@ impl JobLocked {
                 job: Some(job_data::job_stored_data::Job::CronJob(job_data::CronJob {
                     schedule: schedule.pattern.to_string(),
                 })),
-                time_offset_seconds,
+                timezone: timezone_to_tz(&timezone),
             },
             run: Box::new(nop),
             run_async: Box::new(run),
@@ -327,7 +319,7 @@ impl JobLocked {
             + Send
             + Sync,
         S: ToString,
-        TZ: TimeZone,
+        TZ: TimeZone + ToString,
     {
         JobLocked::new_async_tz(schedule, timezone, run)
     }
@@ -371,7 +363,7 @@ impl JobLocked {
                         repeated_every: duration.as_secs(),
                     },
                 )),
-                time_offset_seconds: 0,
+                timezone: chrono_tz::Tz::UTC,
             },
         };
 
@@ -470,7 +462,7 @@ impl JobLocked {
                         repeated_every: instant.duration_since(Instant::now()).as_secs(),
                     },
                 )),
-                time_offset_seconds: 0,
+                timezone: chrono_tz::Tz::UTC,
             },
         };
 
@@ -565,7 +557,7 @@ impl JobLocked {
                         repeated_every: duration.as_secs(),
                     },
                 )),
-                time_offset_seconds: 0,
+                timezone: chrono_tz::Tz::UTC,
             },
         };
 
@@ -921,4 +913,10 @@ impl JobLocked {
             },
         }
     }
+}
+
+fn timezone_to_tz<TZ: TimeZone + ToString>(timezone: &TZ) -> chrono_tz::Tz {
+    // Try to parse the timezone string representation into chrono_tz::Tz
+    let tz_str = timezone.to_string();
+    tz_str.parse().unwrap_or(chrono_tz::Tz::UTC)
 }

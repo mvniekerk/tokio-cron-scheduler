@@ -179,17 +179,13 @@ impl Scheduler {
                         let next_and_last_tick = match job {
                             Ok(Some(job)) => {
                                 let job_type: JobType = JobType::from_i32(job.job_type).unwrap();
-                                let schedule = job.schedule();
-                                let fixed_offset = FixedOffset::east_opt(job.time_offset_seconds)
-                                    .unwrap_or(FixedOffset::east_opt(0).unwrap());
-                                let now = now.with_timezone(&fixed_offset);
+                                let now = now.with_timezone(&job.timezone);
                                 let repeated_every = job.repeated_every();
-                                let next_tick = job
-                                    .next_tick_utc()
-                                    .map(|nt| nt.with_timezone(&fixed_offset));
+                                let next_tick =
+                                    job.next_tick_utc().map(|nt| nt.with_timezone(&job.timezone));
                                 let next_tick = match job_type {
                                     JobType::Cron => {
-                                        schedule.and_then(|s| s.iter_after(now).next())
+                                        job.schedule().and_then(|s| s.iter_after(now).next())
                                     }
                                     JobType::OneShot => None,
                                     JobType::Repeated => repeated_every.and_then(|r| {
