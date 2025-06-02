@@ -121,6 +121,6 @@ impl Job for CronJob {
     }
 
     fn fixed_offset_west(&self) -> i32 {
-        self.data.time_offset_seconds
+        self.data.time_offset_seconds()
     }
 }
