@@ -1,6 +1,6 @@
 [package]
 name = "tokio-cron-scheduler"
-version = "0.14.0"
+version = "0.15.0"
 authors = ["Michael van Niekerk <mike@agri-io.co.za>"]
 edition = "2024"
 
