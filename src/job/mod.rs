@@ -4,7 +4,7 @@ use crate::job::job_data::{JobState, JobType};
 use crate::job::job_data_prost::{JobState, JobType};
 use crate::job_scheduler::JobsSchedulerLocked;
 use crate::{JobScheduler, JobSchedulerError, JobStoredData};
-use chrono::{DateTime, Offset, TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use cron_job::CronJob;
 use croner::Cron;
 use non_cron_job::NonCronJob;

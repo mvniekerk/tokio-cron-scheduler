@@ -9,7 +9,7 @@ use crate::job::job_data_prost;
 pub use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
 use crate::job::{nop, nop_async, JobLocked};
 use crate::{JobSchedulerError, JobToRun, JobToRunAsync};
-use chrono::{Offset, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 use core::time::Duration;
 use croner::Cron;
 use std::sync::{Arc, RwLock};
@@ -42,6 +42,12 @@ impl JobBuilder<Utc> {
             repeating: None,
             instant: None,
         }
+    }
+}
+
+impl Default for JobBuilder<Utc> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

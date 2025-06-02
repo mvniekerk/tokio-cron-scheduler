@@ -4,7 +4,7 @@ use crate::job::job_data::{JobState, JobType};
 #[cfg(feature = "has_bytes")]
 use crate::job::job_data_prost::{JobState, JobType};
 use crate::JobSchedulerError;
-use chrono::{FixedOffset, Utc};
+use chrono::Utc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -75,11 +75,7 @@ impl Scheduler {
                 }
             }
             'next_tick: loop {
-                let shutdown = {
-                    let r = shutdown.load(Ordering::Relaxed);
-                    r
-                };
-                if shutdown {
+                if shutdown.load(Ordering::Relaxed) {
                     break 'next_tick;
                 }
                 tokio::time::sleep(Duration::from_millis(500)).await;
