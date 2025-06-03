@@ -2,7 +2,7 @@
 name = "tokio-cron-scheduler"
 version = "0.14.0"
 authors = ["Michael van Niekerk <mike@agri-io.co.za>"]
-edition = "2018"
+edition = "2024"
 
 documentation = "https://docs.rs/tokio_cron_scheduler/"
 repository = "https://github.com/mvniekerk/tokio-cron-scheduler"
