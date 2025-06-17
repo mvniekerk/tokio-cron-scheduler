@@ -1,4 +1,5 @@
 use chrono::{Utc, Offset};
+use croner::Cron;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct CronJob {
@@ -28,6 +29,7 @@ pub struct JobStoredData {
     pub job: ::core::option::Option<job_stored_data::Job>,
     /// Default is UTC
     pub timezone: chrono_tz::Tz,
+    pub schedule: String,
 }
 
 /// Nested message and enum types in `JobStoredData`.
@@ -144,5 +146,33 @@ impl JobStoredData {
         // Calculate the total offset from UTC for that specific time
         // This will be different during DST transitions
         scheduled_time_local.offset().fix().local_minus_utc()
+    }
+    
+    pub fn set_timezone(&mut self, timezone: chrono_tz::Tz) {
+        self.timezone = timezone;
+        let schedule = Cron::new(&self.schedule)
+            .with_seconds_required()
+            .with_dom_and_dow()
+            .parse()
+            .unwrap();
+        
+        // Get current time in the target timezone
+        let now = Utc::now().with_timezone(&timezone);
+        
+        // Calculate next tick in the target timezone
+        let next_tick = schedule
+            .iter_from(now)
+            .next()
+            .map(|t| {
+                // Convert the timezone-specific time to UTC timestamp
+                // This ensures proper comparison with Utc::now() later
+                t.timestamp() as u64
+            })
+            .unwrap_or(0);
+
+        // Log the next tick time for debugging
+        println!("Next tick for job {}", next_tick);
+            
+        self.next_tick = next_tick;
     }
 }

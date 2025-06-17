@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use tokio_cron_scheduler::job::job_data::*;
+    use tokio_cron_scheduler::{job::job_data::*, Job, JobScheduler};
     use chrono::{TimeZone, Utc};
     use chrono_tz::Tz;
     use croner::Cron;
@@ -19,9 +19,10 @@ mod tests {
             ran: false,
             stopped: false,
             job: Some(job_stored_data::Job::CronJob(CronJob {
-                schedule: "0 0 12 * * *".to_string(), // Daily at noon
+                schedule: "0 30 9 * * *".to_string(), // Daily at 9:30 AM
             })),
             timezone,
+            schedule: "0 30 9 * * *".to_string(),
         }
     }
 
@@ -320,5 +321,113 @@ mod tests {
         
         // Verify they're different
         assert_ne!(first_offset, second_offset, "Same local time, different offsets during fall back");
+    }
+
+    #[tokio::test]
+    async fn test_timezone_scheduling() {
+        // Create scheduler
+        let mut scheduler = JobScheduler::new().await.unwrap();
+        
+        // Create job with Prague timezone
+        let mut job = Job::new_cron_job_async_tz("0 30 10 * * *", Tz::Europe__Prague, |_uuid, _jobs| {
+            Box::pin(async move {
+                println!("Job executed!");
+            })
+        }).unwrap();
+        
+        // Set timezone explicitly (this should recalculate next_tick)
+        job.job_data().unwrap().set_timezone(Tz::Europe__Prague);
+        
+        // Add job and start scheduler
+        let prague_job_id = scheduler.add(job.clone()).await.unwrap();
+        scheduler.start().await.unwrap();
+        
+        // Check time till next job for Prague timezone
+        let prague_time = scheduler.time_till_next_job().await.unwrap();
+        println!("Prague timezone - Time till next job: {:?}", prague_time);
+        
+        // Verify Prague time is reasonable (should be around 23+ hours for 10:30 AM next day)
+        assert!(prague_time.is_some());
+        let prague_seconds = prague_time.unwrap().as_secs();
+        assert!(prague_seconds > 80000 && prague_seconds < 90000, 
+               "Prague time should be around 23+ hours, got: {}s", prague_seconds);
+        
+        // Remove Prague job
+        scheduler.remove(&prague_job_id).await.unwrap();
+        
+        // Verify no jobs scheduled
+        let no_jobs_time = scheduler.time_till_next_job().await.unwrap();
+        assert!(no_jobs_time.is_none(), "Should have no jobs scheduled");
+        
+        // Create job with America/Adak timezone by modifying existing job
+        let mut job_data = job.job_data().unwrap();
+        job_data.set_timezone(Tz::America__Adak);
+        job.set_job_data(job_data).unwrap();
+        
+        // Add Adak job
+        let adak_job_id = scheduler.add(job.clone()).await.unwrap();
+        
+        // Check time till next job for America/Adak timezone
+        let adak_time = scheduler.time_till_next_job().await.unwrap();
+        println!("America/Adak timezone - Time till next job: {:?}", adak_time);
+        
+        // Verify Adak time is reasonable
+        assert!(adak_time.is_some());
+        let adak_seconds = adak_time.unwrap().as_secs();
+        
+        // The key test: Adak should have significantly less time than Prague
+        // if we're in a timezone where Adak 10:30 AM comes before Prague 10:30 AM
+        // This depends on current time, but generally Adak should be much sooner
+        println!("Prague: {}s, Adak: {}s", prague_seconds, adak_seconds);
+        
+        // The times should be different (demonstrating timezone calculations work)
+        assert_ne!(prague_seconds, adak_seconds, 
+                  "Prague and Adak times should be different due to timezone differences");
+        
+        // Clean up
+        scheduler.remove(&adak_job_id).await.unwrap();
+    }
+    
+    #[tokio::test] 
+    async fn test_timezone_next_tick_calculation() {
+        // Test that set_timezone correctly calculates different next_tick values
+        let mut job1 = Job::new_cron_job_async_tz("0 30 10 * * *", Tz::UTC, |_uuid, _jobs| {
+            Box::pin(async move {})
+        }).unwrap();
+        
+        let mut job2 = Job::new_cron_job_async_tz("0 30 10 * * *", Tz::UTC, |_uuid, _jobs| {
+            Box::pin(async move {})
+        }).unwrap();
+        
+        // Set different timezones and update job data
+        let mut job1_data = job1.job_data().unwrap();
+        job1_data.set_timezone(Tz::Europe__Prague);
+        job1.set_job_data(job1_data).unwrap();
+        
+        let mut job2_data = job2.job_data().unwrap();
+        job2_data.set_timezone(Tz::America__Adak);
+        job2.set_job_data(job2_data).unwrap();
+        
+        // Get the next_tick values
+        let prague_next_tick = job1.job_data().unwrap().next_tick;
+        let adak_next_tick = job2.job_data().unwrap().next_tick;
+        
+        println!("Prague next_tick: {}", prague_next_tick);
+        println!("Adak next_tick: {}", adak_next_tick);
+        
+        // They should be different due to timezone differences
+        assert_ne!(prague_next_tick, adak_next_tick, 
+                  "Different timezones should produce different next_tick values");
+        
+        // The difference should be reasonable (timezone offset related)
+        let diff = if prague_next_tick > adak_next_tick {
+            prague_next_tick - adak_next_tick
+        } else {
+            adak_next_tick - prague_next_tick
+        };
+        
+        // Difference should be less than 24 hours (86400 seconds) but more than 1 hour (3600 seconds)
+        assert!(diff > 3600 && diff < 86400, 
+               "Timezone difference should be reasonable, got: {} seconds", diff);
     }
 }

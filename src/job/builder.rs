@@ -205,6 +205,7 @@ impl<T: TimeZone> JobBuilder<T> {
                             schedule: schedule.pattern.to_string(),
                         })),
                         timezone: chrono_tz::Tz::UTC,
+                        schedule: schedule.pattern.to_string(),
                     },
                     run: run.unwrap_or(Box::new(nop)),
                     run_async: run_async.unwrap_or(Box::new(nop_async)),

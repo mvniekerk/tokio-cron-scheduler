@@ -157,6 +157,7 @@ impl JobLocked {
                     schedule: schedule.pattern.to_string(),
                 })),
                 timezone: timezone_to_tz(&timezone),
+                schedule: schedule.pattern.to_string(),
             },
             run: Box::new(run),
             run_async: Box::new(nop_async),
@@ -245,6 +246,7 @@ impl JobLocked {
                     schedule: schedule.pattern.to_string(),
                 })),
                 timezone: timezone_to_tz(&timezone),
+                schedule: schedule.pattern.to_string(),
             },
             run: Box::new(nop),
             run_async: Box::new(run),
@@ -364,6 +366,7 @@ impl JobLocked {
                     },
                 )),
                 timezone: chrono_tz::Tz::UTC,
+                schedule: String::default(),
             },
         };
 
@@ -463,6 +466,7 @@ impl JobLocked {
                     },
                 )),
                 timezone: chrono_tz::Tz::UTC,
+                schedule: String::default(),
             },
         };
 
@@ -558,6 +562,7 @@ impl JobLocked {
                     },
                 )),
                 timezone: chrono_tz::Tz::UTC,
+                schedule: String::default(),
             },
         };
 
