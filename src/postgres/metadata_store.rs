@@ -3,6 +3,7 @@ use crate::postgres::PostgresStore;
 use crate::store::{DataStore, InitStore, MetaDataStorage};
 use crate::{JobAndNextTick, JobSchedulerError, JobStoredData, JobUuid};
 use chrono::{DateTime, Utc};
+use std::convert::TryFrom;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -212,7 +213,7 @@ impl From<Row> for JobStoredData {
             use crate::job::job_data_prost::job_stored_data::Job::CronJob as CronJobType;
             use crate::job::job_data_prost::job_stored_data::Job::NonCronJob as NonCronJobType;
 
-            let job_type = JobType::from_i32(job_type);
+            let job_type = JobType::try_from(job_type).ok();
             match job_type {
                 Some(JobType::Cron) => match row.try_get(8) {
                     Ok(schedule) => Some(CronJobType(CronJob { schedule })),

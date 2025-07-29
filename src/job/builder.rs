@@ -13,7 +13,6 @@ use chrono::{Offset, TimeZone, Utc};
 use core::time::Duration;
 use croner::parser::CronParser;
 use croner::Cron;
-use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
