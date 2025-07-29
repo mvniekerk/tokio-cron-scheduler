@@ -24,6 +24,7 @@ use crate::job::job_data::ListOfUuids;
 #[cfg(feature = "has_bytes")]
 use crate::job::job_data_prost::ListOfUuids;
 use chrono::{DateTime, Utc};
+use croner::parser::CronParser;
 use croner::Cron;
 #[cfg(not(feature = "has_bytes"))]
 use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
@@ -121,10 +122,11 @@ impl JobStoredData {
                 _ => None,
             })
             .and_then(|s| {
-                Cron::new(s)
-                    .with_seconds_required()
-                    .with_dom_and_dow()
-                    .parse()
+                CronParser::builder()
+                    .seconds(croner::parser::Seconds::Required)
+                    .dom_and_dow(true)
+                    .build()
+                    .parse(s)
                     .ok()
             })
     }

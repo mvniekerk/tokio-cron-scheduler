@@ -18,7 +18,7 @@ categories = ["date-and-time"]
 
 [dependencies]
 tokio = { version = "1", features = ["time", "rt", "sync"] }
-croner = "2.0.5"
+croner = "3.0.0"
 chrono = { version = "0.4", default-features = false }
 english-to-cron = { version = "0.1", optional = true }
 uuid = { version = "1", features = ["v4"] }
@@ -87,6 +87,3 @@ required-features = ["nats_storage", "tracing-subscriber"]
 name = "postgres"
 path = "examples/postgres_job.rs"
 required-features = ["postgres_storage", "tracing-subscriber"]
-
-
-

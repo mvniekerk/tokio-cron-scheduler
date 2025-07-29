@@ -6,6 +6,7 @@ use crate::job_scheduler::JobsSchedulerLocked;
 use crate::{JobScheduler, JobSchedulerError, JobStoredData};
 use chrono::{DateTime, Offset, TimeZone, Utc};
 use cron_job::CronJob;
+use croner::parser::CronParser;
 use croner::Cron;
 use non_cron_job::NonCronJob;
 use std::future::Future;
@@ -129,11 +130,12 @@ impl JobLocked {
             .offset_from_utc_datetime(&Utc::now().naive_local())
             .fix()
             .local_minus_utc();
-        let schedule = Cron::new(&schedule)
-            .with_seconds_required()
-            .with_dom_and_dow()
-            .parse()
-            .map_err(|_| ParseSchedule)?;
+        let schedule = CronParser::builder()
+            .seconds(croner::parser::Seconds::Required)
+            .dom_and_dow(true)
+            .build()
+            .parse(&schedule)
+            .map_err(|_| JobSchedulerError::ParseSchedule)?;
         let job_id = Uuid::new_v4();
         Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
             data: JobStoredData {
@@ -141,9 +143,9 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .iter_from(Utc::now().with_timezone(&timezone))
+                    .iter_after(Utc::now())
                     .next()
-                    .map(|t| t.timestamp() as u64)
+                    .map(|utc_time| utc_time.with_timezone(&timezone).timestamp() as u64)
                     .unwrap_or(0),
                 job_type: JobType::Cron.into(),
                 count: 0,
@@ -221,11 +223,13 @@ impl JobLocked {
             .offset_from_utc_datetime(&Utc::now().naive_local())
             .fix()
             .local_minus_utc();
-        let schedule = Cron::new(&schedule)
-            .with_seconds_required()
-            .with_dom_and_dow()
-            .parse()
-            .map_err(|_| ParseSchedule)?;
+        let schedule = CronParser::builder()
+            .seconds(croner::parser::Seconds::Required)
+            .dom_and_dow(true)
+            .build()
+            .parse(&schedule)
+            .map_err(|_| JobSchedulerError::ParseSchedule)?;
+
         let job_id = Uuid::new_v4();
         Ok(Self(Arc::new(RwLock::new(Box::new(CronJob {
             data: JobStoredData {
@@ -233,9 +237,9 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .iter_from(Utc::now().with_timezone(&timezone))
+                    .iter_after(Utc::now())
                     .next()
-                    .map(|t| t.timestamp() as u64)
+                    .map(|utc_time| utc_time.with_timezone(&timezone).timestamp() as u64)
                     .unwrap_or(0),
                 job_type: JobType::Cron.into(),
                 count: 0,
@@ -893,10 +897,11 @@ impl JobLocked {
     #[cfg(feature = "english")]
     pub fn schedule_to_cron<T: ToString>(schedule: T) -> Result<String, JobSchedulerError> {
         let schedule = schedule.to_string();
-        match Cron::new(&schedule)
-            .with_seconds_required()
-            .with_dom_and_dow()
-            .parse()
+        match CronParser::builder()
+            .seconds(croner::parser::Seconds::Required)
+            .dom_and_dow(true)
+            .build()
+            .parse(&schedule)
         {
             Ok(_) => Ok(schedule),
             Err(_) => match english_to_cron::str_cron_syntax(&schedule) {

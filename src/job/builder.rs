@@ -11,7 +11,9 @@ use crate::job::{nop, nop_async, JobLocked};
 use crate::{JobSchedulerError, JobToRun, JobToRunAsync};
 use chrono::{Offset, TimeZone, Utc};
 use core::time::Duration;
+use croner::parser::CronParser;
 use croner::Cron;
+use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -100,11 +102,12 @@ impl<T: TimeZone> JobBuilder<T> {
         TS: ToString,
     {
         let schedule = JobLocked::schedule_to_cron(schedule)?;
-        let schedule = Cron::new(&schedule)
-            .with_seconds_required()
-            .with_dom_and_dow()
-            .parse()
+        let schedule = CronParser::builder()
+            .seconds(croner::parser::Seconds::Required)
+            .build()
+            .parse(&schedule)
             .map_err(|_| JobSchedulerError::ParseSchedule)?;
+
         Ok(Self {
             schedule: Some(schedule),
             ..self
@@ -181,12 +184,12 @@ impl<T: TimeZone> JobBuilder<T> {
                         last_tick: None,
                         next_tick: match &self.timezone {
                             Some(timezone) => schedule
-                                .iter_from(Utc::now().with_timezone(&timezone.clone()))
+                                .iter_after(Utc::now())
                                 .next()
-                                .map(|t| t.timestamp() as u64)
+                                .map(|utc_time| utc_time.with_timezone(timezone).timestamp() as u64)
                                 .unwrap_or(0),
                             None => schedule
-                                .iter_from(Utc::now())
+                                .iter_after(Utc::now())
                                 .next()
                                 .map(|t| t.timestamp() as u64)
                                 .unwrap_or(0),
