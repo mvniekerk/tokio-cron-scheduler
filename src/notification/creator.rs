@@ -8,8 +8,8 @@ use crate::{JobSchedulerError, OnJobNotification};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tokio::sync::broadcast::{Receiver, Sender};
 use tracing::{error, warn};
 use uuid::Uuid;
 

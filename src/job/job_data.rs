@@ -1,18 +1,18 @@
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct CronJob {
     pub schedule: String,
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct NonCronJob {
     pub repeating: bool,
     pub repeated_every: u64,
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Uuid {
     pub id1: u64,
     pub id2: u64,
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct JobStoredData {
     pub id: ::core::option::Option<Uuid>,
     pub last_updated: ::core::option::Option<u64>,
@@ -29,30 +29,30 @@ pub struct JobStoredData {
 
 /// Nested message and enum types in `JobStoredData`.
 pub mod job_stored_data {
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, PartialEq, Eq, Hash, Debug)]
     #[repr(i32)]
     pub enum Job {
         CronJob(super::CronJob),
         NonCronJob(super::NonCronJob),
     }
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct JobIdAndNotification {
     pub job_id: ::core::option::Option<Uuid>,
     pub notification_id: ::core::option::Option<Uuid>,
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NotificationData {
     pub job_id: ::core::option::Option<JobIdAndNotification>,
     pub job_states: Vec<i32>,
     pub extra: Vec<u8>,
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NotificationIdAndState {
     pub notification_id: ::core::option::Option<Uuid>,
     pub job_state: i32,
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct JobAndNextTick {
     pub id: ::core::option::Option<Uuid>,
     pub job_type: i32,
@@ -81,6 +81,32 @@ pub enum JobState {
     Done = 3,
     Removed = 4,
 }
+impl JobState {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Stop => "Stop",
+            Self::Scheduled => "Scheduled",
+            Self::Started => "Started",
+            Self::Done => "Done",
+            Self::Removed => "Removed",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "Stop" => Some(Self::Stop),
+            "Scheduled" => Some(Self::Scheduled),
+            "Started" => Some(Self::Started),
+            "Done" => Some(Self::Done),
+            "Removed" => Some(Self::Removed),
+            _ => None,
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, FromPrimitive, ToPrimitive)]
 #[repr(i32)]
 pub enum JobType {
@@ -103,6 +129,26 @@ impl JobState {
 }
 
 impl JobType {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Cron => "Cron",
+            Self::Repeated => "Repeated",
+            Self::OneShot => "OneShot",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "Cron" => Some(Self::Cron),
+            "Repeated" => Some(Self::Repeated),
+            "OneShot" => Some(Self::OneShot),
+            _ => None,
+        }
+    }
     pub fn from_i32(x: i32) -> Option<Self> {
         match x {
             0 => Some(Self::Cron),

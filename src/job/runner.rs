@@ -1,3 +1,4 @@
+use crate::JobSchedulerError;
 use crate::context::Context;
 #[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::JobState;
@@ -5,13 +6,12 @@ use crate::job::job_data::JobState;
 use crate::job::job_data_prost::JobState;
 use crate::job::to_code::JobCode;
 use crate::job_scheduler::JobsSchedulerLocked;
-use crate::JobSchedulerError;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::{Receiver, Sender};
-use tokio::sync::RwLock;
 use tracing::error;
 use uuid::Uuid;
 

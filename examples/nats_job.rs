@@ -2,7 +2,7 @@ use crate::lib::{run_example, stop_example};
 use tokio_cron_scheduler::{
     JobScheduler, NatsMetadataStore, NatsNotificationStore, SimpleJobCode, SimpleNotificationCode,
 };
-use tracing::{info, Level};
+use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
 
 mod lib;

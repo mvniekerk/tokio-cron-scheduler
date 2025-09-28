@@ -1,3 +1,4 @@
+use crate::JobSchedulerError;
 use crate::context::{Context, NotificationDeletedResult};
 #[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::JobState;
@@ -5,12 +6,11 @@ use crate::job::job_data::JobState;
 use crate::job::job_data_prost::JobState;
 use crate::job::{JobId, NotificationId};
 use crate::store::NotificationStore;
-use crate::JobSchedulerError;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tokio::sync::broadcast::{Receiver, Sender};
 use tracing::error;
 
 #[derive(Default)]

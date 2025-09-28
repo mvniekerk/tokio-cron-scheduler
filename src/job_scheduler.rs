@@ -11,8 +11,8 @@ use crate::store::{MetaDataStorage, NotificationStore};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(all(unix, feature = "signal"))]
 use tokio::signal::unix::SignalKind;
 use tokio::sync::RwLock;

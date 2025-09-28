@@ -4,7 +4,7 @@ use tokio_cron_scheduler::{
     JobScheduler, PostgresMetadataStore, PostgresNotificationStore, SimpleJobCode,
     SimpleNotificationCode,
 };
-use tracing::{info, Level};
+use tracing::{Level, info};
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
@@ -15,7 +15,9 @@ async fn main() {
     tracing::subscriber::set_global_default(subscriber).expect("Setting default subscriber failed");
 
     info!("Remember to have a running Postgres instance to connect to. For example:\n");
-    info!("docker run --rm -it -p 5432:5432 -e POSTGRES_USER=\"postgres\" -e POSTGRES_PASSWORD=\"\" -e POSTGRES_HOST_AUTH_METHOD=\"trust\" postgres:14.1");
+    info!(
+        "docker run --rm -it -p 5432:5432 -e POSTGRES_USER=\"postgres\" -e POSTGRES_PASSWORD=\"\" -e POSTGRES_HOST_AUTH_METHOD=\"trust\" postgres:14.1"
+    );
 
     let metadata_storage = Box::new(PostgresMetadataStore::default());
     let notification_storage = Box::new(PostgresNotificationStore::default());

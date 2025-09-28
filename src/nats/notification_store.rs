@@ -2,7 +2,7 @@ use crate::job::job_data_prost::{
     JobAndNotifications, JobState, ListOfJobsAndNotifications, NotificationData,
 };
 use crate::job::{JobId, NotificationId};
-use crate::nats::{sanitize_nats_key, NatsStore};
+use crate::nats::{NatsStore, sanitize_nats_key};
 use crate::store::{DataStore, InitStore, NotificationStore};
 use crate::{JobSchedulerError, JobUuid};
 use async_nats::jetstream::kv::Store;
@@ -80,7 +80,10 @@ impl DataStore<NotificationData> for NatsNotificationStore {
                     .await
                     .map_err(|_| ()),
                 Err(e) => {
-                    error!("Error getting existing value {:?}, assuming does not exist and hope for the best", e);
+                    error!(
+                        "Error getting existing value {:?}, assuming does not exist and hope for the best",
+                        e
+                    );
                     bucket
                         .create(&*uuid, Bytes::from(bytes))
                         .await

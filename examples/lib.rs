@@ -250,7 +250,7 @@ fn main() {
 #[cfg(test)]
 mod test {
     use tokio_cron_scheduler::{Job, JobScheduler};
-    use tracing::{info, Level};
+    use tracing::{Level, info};
     use tracing_subscriber::FmtSubscriber;
 
     // Needs multi_thread to test, otherwise it hangs on scheduler.add()

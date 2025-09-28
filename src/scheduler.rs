@@ -1,16 +1,15 @@
+use crate::JobSchedulerError;
 use crate::context::Context;
 #[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobState, JobType};
 #[cfg(feature = "has_bytes")]
 use crate::job::job_data_prost::{JobState, JobType};
-use crate::JobSchedulerError;
 use chrono::{FixedOffset, Utc};
-use std::convert::TryFrom;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::sync::RwLock;
+use tokio::sync::oneshot::{Receiver, Sender};
 use tracing::error;
 use uuid::Uuid;
 
@@ -117,7 +116,7 @@ impl Scheduler {
                 let must_runs = next_ticks.iter().filter_map(|n| {
                     let next_tick = n.next_tick_utc();
                     let last_tick = n.last_tick_utc();
-                    let job_type: JobType = JobType::try_from(n.job_type).unwrap();
+                    let job_type: JobType = JobType::from_i32(n.job_type).unwrap();
 
                     let must_run = match (last_tick.as_ref(), next_tick.as_ref(), job_type) {
                         (None, Some(next_tick), JobType::OneShot) => {
@@ -179,7 +178,7 @@ impl Scheduler {
 
                         let next_and_last_tick = match job {
                             Ok(Some(job)) => {
-                                let job_type: JobType = JobType::try_from(job.job_type).unwrap();
+                                let job_type: JobType = JobType::from_i32(job.job_type).unwrap();
                                 let schedule = job.schedule();
                                 let fixed_offset = FixedOffset::east_opt(job.time_offset_seconds)
                                     .unwrap_or(FixedOffset::east_opt(0).unwrap());

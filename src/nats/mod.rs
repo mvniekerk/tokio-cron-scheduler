@@ -1,9 +1,9 @@
 mod metadata_store;
 mod notification_store;
 
-use async_nats::jetstream::kv::{Config, Store};
-use async_nats::jetstream::Context as JetStream;
 use async_nats::ConnectOptions;
+use async_nats::jetstream::Context as JetStream;
+use async_nats::jetstream::kv::{Config, Store};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

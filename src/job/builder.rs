@@ -7,12 +7,12 @@ pub use crate::job::job_data::{JobStoredData, JobType, Uuid};
 use crate::job::job_data_prost;
 #[cfg(feature = "has_bytes")]
 pub use crate::job::job_data_prost::{JobStoredData, JobType, Uuid};
-use crate::job::{nop, nop_async, JobLocked};
+use crate::job::{JobLocked, nop, nop_async};
 use crate::{JobSchedulerError, JobToRun, JobToRunAsync};
 use chrono::{Offset, TimeZone, Utc};
 use core::time::Duration;
-use croner::parser::CronParser;
 use croner::Cron;
+use croner::parser::CronParser;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 

@@ -24,8 +24,8 @@ use crate::job::job_data::ListOfUuids;
 #[cfg(feature = "has_bytes")]
 use crate::job::job_data_prost::ListOfUuids;
 use chrono::{DateTime, Utc};
-use croner::parser::CronParser;
 use croner::Cron;
+use croner::parser::CronParser;
 #[cfg(not(feature = "has_bytes"))]
 use job::job_data::{JobAndNextTick, JobStoredData, Uuid as JobUuid};
 #[cfg(feature = "has_bytes")]
@@ -40,13 +40,13 @@ pub use crate::postgres::{PostgresMetadataStore, PostgresNotificationStore, Post
 
 pub use context::Context;
 pub use error::JobSchedulerError;
+pub use job::JobLocked as Job;
+pub use job::OnJobNotification;
 #[cfg(not(feature = "has_bytes"))]
 pub use job::job_data::JobState as JobNotification;
 #[cfg(feature = "has_bytes")]
 pub use job::job_data_prost::JobState as JobNotification;
 pub use job::to_code::{JobCode, NotificationCode, PinnedGetFuture, ToCode};
-pub use job::JobLocked as Job;
-pub use job::OnJobNotification;
 pub use job::{JobBuilder, JobToRun, JobToRunAsync};
 pub use job_scheduler::JobsSchedulerLocked as JobScheduler;
 pub use store::{MetaDataStorage, NotificationStore};

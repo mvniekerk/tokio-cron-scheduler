@@ -7,8 +7,8 @@ use crate::job::{JobToRunAsync, NotificationId};
 use crate::store::{MetaDataStorage, NotificationStore};
 use crate::{JobSchedulerError, JobStoredData, OnJobNotification};
 use std::sync::Arc;
-use tokio::sync::broadcast::Sender;
 use tokio::sync::RwLock;
+use tokio::sync::broadcast::Sender;
 use uuid::Uuid;
 
 pub type NotificationDeletedResult =

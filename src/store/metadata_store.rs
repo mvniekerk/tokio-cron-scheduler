@@ -1,10 +1,10 @@
+use crate::JobSchedulerError;
+use crate::job::JobToRunAsync;
 #[cfg(not(feature = "has_bytes"))]
 use crate::job::job_data::{JobAndNextTick, JobStoredData};
 #[cfg(feature = "has_bytes")]
 use crate::job::job_data_prost::{JobAndNextTick, JobStoredData};
-use crate::job::JobToRunAsync;
 use crate::store::{CodeGet, DataStore, InitStore};
-use crate::JobSchedulerError;
 use chrono::{DateTime, Utc};
 use std::future::Future;
 use std::pin::Pin;

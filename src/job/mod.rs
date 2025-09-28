@@ -6,8 +6,8 @@ use crate::job_scheduler::JobsSchedulerLocked;
 use crate::{JobScheduler, JobSchedulerError, JobStoredData};
 use chrono::{DateTime, Offset, TimeZone, Utc};
 use cron_job::CronJob;
-use croner::parser::CronParser;
 use croner::Cron;
+use croner::parser::CronParser;
 use non_cron_job::NonCronJob;
 use std::future::Future;
 use std::pin::Pin;
@@ -29,8 +29,9 @@ mod non_cron_job;
 mod runner;
 pub mod to_code;
 
-use crate::notification::{NotificationCreator, NotificationDeleter};
+#[cfg(feature = "english")]
 use crate::JobSchedulerError::ParseSchedule;
+use crate::notification::{NotificationCreator, NotificationDeleter};
 pub use builder::JobBuilder;
 pub use creator::JobCreator;
 pub use deleter::JobDeleter;
@@ -691,11 +692,7 @@ impl JobLocked {
             w.set_last_tick(last_tick);
             w.set_ran(ran || must_run);
             let count = if must_run {
-                if count == u32::MAX {
-                    0
-                } else {
-                    count + 1
-                }
+                if count == u32::MAX { 0 } else { count + 1 }
             } else {
                 count
             };

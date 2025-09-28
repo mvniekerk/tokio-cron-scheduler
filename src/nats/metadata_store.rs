@@ -1,5 +1,5 @@
 use crate::job::job_data_prost::ListOfUuids;
-use crate::nats::{sanitize_nats_key, NatsStore};
+use crate::nats::{NatsStore, sanitize_nats_key};
 use crate::store::{DataStore, InitStore, MetaDataStorage};
 use crate::{JobAndNextTick, JobSchedulerError, JobStoredData, JobUuid};
 use async_nats::jetstream::kv::Store;
@@ -68,7 +68,10 @@ impl DataStore<JobStoredData> for NatsMetadataStore {
                     .await
                     .map_err(|_| ()),
                 Err(e) => {
-                    error!("Error getting existing value {:?}, assuming does not exist and hope for the best", e);
+                    error!(
+                        "Error getting existing value {:?}, assuming does not exist and hope for the best",
+                        e
+                    );
                     bucket
                         .create(&*uuid, Bytes::from(bytes))
                         .await
