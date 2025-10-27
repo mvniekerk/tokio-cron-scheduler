@@ -183,13 +183,11 @@ impl<T: TimeZone> JobBuilder<T> {
                         last_tick: None,
                         next_tick: match &self.timezone {
                             Some(timezone) => schedule
-                                .iter_after(Utc::now())
-                                .next()
-                                .map(|utc_time| utc_time.with_timezone(timezone).timestamp() as u64)
+                                .find_next_occurrence(&Utc::now().with_timezone(timezone), false)
+                                .map(|tz_time| tz_time.timestamp() as u64)
                                 .unwrap_or(0),
                             None => schedule
-                                .iter_after(Utc::now())
-                                .next()
+                                .find_next_occurrence(&Utc::now(), false)
                                 .map(|t| t.timestamp() as u64)
                                 .unwrap_or(0),
                         },

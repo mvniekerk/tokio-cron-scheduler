@@ -144,9 +144,8 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .iter_after(Utc::now())
-                    .next()
-                    .map(|utc_time| utc_time.with_timezone(&timezone).timestamp() as u64)
+                    .find_next_occurrence(&Utc::now().with_timezone(&timezone), false)
+                    .map(|tz_time| tz_time.timestamp() as u64)
                     .unwrap_or(0),
                 job_type: JobType::Cron.into(),
                 count: 0,
@@ -238,9 +237,8 @@ impl JobLocked {
                 last_updated: None,
                 last_tick: None,
                 next_tick: schedule
-                    .iter_after(Utc::now())
-                    .next()
-                    .map(|utc_time| utc_time.with_timezone(&timezone).timestamp() as u64)
+                    .find_next_occurrence(&Utc::now().with_timezone(&timezone), false)
+                    .map(|tz_time| tz_time.timestamp() as u64)
                     .unwrap_or(0),
                 job_type: JobType::Cron.into(),
                 count: 0,
@@ -922,5 +920,117 @@ impl JobLocked {
                 Err(_) => Err(ParseSchedule),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::JobScheduler;
+    use chrono::Timelike;
+
+    #[tokio::test]
+    async fn test_timezone_paris() {
+        let mut scheduler = JobScheduler::new().await.unwrap();
+
+        let job_id = scheduler
+            .add(
+                JobLocked::new_async_tz(
+                    "0 30 9 * * *",
+                    chrono_tz::Europe::Paris,
+                    |_uuid, _lock| Box::pin(async move {}),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let next_tick = scheduler
+            .next_tick_for_job(job_id)
+            .await
+            .unwrap()
+            .expect("Should have next_tick");
+
+        let paris_time = next_tick.with_timezone(&chrono_tz::Europe::Paris);
+        assert_eq!(paris_time.hour(), 9);
+        assert_eq!(paris_time.minute(), 30);
+    }
+
+    #[tokio::test]
+    async fn test_timezone_differences() {
+        let mut scheduler = JobScheduler::new().await.unwrap();
+        let schedule = "0 0 12 * * *";
+
+        let paris_job = scheduler
+            .add(
+                JobLocked::new_async_tz(schedule, chrono_tz::Europe::Paris, |_uuid, _lock| {
+                    Box::pin(async move {})
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let tokyo_job = scheduler
+            .add(
+                JobLocked::new_async_tz(schedule, chrono_tz::Asia::Tokyo, |_uuid, _lock| {
+                    Box::pin(async move {})
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let paris_next = scheduler
+            .next_tick_for_job(paris_job)
+            .await
+            .unwrap()
+            .unwrap();
+        let tokyo_next = scheduler
+            .next_tick_for_job(tokyo_job)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Noon in different timezones = different UTC times
+        assert_ne!(paris_next, tokyo_next);
+
+        // Should be noon in their local time
+        assert_eq!(
+            paris_next.with_timezone(&chrono_tz::Europe::Paris).hour(),
+            12
+        );
+        assert_eq!(tokyo_next.with_timezone(&chrono_tz::Asia::Tokyo).hour(), 12);
+    }
+
+    #[tokio::test]
+    async fn test_timezone_utc_equivalence() {
+        let mut scheduler = JobScheduler::new().await.unwrap();
+
+        let utc_job = scheduler
+            .add(
+                JobLocked::new_async("0 0 0 * * *", |_uuid, _lock| Box::pin(async move {}))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let shanghai_job = scheduler
+            .add(
+                JobLocked::new_async_tz(
+                    "0 0 8 * * *",
+                    chrono_tz::Asia::Shanghai,
+                    |_uuid, _lock| Box::pin(async move {}),
+                )
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let utc_next = scheduler.next_tick_for_job(utc_job).await.unwrap();
+        let shanghai_next = scheduler.next_tick_for_job(shanghai_job).await.unwrap();
+
+        // Should be the same UTC time
+        assert_eq!(utc_next, shanghai_next);
     }
 }
