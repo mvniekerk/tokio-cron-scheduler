@@ -183,13 +183,11 @@ impl<T: TimeZone> JobBuilder<T> {
                         last_tick: None,
                         next_tick: match &self.timezone {
                             Some(timezone) => schedule
-                                .iter_after(Utc::now())
-                                .next()
-                                .map(|utc_time| utc_time.with_timezone(timezone).timestamp() as u64)
+                                .find_next_occurrence(&Utc::now().with_timezone(timezone), false)
+                                .map(|tz_time| tz_time.timestamp() as u64)
                                 .unwrap_or(0),
                             None => schedule
-                                .iter_after(Utc::now())
-                                .next()
+                                .find_next_occurrence(&Utc::now(), false)
                                 .map(|t| t.timestamp() as u64)
                                 .unwrap_or(0),
                         },
@@ -218,5 +216,41 @@ impl<T: TimeZone> JobBuilder<T> {
             JobType::Repeated => Err(JobSchedulerError::NoNextTick),
             JobType::OneShot => Err(JobSchedulerError::NoNextTick),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::JobScheduler;
+    use chrono::Timelike;
+
+    #[tokio::test]
+    async fn test_timezone_job_builder() {
+        let mut scheduler = JobScheduler::new().await.unwrap();
+
+        let job_id = scheduler
+            .add(
+                JobBuilder::new()
+                    .with_timezone(chrono_tz::Europe::Paris)
+                    .with_cron_job_type()
+                    .with_schedule("0 30 9 * * *")
+                    .unwrap()
+                    .with_run_async(Box::new(|_uuid, _lock| Box::pin(async move {})))
+                    .build()
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let next_tick = scheduler
+            .next_tick_for_job(job_id)
+            .await
+            .unwrap()
+            .expect("Should have next_tick");
+
+        let paris_time = next_tick.with_timezone(&chrono_tz::Europe::Paris);
+        assert_eq!(paris_time.hour(), 9);
+        assert_eq!(paris_time.minute(), 30);
     }
 }
